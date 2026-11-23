@@ -473,6 +473,7 @@ def _apply_share_item_filters(
                 statuses=statuses,
                 category=categories,
                 format_filter=formats,
+                excluded_formats=excluded_formats,
                 owner_only=True,
                 include_hidden=include_hidden or any(v != "public" for v in allowed_vis),
                 visibility=list(allowed_vis),
@@ -976,26 +977,44 @@ def get_shared_collection(token: str):
                 sa.exists(
                     select(Expression.id).where(
                         Expression.work_id == UserWorkIntent.work_id,
+                        or_(UserWorkIntent.expression_id.is_(None), Expression.id == UserWorkIntent.expression_id),
                         Expression.content_type.in_(cat_list),
                     )
                 )
             )
-        if filter_specs["formats"]:
-            fmt_list = filter_specs["formats"]
-            intent_stmt = intent_stmt.where(
-                sa.exists(
-                    select(Manifestation.id)
-                    .join(Expression, Manifestation.expression_id == Expression.id)
-                    .where(
-                        Expression.work_id == UserWorkIntent.work_id,
-                        or_(
-                            func.lower(Manifestation.format).in_(fmt_list),
-                            func.lower(Manifestation.format_type).in_(fmt_list),
-                            func.lower(Manifestation.meta["format"].as_string()).in_(fmt_list),
-                        ),
-                    )
+        if filter_specs["formats"] or filter_specs["excluded_formats"]:
+            manif_sub = (
+                select(Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .where(
+                    Expression.work_id == UserWorkIntent.work_id,
+                    or_(UserWorkIntent.expression_id.is_(None), Expression.id == UserWorkIntent.expression_id),
+                    or_(UserWorkIntent.manifestation_id.is_(None), Manifestation.id == UserWorkIntent.manifestation_id),
                 )
             )
+            if filter_specs["formats"]:
+                fmt_list = filter_specs["formats"]
+                fmt_clauses = [
+                    func.lower(Manifestation.format).in_(fmt_list),
+                    func.lower(Manifestation.format_type).in_(fmt_list),
+                    func.lower(Manifestation.meta["format"].as_string()).in_(fmt_list),
+                ]
+                if filter_specs["include_null_fmt"]:
+                    fmt_clauses.append(
+                        sa.and_(
+                            Manifestation.format.is_(None),
+                            Manifestation.format_type.is_(None),
+                            Manifestation.meta["format"].as_string().is_(None),
+                        )
+                    )
+                manif_sub = manif_sub.where(or_(*fmt_clauses))
+            if filter_specs["excluded_formats"]:
+                excl_list = filter_specs["excluded_formats"]
+                resolved_manif_fmt = func.lower(
+                    func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
+                )
+                manif_sub = manif_sub.where(or_(resolved_manif_fmt.is_(None), ~resolved_manif_fmt.in_(excl_list)))
+            intent_stmt = intent_stmt.where(sa.exists(manif_sub))
         matched_intents = [s for s in status_list if s in _INTENT_LEVEL_STATUSES]
         if matched_intents:
             intent_stmt = intent_stmt.where(UserWorkIntent.status.in_(matched_intents))

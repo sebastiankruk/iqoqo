@@ -65,8 +65,12 @@ def _resolve_target_format(
         for val in (fmt, fmt_type, meta_fmt)
         if isinstance(val, str) and val.strip()
     ]
-    if not raw_values and not raw_payload:
-        return None
+    has_missing_column = any(not isinstance(val, str) or not val.strip() for val in (fmt, fmt_type, meta_fmt))
+
+    if not raw_values:
+        if not raw_payload:
+            return None
+        return recover_carrier_from_raw_payload(raw_payload, content_type=content_type)
 
     has_generic = any(c in _GENERIC_AUDIO or c in _GENERIC_VIDEO for c in raw_values)
     explicit_alias_targets = [
@@ -90,11 +94,12 @@ def _resolve_target_format(
     if explicit_alias_targets:
         return explicit_alias_targets[0]
 
-    if has_drift and raw_values:
+    if (has_drift or has_missing_column) and raw_values:
         for c in raw_values:
             if c not in _GENERIC_AUDIO and c not in _GENERIC_VIDEO:
                 return FormatNormalizer.normalize(c, content_type)
-    return raw_values[0] if (has_drift and raw_values) else None
+        return raw_values[0]
+    return None
 
 
 def upgrade() -> None:

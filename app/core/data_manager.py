@@ -1061,7 +1061,26 @@ class DataManager:
         if category:
             base_query = base_query.where(Expression.content_type.in_(category))
         if fmt:
-            base_query = base_query.where(Manifestation.meta["format"].as_string().in_(fmt))
+            from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
+
+            fmt_list = [fmt] if isinstance(fmt, str) else list(fmt)
+            expanded_fmt = [str(f).strip().lower() for f in (expand_format_filter(fmt_list) or fmt_list) if str(f).strip()]
+            resolved_fmt = func.lower(
+                func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
+            )
+            if filter_includes_null_format(fmt_list):
+                base_query = base_query.where(
+                    or_(
+                        resolved_fmt.in_(expanded_fmt),
+                        and_(
+                            Manifestation.format.is_(None),
+                            Manifestation.format_type.is_(None),
+                            Manifestation.meta["format"].as_string().is_(None),
+                        ),
+                    )
+                )
+            else:
+                base_query = base_query.where(resolved_fmt.in_(expanded_fmt))
         if missing_cover:
             base_query = base_query.where(
                 or_(

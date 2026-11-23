@@ -159,6 +159,13 @@
   [[ "$output" == *"--deploy-dir"* ]]
 }
 
+@test "Makefile monitoring-reset-auth pipes OPENOBSERVE_BASIC_AUTH via stdin instead of -e argv" {
+  run make -n monitoring-reset-auth MODE=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"-e OO_BASIC_AUTH"* ]]
+  [[ "$output" == *"sys.stdin.read().strip()"* ]]
+}
+
 @test "Makefile monitoring-reset-auth uses --project-directory and --force-recreate --no-deps" {
   run make -n monitoring-reset-auth MODE=preview
   [ "$status" -eq 0 ]

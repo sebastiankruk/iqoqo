@@ -594,7 +594,7 @@ def build_graph(
     Enforces resource limits on graph size to prevent memory exhaustion.
     """
     from flask import has_app_context
-    from sqlalchemy import and_, or_, select
+    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     from app.core.friend_service import get_friend_user_ids
@@ -620,31 +620,18 @@ def build_graph(
         )
 
     if items is None:
-        from sqlalchemy import and_, or_, select
+        from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
+        from app.core.graph_service import build_sql_item_visibility_clause
         from app.db.models import Expression, Item, Manifestation, Work
 
-        public_clause = and_(
-            Item.is_hidden.is_(False),
-            Item.visibility == "public",
-            ~Item.owner_id.in_(opted_out_ids) if opted_out_ids else True,
-        )
-        vis_clauses = [public_clause]
-        if viewer_uuid is not None:
-            vis_clauses.append(Item.owner_id == viewer_uuid)
-            if friend_ids:
-                vis_clauses.append(
-                    and_(
-                        Item.owner_id.in_(friend_ids),
-                        Item.visibility.in_(("friends_only", "shared")),
-                    )
-                )
+        vis_where = build_sql_item_visibility_clause(viewer_uuid, friend_ids, opted_out_ids)
 
         item_stmt = (
             select(Item)
             .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-            .where(or_(*vis_clauses))
+            .where(vis_where)
             .limit(MAX_GRAPH_ITEMS)
         )
 

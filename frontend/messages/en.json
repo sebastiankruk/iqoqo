@@ -1216,6 +1216,7 @@
     "hop3": "3 hops",
     "hop4": "4 hops",
     "libraryMode": "Full Library",
+    "moreTypes": "More types",
     "filtersLabel": "Filters",
     "fitToView": "Fit to View",
     "searchPlaceholder": "Highlight nodes...",

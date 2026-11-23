@@ -237,7 +237,14 @@ describe("FRBR Relation Graph Explorer (/graph) & Entry Buttons (C133)", () => {
     render(<GraphPage />);
     expect(screen.getByTestId("frbr-relation-graph-svg")).toBeInTheDocument();
     expect(screen.getByTestId("graph-entity-work")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-entity-expression")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-entity-manifestation")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-entity-item")).toBeInTheDocument();
+    expect(screen.queryByTestId("graph-entity-contributor")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("graph-entity-more-toggle"));
     expect(screen.getByTestId("graph-entity-contributor")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-entity-series")).toBeInTheDocument();
     expect(screen.getByTestId("graph-fit-view")).toBeInTheDocument();
   });
 

@@ -28,16 +28,9 @@ import { useCatalogGraph, useCatalogLibraryGraph } from "@/lib/api/hooks/catalog
 import type { GraphAnchorEntityType } from "@/types/frbr";
 
 const VALID_TYPES = new Set<string>(["work", "expression", "manifestation", "item"]);
-const LIBRARY_ENTITY_TYPES = [
-  "work",
-  "series",
-  "contributor",
-  "expression",
-  "manifestation",
-  "item",
-  "map",
-  "lod",
-] as const;
+const PRIMARY_LIBRARY_ENTITY_TYPES = ["work", "expression", "manifestation", "item"] as const;
+const SECONDARY_LIBRARY_ENTITY_TYPES = ["series", "contributor", "map", "lod"] as const;
+const LIBRARY_ENTITY_TYPES = [...PRIMARY_LIBRARY_ENTITY_TYPES, ...SECONDARY_LIBRARY_ENTITY_TYPES] as const;
 
 /** Inner client graph explorer reading query params inside a Suspense boundary. */
 function GraphExplorerContent() {
@@ -54,6 +47,7 @@ function GraphExplorerContent() {
 
   const isValidAnchor = VALID_TYPES.has(rawType) && Number.isInteger(rawId) && rawId > 0;
   const isLibraryMode = rawMode === "library" || !isValidAnchor;
+  const [showMoreEntityTypes, setShowMoreEntityTypes] = React.useState(false);
 
   const {
     data: anchorGraph,
@@ -141,8 +135,13 @@ function GraphExplorerContent() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Entity type filters">
-            {LIBRARY_ENTITY_TYPES.map(ent => {
+          <div
+            className="relative flex flex-wrap items-center gap-1.5"
+            role="group"
+            aria-label="Entity type filters"
+            data-testid="graph-entity-type-filters"
+          >
+            {PRIMARY_LIBRARY_ENTITY_TYPES.map(ent => {
               const active = activeEntityTypes.size === 0 || activeEntityTypes.has(ent);
               return (
                 <Button
@@ -157,6 +156,38 @@ function GraphExplorerContent() {
                 </Button>
               );
             })}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-expanded={showMoreEntityTypes}
+              data-testid="graph-entity-more-toggle"
+              onClick={() => setShowMoreEntityTypes(prev => !prev)}
+            >
+              {t("moreTypes")}
+            </Button>
+            {showMoreEntityTypes && (
+              <div
+                className="absolute right-0 top-full z-20 mt-1 flex flex-wrap gap-1.5 rounded-lg border border-border bg-card p-2 shadow-md"
+                data-testid="graph-entity-more-menu"
+              >
+                {SECONDARY_LIBRARY_ENTITY_TYPES.map(ent => {
+                  const active = activeEntityTypes.size === 0 || activeEntityTypes.has(ent);
+                  return (
+                    <Button
+                      key={ent}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      data-testid={`graph-entity-${ent}`}
+                      onClick={() => toggleEntityType(ent)}
+                    >
+                      {t(`nodeTypes.${ent}`)}
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -51,6 +51,7 @@ class FormatNormalizer:
     """
 
     _mappings: dict[str, str] = {}
+    _reverse_mappings: dict[str, set[str]] = {}
     _null_mappings: dict[str, str] = {}
     _loaded: bool = False
 
@@ -67,6 +68,7 @@ class FormatNormalizer:
             return
 
         cls._mappings = {}
+        cls._reverse_mappings = {}
         cls._null_mappings = {}
         cls._loaded = True
 
@@ -114,8 +116,10 @@ class FormatNormalizer:
                 mapping_parse_failures_total.add(1, {"reason": "invalid_format", "target": target_str})
                 continue
 
-            # Store lowercase key for case-insensitive lookup
-            cls._mappings[str(key).lower().strip()] = target_str
+            # Store lowercase key for case-insensitive lookup and pre-compute reverse map
+            raw_lower = str(key).lower().strip()
+            cls._mappings[raw_lower] = target_str
+            cls._reverse_mappings.setdefault(target_str, set()).add(raw_lower)
 
     @classmethod
     def normalize(cls, raw: str | None, content_type: str | None = None) -> str:
@@ -216,6 +220,7 @@ class FormatNormalizer:
     def reset(cls) -> None:
         """Clear cached mappings (useful for testing)."""
         cls._mappings = {}
+        cls._reverse_mappings = {}
         cls._null_mappings = {}
         cls._loaded = False
 
@@ -250,10 +255,8 @@ def expand_format_filter(format_list: list[str] | None) -> list[str] | None:
 
     FormatNormalizer._load_mappings()
 
-    # Build reverse mapping: canonical → set of raw keys that map to it
-    reverse: dict[str, set[str]] = {}
-    for raw_key, target in FormatNormalizer._mappings.items():
-        reverse.setdefault(target, set()).add(raw_key)
+    # Reuse pre-computed reverse mapping + invert FORMAT_ALIAS_TO_CATEGORY -> unknown_{category}
+    reverse: dict[str, set[str]] = {k: set(v) for k, v in FormatNormalizer._reverse_mappings.items()}
 
     # Also invert FORMAT_ALIAS_TO_CATEGORY -> unknown_{category}
     for alias_key, cat in FORMAT_ALIAS_TO_CATEGORY.items():

@@ -287,12 +287,12 @@ class CatalogFilterBuilder:
         if fmt:
             from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
 
-            expanded = expand_format_filter(fmt) or fmt
+            expanded = [str(f).strip().lower() for f in (expand_format_filter(fmt) or fmt) if str(f).strip()]
             include_null = filter_includes_null_format(fmt)
             fmt_clauses = [
-                Manifestation.format.in_(expanded),
-                Manifestation.format_type.in_(expanded),
-                Manifestation.meta["format"].as_string().in_(expanded),
+                db.func.lower(Manifestation.format).in_(expanded),
+                db.func.lower(Manifestation.format_type).in_(expanded),
+                db.func.lower(Manifestation.meta["format"].as_string()).in_(expanded),
             ]
             if include_null:
                 fmt_clauses.append(

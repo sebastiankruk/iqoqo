@@ -997,3 +997,48 @@ def test_music_share_excludes_movie_dvd_even_with_drifted_content_type(client, a
     titles = {item["title"] for item in res.get_json()["data"]["items"]}
     assert "Kind of Blue" in titles
     assert "Drifted Movie DVD" not in titles
+
+
+def test_wishlist_share_bound_manifestation_filters_strictly(app, client):
+    """Bound UserWorkIntent.manifestation_id excludes non-matching manifestations of same Work."""
+    from app.db.models import Expression, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
+
+    with app.app_context():
+        owner = User(email="wl_bound@iqoqo.local", public_username="wl_bound", visibility="public")
+        db.session.add(owner)
+        db.session.flush()
+
+        w = Work(title="Dual Edition Album", meta={})
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="music")
+        db.session.add(e)
+        db.session.flush()
+        m_cd = Manifestation(expression_id=e.id, format="cd", format_type="cd", meta={"format": "cd"})
+        m_vinyl = Manifestation(expression_id=e.id, format="vinyl", format_type="vinyl", meta={"format": "vinyl"})
+        db.session.add_all([m_cd, m_vinyl])
+        db.session.flush()
+
+        db.session.add(
+            UserWorkIntent(
+                user_id=owner.id,
+                work_id=w.id,
+                expression_id=e.id,
+                manifestation_id=m_vinyl.id,
+                status="want_to_listen",
+                is_hidden=False,
+            )
+        )
+        db.session.add(
+            SharedCollection(
+                user_id=owner.id,
+                name="CD Wishlist Share",
+                share_token="c146-bound-wl-cd-token",
+                filters={"status": ["want_to_listen"], "tags": ["music"], "format": ["cd"]},
+            )
+        )
+        db.session.commit()
+
+    res = client.get("/api/public/share/c146-bound-wl-cd-token")
+    assert res.status_code == 200
+    assert res.get_json()["data"]["items"] == []

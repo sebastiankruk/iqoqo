@@ -395,3 +395,17 @@ class TestUnknownFormatLabels:
         assert "unknown_video" in MediaFormat.ALL
         assert "unknown_audio" in MediaFormat.ALL
         assert "unknown_text" in MediaFormat.ALL
+
+
+def test_f3_validation_normalizes_moving_image_and_aliases(monkeypatch):
+    """validate_format_type(strict=False) normalizes moving image and configured carrier aliases."""
+    from pathlib import Path
+
+    import app.core.format_normalizer as mod
+    from app.core.f3_validation import validate_format_type
+
+    monkeypatch.setattr(mod, "_MAPPINGS_PATH", Path("shared/format_mappings.yaml"))
+    FormatNormalizer.reset()
+    assert validate_format_type("moving image", strict=False) == "unknown_video"
+    assert validate_format_type("płyta dvd", strict=False) == "dvd"
+    assert validate_format_type("płyta vcd", strict=False) == "vcd"

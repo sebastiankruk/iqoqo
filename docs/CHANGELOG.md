@@ -5,13 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.1] - TBD
+## [1.1.1] - 2026-11-23
 
 ### Added
 
+- **Full-Library FRBR Concept Graph & Depth 1–4 Explorer (C140, C146)**:
+  - Extended `/graph` and `GET /api/catalog/graph` to support 1–4 hop bounded neighborhood traversal (`MAX_GRAPH_DEPTH=4`, `MAX_NEIGHBORS_PER_NODE_DEEP=25`), explicit `max_edges` bounds, radial outer-ring layouts for `hop >= 3`, and a filterable full-library concept graph explorer mode (`?mode=library`) with balanced multi-tier node budgeting and compact `<= 4` primary entity filter pills.
+- **VCD Carrier & Polish Carrier Normalization (C141)**:
+  - Added canonical `vcd` (`Video CD`) carrier format (`MediaFormat.VCD`) mapped to `schema:Movie` in JSON-LD/RDF and `shared/format_mappings.yaml` aliases (`płyta dvd`, `płyta blu-ray`, `płyta vcd`, `książka papierowa`, `moving image`).
+- **Unified `make preview-reconcile` & Test Framework Integrity (C139, C145)**:
+  - Added `preview-reconcile` entrypoint (`scripts/reconcile_preview_settings.py`, `scripts/iqopretest.sh --skip-build`) and expanded `tests/test_aiops_mode.py` + `tests/test_type_gate_and_suite_integrity.py` meta-tests to enforce `IQOQO_AI_MODE=1` dots-only output, zero orphaned suites, and coverage gates across all test streams.
+
 ### Changed
 
+- **Prebuilt Preview Parity & Security Hygiene (C139, C146)**:
+  - Aligned `make start preview prebuilt` with container-executed `ensure_env_secrets.py`, `reconcile_preview_settings.py --dotenv-stdin`, and `provision_rum_token.py` using host-UID directory mounts (`0600` safe) and safe `ABS_COMPOSE_ENV_FILE` resolution; switched `monitoring-reset-auth` to `stdin` credential piping; bumped base `nginx` image to `1.31.9` (#451).
+- **RDF/SPARQL & Share Type Integrity (C140, C141, C146)**:
+  - Eliminated N+1 visibility queries in `SparqlService`, unified friend `FederationConsent` exemptions across `GraphService` and `SparqlService`, and enforced `FORMAT_TO_CATEGORY` consistency and bound `UserWorkIntent` filtering across shared collections, PostgreSQL FTS, SQLite `ILIKE`, and `DataManager`.
+
 ### Fixed
+
+- **Graph Starvation, Legacy Format Backfill & FTS Parity (C146)**:
+  - Fixed `GraphService.build_library_graph()` 150-Work node budget starvation and emitted `WorkPart`, `WorkExpansionLink`, `ContainerAggregation`, `ExpressionContribution`, and `ManifestationContribution` edges in `mode=library`.
+  - Fixed `v1_1_1_norm_legacy_formats.py` and `scripts/fix_physical_kinds.py` to backfill single-column/cross-column format drift, recover carriers from `raw_payload` on all-`NULL` rows, and repair mis-tagged `Expression.content_type` values on unambiguous video/book carriers.
+  - Fixed PostgreSQL FTS (`LOWER(COALESCE(...))`, `unknown_*` `NULL` format matching, and pre-`LIMIT` `excluded_formats`) and `validate_format_type(..., strict=False)` alias normalization.
 
 ## [1.1.0] - 2026-11-20
 

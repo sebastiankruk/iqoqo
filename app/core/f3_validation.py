@@ -272,7 +272,7 @@ def validate_format_type(format_type: str | None, strict: bool = False) -> str |
     # Check if format is in the known taxonomy
     known_formats = {attr.lower() for attr in dir(MediaFormat) if not attr.startswith("_") and isinstance(getattr(MediaFormat, attr), str)}
 
-    generic_category_tokens = frozenset({"music", "audio", "sound", "movie", "video"})
+    generic_category_tokens = frozenset({"music", "audio", "sound", "movie", "video", "moving image"})
     if cleaned in generic_category_tokens:
         if strict:
             raise FormatTypeValidationError(
@@ -285,6 +285,12 @@ def validate_format_type(format_type: str | None, strict: bool = False) -> str |
     if cleaned not in known_formats:
         if strict:
             raise FormatTypeValidationError(f"Unknown format type: {format_type}. " f"Known formats: {sorted(known_formats)}")
+        from app.core.format_normalizer import FormatNormalizer
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        FormatNormalizer._load_mappings()
+        if cleaned in FormatNormalizer._mappings or cleaned in FORMAT_ALIAS_TO_CATEGORY:
+            return FormatNormalizer.normalize(cleaned)
         return cleaned
 
     return cleaned

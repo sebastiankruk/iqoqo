@@ -204,6 +204,7 @@ class ItemSearchFilters:
     scope: str = "personal"
     friend_ids: list[Any] | None = None
     visibility: list[str] | None = None
+    excluded_formats: tuple[str, ...] | list[str] | None = None
 
 
 class SearchService:
@@ -369,11 +370,17 @@ class SearchService:
             params["category"] = tuple(category)
             extra_filters_sql += " AND e.content_type IN :category"
         if format_filter:
-            from app.core.format_normalizer import expand_format_filter
+            from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
 
             expanded_fmt = expand_format_filter(format_filter) or format_filter
-            params["format_filter"] = tuple(expanded_fmt)
-            extra_filters_sql += " AND COALESCE(m.format, m.format_type, m.meta ->> 'format') IN :format_filter"
+            params["format_filter"] = tuple(str(f).strip().lower() for f in expanded_fmt if str(f).strip())
+            fmt_coalesce = "LOWER(COALESCE(m.format, m.format_type, m.meta ->> 'format'))"
+            if filter_includes_null_format(format_filter):
+                extra_filters_sql += (
+                    f" AND ({fmt_coalesce} IN :format_filter OR COALESCE(m.format, m.format_type, m.meta ->> 'format') IS NULL)"
+                )
+            else:
+                extra_filters_sql += f" AND {fmt_coalesce} IN :format_filter"
         if missing_cover:
             extra_filters_sql += (
                 " AND (m.cover_url IS NULL OR m.cover_url = '') AND (m.meta ->> 'cover_url' IS NULL OR m.meta ->> 'cover_url' = '')"
@@ -541,11 +548,24 @@ class SearchService:
             extra_filters_sql += " AND e.content_type IN :category"
 
         if format_filter:
-            from app.core.format_normalizer import expand_format_filter
+            from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
 
             expanded_fmt = expand_format_filter(format_filter) or format_filter
-            params["format_filter"] = tuple(expanded_fmt)
-            extra_filters_sql += " AND COALESCE(m.format, m.format_type, m.meta ->> 'format') IN :format_filter"
+            params["format_filter"] = tuple(str(f).strip().lower() for f in expanded_fmt if str(f).strip())
+            fmt_coalesce = "LOWER(COALESCE(m.format, m.format_type, m.meta ->> 'format'))"
+            if filter_includes_null_format(format_filter):
+                extra_filters_sql += (
+                    f" AND ({fmt_coalesce} IN :format_filter OR COALESCE(m.format, m.format_type, m.meta ->> 'format') IS NULL)"
+                )
+            else:
+                extra_filters_sql += f" AND {fmt_coalesce} IN :format_filter"
+
+        if filters.excluded_formats:
+            params["excluded_formats"] = tuple(str(f).strip().lower() for f in filters.excluded_formats if str(f).strip())
+            extra_filters_sql += (
+                " AND (COALESCE(m.format, m.format_type, m.meta ->> 'format') IS NULL"
+                " OR LOWER(COALESCE(m.format, m.format_type, m.meta ->> 'format')) NOT IN :excluded_formats)"
+            )
 
         if missing_cover:
             extra_filters_sql += (
@@ -625,6 +645,9 @@ class SearchService:
         if format_filter:
             count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
+        if filters.excluded_formats:
+            count_stmt = count_stmt.bindparams(bindparam("excluded_formats", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("excluded_formats", expanding=True))
         if filters.visibility and "visibility_filter" in params:
             count_stmt = count_stmt.bindparams(bindparam("visibility_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("visibility_filter", expanding=True))
@@ -665,6 +688,7 @@ class SearchService:
             scope,
             friend_ids,
             visibility,
+            excluded_formats,
         ) = dataclasses.astuple(filters)
 
         # Subquery to get matching item IDs. Contributor matching lives inside the
@@ -753,6 +777,14 @@ class SearchService:
 
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
+
+        if excluded_formats:
+            excl_lower = [str(f).strip().lower() for f in excluded_formats if str(f).strip()]
+            if excl_lower:
+                resolved_fmt_expr = db.func.lower(
+                    db.func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
+                )
+                query = query.filter(db.or_(resolved_fmt_expr.is_(None), ~resolved_fmt_expr.in_(excl_lower)))
 
         # The Item -> Manifestation -> Expression -> Work chain is already
         # INNER-joined by the base query above, so the builder must not re-join it.

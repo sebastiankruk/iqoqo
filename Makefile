@@ -337,37 +337,43 @@ ensure-mount-perms: ## Ensure host bind-mount paths exist and have permissive wr
 	@if [ -d data/keys ]; then chmod 1777 data/keys 2>/dev/null || true; chmod 600 data/keys/*.pem 2>/dev/null || true; fi
 
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
+ABS_COMPOSE_ENV_FILE = $(if $(filter /%,$(COMPOSE_ENV_FILE)),$(COMPOSE_ENV_FILE),$(CURDIR)/$(COMPOSE_ENV_FILE))
 start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@echo "Deploying $(COMPOSE_PROJECT) (prebuilt)..."
 	@echo "Project version: $(IQOQO_VERSION)"
 	@echo "Prebuilt tag: $(PREBUILT_TAG)"
-	@if [ -f "$(COMPOSE_ENV_FILE)" ]; then chmod 0600 "$(COMPOSE_ENV_FILE)" 2>/dev/null || true; fi
+	@if [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then chmod 0600 "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null || true; fi
 	@docker image prune -f --filter "dangling=true"
 	@if [ -n "$(IMAGE_PREFIX)" ]; then \
-		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file $(ABS_COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
 	fi
-	@if [ "$(MODE)" = "preview" ] && [ -f "$(COMPOSE_ENV_FILE)" ]; then \
-		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose --env-file "$(COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml run --rm --no-deps -T -v "$(CURDIR)/$(COMPOSE_ENV_FILE):/tmp/iqoqo.env" --entrypoint python3 web /usr/src/app/scripts/ensure_env_secrets.py --env-file /tmp/iqoqo.env || true; \
-		chmod 0600 "$(COMPOSE_ENV_FILE)" 2>/dev/null || true; \
+	@if [ "$(MODE)" = "preview" ] && [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then \
+		env_dir="$$(dirname "$(ABS_COMPOSE_ENV_FILE)")"; env_base="$$(basename "$(ABS_COMPOSE_ENV_FILE)")"; \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml run --rm --no-deps -T --user "$$(id -u):$$(id -g)" -v "$$env_dir:/tmp/envdir" --entrypoint python3 web /usr/src/app/scripts/ensure_env_secrets.py --env-file "/tmp/envdir/$$env_base" || echo "⚠️ Warning: container ensure_env_secrets.py failed for $(ABS_COMPOSE_ENV_FILE)" >&2; \
+		chmod 0600 "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null || true; \
 	fi
 	@if [ "$(MODE)" = "preview" ] && [ -f docker-compose.monitoring.yml ]; then \
-		set -a; [ -f "$(COMPOSE_ENV_FILE)" ] && . "$(COMPOSE_ENV_FILE)"; set +a; \
-		if [ "$${OTEL_TRACES_EXPORTER:-otlp}" != "none" ]; then \
-			COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.monitoring.yml up -d || true; \
+		otel_exp=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OTEL_TRACES_EXPORTER=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		if [ "$${otel_exp:-otlp}" != "none" ]; then \
+			COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file "$(ABS_COMPOSE_ENV_FILE)",) -f docker-compose.monitoring.yml up -d || true; \
 		fi; \
 	fi
-	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
-	@if [ "$(MODE)" = "preview" ] && [ -f "$(COMPOSE_ENV_FILE)" ]; then \
-		set -a; . "$(COMPOSE_ENV_FILE)"; set +a; \
+	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file $(ABS_COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+	@if [ "$(MODE)" = "preview" ] && [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then \
+		cat "$(ABS_COMPOSE_ENV_FILE)" | IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py --dotenv-stdin 2>/dev/null || echo "⚠️ Warning: container reconcile_preview_settings failed for $(ABS_COMPOSE_ENV_FILE)" >&2; \
 		export MODE="preview"; \
-		origin_url="$${NEXT_PUBLIC_FRONTEND_URL:-$${BASE_URL:-}}"; \
-		if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$$origin_url" ]; then \
+		origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		[ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		oo_rum_site=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_RUM_SITE=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		if [ -z "$$oo_rum_site" ] && [ -n "$$origin_url" ]; then \
 			case "$$origin_url" in \
 				https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
 			esac; \
+		elif [ -n "$$oo_rum_site" ]; then \
+			export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
 		fi; \
-		rum_out="$$(IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose --env-file "$(COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/provision_rum_token.py --mgmt-host openobserve 2>/dev/null || true)"; \
+		rum_out="$$(IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/provision_rum_token.py --mgmt-host openobserve 2>/dev/null || true)"; \
 		rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
 		rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
 		rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
@@ -375,7 +381,7 @@ start: ensure-mount-perms
 			export OPENOBSERVE_RUM_CLIENT_TOKEN="$$rum_token"; \
 			export OPENOBSERVE_RUM_SITE="$$rum_site"; \
 			export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
-			IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose --env-file "$(COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml up -d --force-recreate --no-deps frontend || true; \
+			IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml up -d --force-recreate --no-deps frontend || true; \
 		fi; \
 	fi
 else
@@ -485,13 +491,16 @@ preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSetting
 		| COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=$${APP_VERSION:-preview} docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py; \
 	 fi; \
 	 unset src_secret SRC_SECRET_KEY; \
-	 set -a; . "$(DEPLOY_ENV_FILE)"; set +a; \
 	 export MODE="$${MODE:-preview}"; \
-	 origin_url="$${NEXT_PUBLIC_FRONTEND_URL:-$${BASE_URL:-}}"; \
-	 if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$$origin_url" ]; then \
+	 origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	 [ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	 oo_rum_site=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_RUM_SITE=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	 if [ -z "$$oo_rum_site" ] && [ -n "$$origin_url" ]; then \
 		case "$$origin_url" in \
 			https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
 		esac; \
+	 elif [ -n "$$oo_rum_site" ]; then \
+		export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
 	 fi; \
 	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file "$(DEPLOY_ENV_FILE)" 2>/dev/null || true)"; \
 	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
@@ -593,19 +602,24 @@ monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while 
 	echo "🚀 Recreating OpenObserve and OTel Collector..."; \
 	docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$cfile" --env-file "$$cenv" up -d --force-recreate --no-deps openobserve otel-collector; \
 	if [ -f "$$cenv" ] && [ -f "$$pfile" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "$${cproject}-web"; then \
-		oo_auth=$$(grep -E '^OPENOBSERVE_BASIC_AUTH=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true); \
+		oo_auth=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_BASIC_AUTH=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
 		if [ -n "$$oo_auth" ]; then \
-			OO_BASIC_AUTH="$$oo_auth" docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" exec -T -e OO_BASIC_AUTH="$$oo_auth" web env PYTHONPATH=/usr/src/app python3 -c "import os; from app import create_app; from app.db.settings import InstanceSettings; app = create_app(); app.app_context().push(); InstanceSettings.set_value('OPENOBSERVE_BASIC_AUTH', os.environ['OO_BASIC_AUTH'])" 2>/dev/null || true; \
+			if ! printf '%s' "$$oo_auth" | docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" exec -T web env PYTHONPATH=/usr/src/app python3 -c "import sys; from app import create_app; from app.db.settings import InstanceSettings; raw = sys.stdin.read().strip(); app = create_app(); app.app_context().push(); InstanceSettings.set_value('OPENOBSERVE_BASIC_AUTH', raw)" 2>/dev/null; then \
+				echo "⚠️ Warning: failed to sync OPENOBSERVE_BASIC_AUTH into InstanceSettings." >&2; \
+			fi; \
 		fi; \
 	fi; \
 	echo "🔑 Re-provisioning OpenObserve RUM token..."; \
-	set -a; [ -f "$$cenv" ] && . "$$cenv"; set +a; \
 	export MODE="$$stack"; \
-	origin_url="$${NEXT_PUBLIC_FRONTEND_URL:-$${BASE_URL:-}}"; \
-	if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$$origin_url" ]; then \
+	origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	[ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	oo_rum_site=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_RUM_SITE=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	if [ -z "$$oo_rum_site" ] && [ -n "$$origin_url" ]; then \
 		case "$$origin_url" in \
 			https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
 		esac; \
+	elif [ -n "$$oo_rum_site" ]; then \
+		export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
 	fi; \
 	rum_out="$$(python3 scripts/provision_rum_token.py --env-file "$$cenv" 2>/dev/null || true)"; \
 	rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \

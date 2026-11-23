@@ -53,7 +53,7 @@ import yaml
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from app import create_app  # noqa: E402
@@ -96,8 +96,30 @@ def get_non_canonical_rows(content_type: str | None = None, limit: int | None = 
     )
     if content_type:
         q_nc = q_nc.where(Expression.content_type == content_type)
+    meta_fmt_col = Manifestation.meta["format"].as_string()
     if canonical_list:
-        q_nc = q_nc.where(func.lower(fmt_expr).notin_(canonical_list))
+        q_nc = q_nc.where(
+            or_(
+                func.lower(fmt_expr).notin_(canonical_list),
+                and_(
+                    Manifestation.format_type.isnot(None),
+                    or_(
+                        func.lower(Manifestation.format_type).notin_(canonical_list),
+                        func.lower(Manifestation.format_type) != func.lower(func.coalesce(Manifestation.format, "")),
+                    ),
+                ),
+                and_(
+                    meta_fmt_col.isnot(None),
+                    or_(
+                        func.lower(meta_fmt_col).notin_(canonical_list),
+                        and_(
+                            Manifestation.format.isnot(None),
+                            func.lower(meta_fmt_col) != func.lower(Manifestation.format),
+                        ),
+                    ),
+                ),
+            )
+        )
     q_nc = q_nc.group_by(fmt_expr, Expression.content_type)
 
     # NULL formats
@@ -380,6 +402,20 @@ def interactive_mode(content_type: str | None = None, limit: int | None = None) 
 # ---------------------------------------------------------------------------
 
 
+_REPAIRABLE_EXPRESSION_TYPES: dict[str, str] = {
+    "dvd": "movie",
+    "bluray": "movie",
+    "4k_uhd": "movie",
+    "vcd": "movie",
+    "vhs": "movie",
+    "laserdisc": "movie",
+    "unknown_video": "movie",
+    "book": "text",
+    "hardcover": "text",
+    "paperback": "text",
+}
+
+
 def _update_manifestation_format(raw_val: str, target: str) -> int:
     """Update non-canonical format manifestations in keyset-batched chunks of 500."""
     raw_lower = raw_val.strip().lower()
@@ -404,7 +440,11 @@ def _update_manifestation_format(raw_val: str, target: str) -> int:
             break
         for m in batch:
             last_id = m.id
-            recovered = recover_carrier_from_raw_payload(m.raw_payload if isinstance(m.raw_payload, dict) else None)
+            ct = m.expression.content_type if m.expression else None
+            recovered = recover_carrier_from_raw_payload(
+                m.raw_payload if isinstance(m.raw_payload, dict) else None,
+                content_type=ct,
+            )
             final_fmt = recovered or target
             m.format = final_fmt
             m.format_type = final_fmt
@@ -412,6 +452,9 @@ def _update_manifestation_format(raw_val: str, target: str) -> int:
             meta_dict["format"] = final_fmt
             m.meta = meta_dict
             flag_modified(m, "meta")
+            expected_ct = _REPAIRABLE_EXPRESSION_TYPES.get(final_fmt)
+            if expected_ct and m.expression is not None and m.expression.content_type == "music":
+                m.expression.content_type = expected_ct
             count += 1
         db.session.commit()
     return count

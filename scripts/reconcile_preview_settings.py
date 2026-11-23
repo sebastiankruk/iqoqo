@@ -212,21 +212,55 @@ def reconcile_preview_state(
     }
 
 
+def parse_env_text(raw_text: str) -> dict[str, str]:
+    """Parse raw .env file contents into a dictionary of stripped key/value pairs."""
+    dst_env: dict[str, str] = {}
+    for raw in raw_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        clean = line[7:].lstrip() if line.startswith("export ") else line
+        if "=" not in clean:
+            continue
+        key, _, val = clean.partition("=")
+        k = key.strip()
+        v = val.strip()
+        if not k or not v:
+            continue
+        if len(v) >= 2 and ((v[0] == '"' and v[-1] == '"') or (v[0] == "'" and v[-1] == "'")):
+            v = v[1:-1]
+        elif " #" in v:
+            v = v.split(" #", 1)[0].strip()
+        if v:
+            dst_env[k] = v
+    return dst_env
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI entrypoint reading JSON reconciliation payload from stdin."""
+    """CLI entrypoint reading JSON reconciliation payload (or raw dotenv) from stdin."""
     parser = argparse.ArgumentParser(description="Reconcile cloned InstanceSettings and preview credentials.")
     parser.add_argument(
         "--purge-undecryptable",
         action="store_true",
         help="Delete undecryptable cloned InstanceSettings rows when src_secret_key is missing/empty.",
     )
+    parser.add_argument(
+        "--dotenv-stdin",
+        action="store_true",
+        help="Parse raw .env key=value text from stdin instead of JSON payload.",
+    )
     args = parser.parse_args(argv)
 
-    raw_stdin = sys.stdin.read().strip()
-    payload: dict[str, Any] = json.loads(raw_stdin) if raw_stdin else {}
-    src_secret_key = str(payload.get("src_secret_key") or "")
-    raw_env = payload.get("dst_env")
-    dst_env: dict[str, str] = raw_env if isinstance(raw_env, dict) else {}
+    raw_stdin = sys.stdin.read()
+    if args.dotenv_stdin:
+        src_secret_key = os.environ.get("SRC_SECRET_KEY", "")
+        dst_env = parse_env_text(raw_stdin)
+    else:
+        stripped = raw_stdin.strip()
+        payload: dict[str, Any] = json.loads(stripped) if stripped else {}
+        src_secret_key = str(payload.get("src_secret_key") or "")
+        raw_env = payload.get("dst_env")
+        dst_env = raw_env if isinstance(raw_env, dict) else {}
 
     # Suppress expected pre-reconciliation InvalidToken startup logs while building the app
     app_logger = logging.getLogger("app")

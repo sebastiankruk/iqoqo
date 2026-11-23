@@ -2126,3 +2126,55 @@ def test_v1_1_1_norm_legacy_formats_normalizes_polish_aliases_and_repairs_expres
 
         assert db.session.get(Manifestation, m_combo.id).format == "cd_dvd_combo"
         assert db.session.get(Expression, e_combo.id).content_type == "music"
+
+
+def test_v1_1_1_norm_legacy_formats_single_column_and_all_null_raw_payload(app) -> None:
+    """Single-column canonical rows backfill missing columns and all-NULL rows recover from raw_payload."""
+    import importlib
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db.models import Expression, Manifestation, Work, db
+
+    migration = importlib.import_module("migrations.versions.v1_1_1_norm_legacy_formats")
+
+    with app.app_context():
+        w = Work(title="Single Col & Raw Payload Work", meta={})
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="music")
+        db.session.add(e)
+        db.session.flush()
+
+        m_single = Manifestation(expression_id=e.id, format=None, format_type=None, meta={"format": "vinyl"})
+        m_null_raw = Manifestation(
+            expression_id=e.id,
+            format=None,
+            format_type=None,
+            meta={},
+            raw_payload={"media": [{"format": "CD"}]},
+        )
+        db.session.add_all([m_single, m_null_raw])
+        db.session.commit()
+
+        conn = db.session.connection()
+        prev_op = migration.op
+        cast(Any, migration).op = Operations(MigrationContext.configure(conn))
+        try:
+            migration.upgrade()
+        finally:
+            cast(Any, migration).op = prev_op
+        db.session.commit()
+        db.session.expire_all()
+
+        reloaded_single = db.session.get(Manifestation, m_single.id)
+        assert reloaded_single.format == "vinyl"
+        assert reloaded_single.format_type == "vinyl"
+        assert reloaded_single.meta["format"] == "vinyl"
+
+        reloaded_raw = db.session.get(Manifestation, m_null_raw.id)
+        assert reloaded_raw.format == "cd"
+        assert reloaded_raw.format_type == "cd"
+        assert reloaded_raw.meta["format"] == "cd"
