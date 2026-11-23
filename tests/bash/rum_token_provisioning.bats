@@ -330,3 +330,11 @@ teardown() {
   grep -qE 'NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION \?\? "v1"' \
     "$REPO_ROOT/frontend/components/browser-openobserve-rum.tsx"
 }
+
+
+@test "provision_rum_token.py accepts allowlisted --mgmt-host openobserve" {
+  run python3 "$PROVISIONER" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--mgmt-host"* ]]
+  [[ "$output" == *"openobserve"* ]]
+}

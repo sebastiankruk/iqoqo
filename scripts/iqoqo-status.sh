@@ -399,7 +399,10 @@ if [[ -n "$oo_cname" ]]; then
         oo_auth=$(load_env "OPENOBSERVE_BASIC_AUTH")
     fi
     if [[ -z "$oo_auth" ]]; then
-        oo_auth=$(python3 -c "
+        if [[ "$STACK" != "dev" ]]; then
+            web_oo_cname=$(find_container "web")
+            if [[ -n "$web_oo_cname" ]]; then
+                oo_auth=$(docker exec "$web_oo_cname" env PYTHONPATH=/usr/src/app python3 -c "
 try:
     from app import create_app
     from app.db.settings import InstanceSettings
@@ -411,6 +414,21 @@ try:
 except Exception:
     pass
 " 2>/dev/null || true)
+            fi
+        else
+            oo_auth=$(python3 -c "
+try:
+    from app import create_app
+    from app.db.settings import InstanceSettings
+    app = create_app()
+    with app.app_context():
+        val = InstanceSettings.get_value('OPENOBSERVE_BASIC_AUTH')
+        if val:
+            print(val)
+except Exception:
+    pass
+" 2>/dev/null || true)
+        fi
     fi
     oo_auth="${oo_auth#\"}"
     oo_auth="${oo_auth%\"}"
@@ -594,7 +612,14 @@ if [[ "$STACK" != "dev" ]]; then
         if docker exec "$frontend_cname" sh -c 'test -n "${OPENOBSERVE_RUM_CLIENT_TOKEN:-}"' 2>/dev/null; then
             check "Browser RUM" pass "OPENOBSERVE_RUM_CLIENT_TOKEN provisioned in frontend"
         elif [[ -n "$oo_cname" ]]; then
-            check "Browser RUM" info "OPENOBSERVE_RUM_CLIENT_TOKEN not active in frontend (set OPENOBSERVE_RUM_SITE or RUM_LOCAL_ONLY=true)"
+            rum_origin="$(load_env "NEXT_PUBLIC_FRONTEND_URL")"
+            [[ -z "$rum_origin" ]] && rum_origin="$(load_env "BASE_URL")"
+            rum_exporter="$(load_env "OTEL_TRACES_EXPORTER")"
+            if [[ "$STACK" == "preview" && "$rum_origin" == https://* && "${rum_exporter:-otlp}" != "none" ]]; then
+                check "Browser RUM" warn "OPENOBSERVE_RUM_CLIENT_TOKEN missing in frontend despite HTTPS preview origin (${rum_origin}) — run 'make preview-reconcile' or 'make monitoring-reset-auth'"
+            else
+                check "Browser RUM" info "OPENOBSERVE_RUM_CLIENT_TOKEN not active in frontend (set OPENOBSERVE_RUM_SITE or RUM_LOCAL_ONLY=true)"
+            fi
         fi
     fi
 fi
@@ -807,33 +832,32 @@ print(count)
             check "Gunicorn" info "${gunicorn_workers} worker process(es)"
         fi
 
-        probe_out=$(docker exec "$web_cname" python3 -c "
-from cryptography.fernet import InvalidToken
+        probe_out=$(docker exec "$web_cname" env PYTHONPATH=/usr/src/app python3 -c "
 try:
     from app import create_app
     from app.db import db
-    from app.db.settings import InstanceSettings, _get_fernet_cipher
+    from app.db.settings import InstanceSettings, check_encrypted_settings_drift
     app = create_app()
     with app.app_context():
         rows = db.session.execute(db.select(InstanceSettings)).scalars().all()
-        sample = next((r for r in rows if isinstance(r.value, dict) and r.value.get('_encrypted') is True and isinstance(r.value.get('ciphertext'), str)), None)
-        if sample is None:
+        enc_count = sum(1 for r in rows if isinstance(r.value, dict) and r.value.get('_encrypted') is True and isinstance(r.value.get('ciphertext'), str))
+        if enc_count == 0:
             print('NO_ENCRYPTED_ROWS')
         else:
-            try:
-                _get_fernet_cipher().decrypt(sample.value['ciphertext'].encode('utf-8'))
-                print('OK:' + sample.key)
-            except InvalidToken:
-                print('INVALID_TOKEN:' + sample.key)
+            failed = check_encrypted_settings_drift()
+            if not failed:
+                print(f'OK:{enc_count}')
+            else:
+                print('INVALID_TOKEN:' + ','.join(sorted(failed)))
 except Exception as e:
     print('ERR:' + type(e).__name__)
 " 2>/dev/null || echo "ERR:docker_exec")
         if [[ "$probe_out" == OK:* ]]; then
-            check "Encrypted settings" pass "decrypted sample key (${probe_out#OK:})"
+            check "Encrypted settings" pass "all ${probe_out#OK:} encrypted key(s) decrypted"
         elif [[ "$probe_out" == "NO_ENCRYPTED_ROWS" ]]; then
             check "Encrypted settings" pass "no encrypted rows present"
         elif [[ "$probe_out" == INVALID_TOKEN:* ]]; then
-            check "Encrypted settings" fail "InvalidToken decrypting ${probe_out#INVALID_TOKEN:} (ENV_FILE / --env-file SECRET_KEY mismatch or run 'make migrate-secrets')"
+            check "Encrypted settings" fail "InvalidToken decrypting ${probe_out#INVALID_TOKEN:} (ENV_FILE / --env-file SECRET_KEY mismatch or run 'make preview-reconcile' / 'make migrate-secrets')"
         else
             check "Encrypted settings" info "probe skipped (${probe_out})"
         fi

@@ -112,3 +112,12 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Prebuilt tag: v0.7.17-custom" ]]
 }
+
+
+@test "make preview start prebuilt includes container-side reconciliation and monitoring pre-start without host python" {
+  run make -n preview start prebuilt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ensure_env_secrets.py"* ]]
+  [[ "$output" == *"provision_rum_token.py --mgmt-host openobserve"* ]]
+  [[ "$output" == *"chmod 0600"* ]]
+}

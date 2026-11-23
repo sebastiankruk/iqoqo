@@ -114,3 +114,24 @@
   run grep -F 'IQOQO_ROOT="${IQOQO_STATUS_ROOT:-' scripts/iqoqo-status.sh
   [ "$status" -eq 0 ]
 }
+
+
+@test "Makefile status fallback passes --deploy-dir for preview" {
+  run make -n status STACK=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--deploy-dir"* ]]
+}
+
+@test "Makefile monitoring-reset-auth uses --project-directory and --force-recreate --no-deps" {
+  run make -n monitoring-reset-auth MODE=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--project-directory"* ]]
+  [[ "$output" == *"--enforce-openobserve-password-policy"* ]]
+  [[ "$output" == *"up -d --force-recreate --no-deps openobserve otel-collector"* ]]
+  [[ "$output" == *"up -d --force-recreate --no-deps web worker frontend"* ]]
+}
+
+@test "Makefile has preview-reconcile target" {
+  run grep -E '^preview-reconcile:' Makefile
+  [ "$status" -eq 0 ]
+}

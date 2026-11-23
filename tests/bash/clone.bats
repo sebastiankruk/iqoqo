@@ -65,3 +65,14 @@ teardown() {
   # Fails at docker search or container check, not at the production check
   [[ ! "$output" =~ "is a production environment" ]]
 }
+
+
+@test "iqopretest.sh supports --skip-build and delegates to make preview-reconcile" {
+  run bash scripts/iqopretest.sh --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--skip-build"* ]]
+  [[ "$output" == *"prod.iqoqo.cc"* ]]
+
+  run grep -F 'make preview-reconcile' scripts/iqopretest.sh
+  [ "$status" -eq 0 ]
+}

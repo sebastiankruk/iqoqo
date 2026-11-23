@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import os
 import re
 import secrets
 import sys
@@ -202,7 +203,10 @@ def ensure_secrets_in_env_file(file_path: Path, enforce_openobserve_password_pol
         file_path.parent.mkdir(parents=True, exist_ok=True)
         content = "\n".join(lines).rstrip() + "\n"
         file_path.write_text(content, encoding="utf-8")
+        os.chmod(file_path.resolve(), 0o600)
         print(f"✅ Auto-provisioned missing secrets in {file_path}")
+    elif file_path.exists():
+        os.chmod(file_path.resolve(), 0o600)
 
     return current
 

@@ -77,6 +77,7 @@ HEALTHZ_PATH = "/healthz"
 #: binds 127.0.0.1 only, so getaddrinfo("localhost") tries ::1 first on a
 #: dual-stack host and nothing is listening there.
 LOOPBACK_HOST = "127.0.0.1"
+ALLOWED_MGMT_HOSTS = frozenset({LOOPBACK_HOST, "openobserve"})
 
 #: Image tag this change was verified against. Named on the 404 branch so an
 #: image bump has something concrete to re-check rather than degrading silently.
@@ -401,6 +402,12 @@ class HttpResult:
     body: str
 
 
+def _resolve_mgmt_host() -> str:
+    """Return the allowlisted OpenObserve management host (default 127.0.0.1)."""
+    candidate = os.environ.get("OPENOBSERVE_MGMT_HOST", "").strip()
+    return candidate if candidate in ALLOWED_MGMT_HOSTS else LOOPBACK_HOST
+
+
 def _request(
     path: str,
     port: int,
@@ -417,7 +424,7 @@ def _request(
     * The ``Authorization`` header lives only in this process's memory. It never
       reaches an argument list, a shell, or a temp file.
     """
-    connection = http.client.HTTPConnection(LOOPBACK_HOST, port, timeout=timeout)
+    connection = http.client.HTTPConnection(_resolve_mgmt_host(), port, timeout=timeout)
     try:
         headers = {"Accept": "application/json"}
         if auth:
@@ -597,6 +604,7 @@ def provision(*, budget_seconds: int | None = None) -> int:
     RUM is optional telemetry. No failure mode here may abort a deployment, so
     every path returns 0 and leaves RUM disabled.
     """
+    host = _resolve_mgmt_host()
     port = resolve_port(os.environ.get("OPENOBSERVE_HOST_PORT"))
     budget = budget_seconds if budget_seconds is not None else resolve_budget(os.environ.get("RUM_READY_BUDGET_SECONDS"))
     auth = build_basic_auth()
@@ -608,7 +616,7 @@ def provision(*, budget_seconds: int | None = None) -> int:
     deadline = started + budget
 
     if not wait_until_ready(port, deadline):
-        log("DEGRADED", "not-ready", target=f"{LOOPBACK_HOST}:{port}", budget_s=budget)
+        log("DEGRADED", "not-ready", target=f"{host}:{port}", budget_s=budget)
         return 0
 
     try:
@@ -619,7 +627,7 @@ def provision(*, budget_seconds: int | None = None) -> int:
         log(
             "DEGRADED",
             "provision-failed",
-            target=f"{LOOPBACK_HOST}:{port}",
+            target=f"{host}:{port}",
             image=resolve_image_tag(),
             verified_against=VERIFIED_AGAINST_IMAGE_TAG,
             elapsed_s=round(time.monotonic() - started, 1),
@@ -645,7 +653,7 @@ def provision(*, budget_seconds: int | None = None) -> int:
         log(
             "DEGRADED",
             "ingest-site-rejected",
-            target=f"{LOOPBACK_HOST}:{port}",
+            target=f"{host}:{port}",
             elapsed_s=round(time.monotonic() - started, 1),
         )
         return 0
@@ -661,7 +669,7 @@ def provision(*, budget_seconds: int | None = None) -> int:
         ingest_site=target.site,
         topology=target.topology,
         insecure="true" if target.insecure else "false",
-        mgmt_target=f"{LOOPBACK_HOST}:{port}",
+        mgmt_target=f"{host}:{port}",
         image=resolve_image_tag(),
         elapsed_s=round(time.monotonic() - started, 1),
     )
@@ -718,10 +726,19 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Wall-clock budget for the readiness wait (default: env or 20).",
     )
+    parser.add_argument(
+        "--mgmt-host",
+        choices=sorted(ALLOWED_MGMT_HOSTS),
+        default=LOOPBACK_HOST,
+        help="OpenObserve management host (127.0.0.1 on host, openobserve inside Compose network).",
+    )
     args = parser.parse_args(argv)
 
     if args.env_file and load_env_file(args.env_file) != 0:
         return 0
+
+    if args.mgmt_host:
+        os.environ["OPENOBSERVE_MGMT_HOST"] = args.mgmt_host
 
     return provision(budget_seconds=args.budget_seconds)
 

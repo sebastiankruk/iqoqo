@@ -199,3 +199,21 @@ def test_startup_drift_probe_logs_aggregated_error_without_leaking_secret(app, m
     # Rows remain untouched in DB so restoring ENV_FILE recovers them
     stored_row = db.session.execute(db.select(InstanceSettings).filter_by(key="GOOGLE_CLIENT_SECRET")).scalar_one()
     assert stored_row.value == envelope
+
+
+def test_check_encrypted_settings_drift_detects_mixed_key_rows(app, monkeypatch):
+    """Mixed preview-encrypted and prod-encrypted rows report only the undecryptable keys."""
+    valid_cipher = settings_mod._get_fernet_cipher()
+    foreign_cipher = rotated_cipher()
+
+    with app.app_context():
+        ok_token = valid_cipher.encrypt(b'"ok-value"').decode("utf-8")
+        bad_token_1 = foreign_cipher.encrypt(b'"bad-1"').decode("utf-8")
+        bad_token_2 = foreign_cipher.encrypt(b'"bad-2"').decode("utf-8")
+        db.session.add(InstanceSettings(key="DISCOGS_USER_TOKEN", value={"_encrypted": True, "ciphertext": ok_token}))
+        db.session.add(InstanceSettings(key="TMDB_API_KEY", value={"_encrypted": True, "ciphertext": bad_token_1}))
+        db.session.add(InstanceSettings(key="BGG_API_TOKEN", value={"_encrypted": True, "ciphertext": bad_token_2}))
+        db.session.commit()
+
+        failed = settings_mod.check_encrypted_settings_drift()
+        assert sorted(failed) == ["BGG_API_TOKEN", "TMDB_API_KEY"]
