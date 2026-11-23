@@ -59,6 +59,11 @@ format_normalizations:
   sound: unknown_audio
   video: unknown_video
   movie: unknown_video
+  "moving image": unknown_video
+  "płyta dvd": dvd
+  "płyta blu-ray": bluray
+  "płyta vcd": vcd
+  "książka papierowa": book
   boardgame: board_game
   # BluRay HiFi Pure Audio raw values → canonical bluray_audio format
   "blu-ray audio": bluray_audio

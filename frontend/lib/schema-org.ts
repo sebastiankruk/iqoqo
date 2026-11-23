@@ -82,6 +82,7 @@ export function resolveSchemaType(
   if (
     normFormat === "dvd" ||
     normFormat === "bluray" ||
+    normFormat === "vcd" ||
     normFormat === "vhs" ||
     normFormat === "4k_uhd" ||
     normFormat === "laserdisc"

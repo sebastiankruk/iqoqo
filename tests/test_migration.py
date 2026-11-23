@@ -2052,3 +2052,77 @@ def test_v0_9_0_user_default_visibility_migration():
             assert "default_item_visibility" not in cols
     finally:
         engine.dispose()
+
+
+def test_v1_1_1_norm_legacy_formats_normalizes_polish_aliases_and_repairs_expression_types(app) -> None:
+    """Verify v1_1_1_norm_legacy_formats normalizes Polish/generic formats and repairs mis-tagged Expressions."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db.models import Expression, Manifestation, Work, db
+
+    migration = import_module("migrations.versions.v1_1_1_norm_legacy_formats")
+
+    with app.app_context():
+        w = Work(title="Migration Format Repair Work", meta={})
+        db.session.add(w)
+        db.session.flush()
+
+        e_dvd = Expression(work_id=w.id, content_type="music")
+        e_br = Expression(work_id=w.id, content_type="music")
+        e_vcd = Expression(work_id=w.id, content_type="movie")
+        e_book = Expression(work_id=w.id, content_type="music")
+        e_mi = Expression(work_id=w.id, content_type="movie")
+        e_combo = Expression(work_id=w.id, content_type="music")
+        db.session.add_all([e_dvd, e_br, e_vcd, e_book, e_mi, e_combo])
+        db.session.flush()
+
+        m_dvd = Manifestation(expression_id=e_dvd.id, format="płyta dvd", format_type="płyta dvd", meta={"format": "płyta dvd"})
+        m_br = Manifestation(expression_id=e_br.id, format="płyta blu-ray", format_type="płyta blu-ray", meta={"format": "płyta blu-ray"})
+        m_vcd = Manifestation(expression_id=e_vcd.id, format="dvd", format_type="płyta vcd", meta={"format": "dvd"})
+        m_book = Manifestation(
+            expression_id=e_book.id,
+            format="książka papierowa",
+            format_type="książka papierowa",
+            meta={"format": "książka papierowa"},
+        )
+        m_mi = Manifestation(expression_id=e_mi.id, format=None, format_type="moving image", meta={"format": "moving image"})
+        m_combo = Manifestation(
+            expression_id=e_combo.id, format="cd_dvd_combo", format_type="cd_dvd_combo", meta={"format": "cd_dvd_combo"}
+        )
+        db.session.add_all([m_dvd, m_br, m_vcd, m_book, m_mi, m_combo])
+        db.session.commit()
+
+        conn = db.session.connection()
+        prev_op = migration.op
+        cast(Any, migration).op = Operations(MigrationContext.configure(conn))
+        try:
+            migration.upgrade()
+        finally:
+            cast(Any, migration).op = prev_op
+        db.session.commit()
+        db.session.expire_all()
+
+        assert db.session.get(Manifestation, m_dvd.id).format == "dvd"
+        assert db.session.get(Manifestation, m_dvd.id).format_type == "dvd"
+        assert db.session.get(Manifestation, m_dvd.id).meta["format"] == "dvd"
+        assert db.session.get(Expression, e_dvd.id).content_type == "movie"
+
+        assert db.session.get(Manifestation, m_br.id).format == "bluray"
+        assert db.session.get(Expression, e_br.id).content_type == "movie"
+
+        assert db.session.get(Manifestation, m_vcd.id).format == "vcd"
+        assert db.session.get(Manifestation, m_vcd.id).format_type == "vcd"
+        assert db.session.get(Expression, e_vcd.id).content_type == "movie"
+
+        assert db.session.get(Manifestation, m_book.id).format == "book"
+        assert db.session.get(Expression, e_book.id).content_type == "text"
+
+        assert db.session.get(Manifestation, m_mi.id).format == "unknown_video"
+        assert db.session.get(Expression, e_mi.id).content_type == "movie"
+
+        assert db.session.get(Manifestation, m_combo.id).format == "cd_dvd_combo"
+        assert db.session.get(Expression, e_combo.id).content_type == "music"

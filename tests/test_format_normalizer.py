@@ -148,6 +148,21 @@ class TestFallbackResolution:
         # "video" has FORMAT_ALIAS_TO_CATEGORY → movie → unknown_video
         assert normalize_format("video") == "unknown_video"
 
+    def test_polish_carrier_aliases_normalize_canonically(self, monkeypatch):
+        from pathlib import Path
+
+        import app.core.format_normalizer as mod
+
+        real_yaml = Path(__file__).resolve().parent.parent / "shared" / "format_mappings.yaml"
+        monkeypatch.setattr(mod, "_MAPPINGS_PATH", real_yaml)
+        FormatNormalizer.reset()
+
+        assert normalize_format("płyta dvd") == "dvd"
+        assert normalize_format("płyta blu-ray") == "bluray"
+        assert normalize_format("płyta vcd") == "vcd"
+        assert normalize_format("książka papierowa") == "book"
+        assert normalize_format("moving image") == "unknown_video"
+
     def test_audio_falls_to_unknown_audio(self):
         assert normalize_format("audio") == "unknown_audio"
 
