@@ -7,7 +7,7 @@ Enforce strict FRBR media-category and physical carrier-format integrity across 
 
 ### Requirement: Unified Media-Category and Format Filtering Across All Share Delivery Surfaces
 
-All shared collection delivery surfaces (`GET /api/public/share/<token>`, `GET /share/<token>`, `GET /share/<token>/jsonld/<page>`, `GET /api/public/rdf/share/<token>`, and RSS feeds) SHALL evaluate `SharedCollection.filters` through a single shared query resolution pipeline that normalizes category filters (`tags` and `category` via `FORMAT_ALIAS_TO_CATEGORY`), evaluates carrier format filters (`format` via `expand_format_filter`) across `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']`, enforces fail-closed semantics on empty filter arrays (`tags: []`, `category: []`, `format: []`), maintains parity across PostgreSQL full-text search (`SearchService.search_items`) and SQLite `ILIKE` filtering (`CatalogFilterBuilder`), and preserves `visibility_scope` plus `Cache-Control: private, no-store` response headers for non-public scopes and Friend Bonus views.
+All shared collection delivery surfaces (`GET /api/public/share/<token>`, `GET /share/<token>`, `GET /share/<token>/jsonld/<page>`, `GET /api/public/rdf/share/<token>`, and RSS feeds) SHALL evaluate `SharedCollection.filters` through a single shared query resolution pipeline that normalizes category filters (`tags` and `category` via `FORMAT_ALIAS_TO_CATEGORY`), evaluates carrier format filters (`format` via `expand_format_filter`) across `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']`, pushes both positive format lists and `excluded_formats` into PostgreSQL full-text search (`SearchService.search_items` / `search_manifestations`) and SQLite `ILIKE` filtering (`CatalogFilterBuilder`) prior to applying SQL `LIMIT`, enforces fail-closed semantics on empty filter arrays (`tags: []`, `category: []`, `format: []`), and preserves `visibility_scope` plus `Cache-Control: private, no-store` response headers for non-public scopes and Friend Bonus views.
 
 #### Scenario: Music-filtered share excludes movie DVDs across JSON, RDF, JSON-LD, and RSS
 
@@ -20,6 +20,12 @@ All shared collection delivery surfaces (`GET /api/public/share/<token>`, `GET /
 - **GIVEN** User A owns a music `cd` stored in `Manifestation.format`, a music `vinyl` stored only in `Manifestation.meta['format']`, and a music `cassette` stored in `Manifestation.format_type`
 - **WHEN** a `SharedCollection` with `filters={"tags": ["music"], "format": ["vinyl"]}` is queried (with or without `filters["query"]` under PostgreSQL FTS or SQLite `ILIKE`)
 - **THEN** only the `vinyl` item MUST be returned.
+
+#### Scenario: FTS share query applies excluded_formats before SQL LIMIT
+
+- **GIVEN** a `SharedCollection` with `filters={"tags": ["movie"], "query": "Live"}` where the catalog contains 500 music items matching `"Live"` and 5 movie items matching `"Live"`
+- **WHEN** the share query resolves FTS matches
+- **THEN** `excluded_formats` MUST be applied inside the search query prior to the `LIMIT 500` ceiling so the 5 matching movie items are not crowded out by excluded-format hits.
 
 #### Scenario: Category filter accepts category aliases and `category` key
 
@@ -57,7 +63,7 @@ When a `SharedCollection` filters by a `MediaCategory` (such as `"music"`), the 
 
 ### Requirement: UserWorkIntent Wishlist Media-Type and Format Filtering Parity
 
-When `SharedCollection.filters["status"]` includes `"wish_list"` or intent-level statuses (`want_to_read`, `want_to_listen`, `want_to_watch`, `want_to_play`, `want_to_build`), the share query pipeline SHALL apply the same normalized category (`tags`/`category`), carrier format (`format`), `FORMAT_TO_CATEGORY` consistency guard, and `query` filters to `UserWorkIntent` entries—resolving target realization metadata via `intent.expression` and `intent.manifestation` when bound (falling back to the parent `Work`'s expressions/manifestations when unbound)—and SHALL serialize `content_type` and `format` on returned wishlist items across JSON and JSON-LD/RDF projections.
+When `SharedCollection.filters["status"]` includes `"wish_list"` or intent-level statuses (`want_to_read`, `want_to_listen`, `want_to_watch`, `want_to_play`, `want_to_build`), the share query pipeline SHALL apply the same normalized category (`tags`/`category`), carrier format (`format` including `include_null_fmt` support), `excluded_formats` (`FORMAT_TO_CATEGORY` consistency guard), and `query` filters to `UserWorkIntent` entries—constraining the `Expression`/`Manifestation` correlation strictly to `UserWorkIntent.expression_id` and `UserWorkIntent.manifestation_id` when bound (falling back to any expression/manifestation of the parent `Work` only when unbound)—and SHALL serialize `content_type` and `format` on returned wishlist items across JSON and JSON-LD/RDF projections.
 
 #### Scenario: Music wishlist share excludes movie DVD and audiobook intents
 
@@ -67,6 +73,6 @@ When `SharedCollection.filters["status"]` includes `"wish_list"` or intent-level
 
 #### Scenario: Intent bound to a specific Manifestation filters by that Manifestation's format
 
-- **GIVEN** a `Work` with both a `cd` manifestation and a `vinyl` manifestation, and a `UserWorkIntent` bound via `intent.manifestation_id` to the `vinyl` manifestation
+- **GIVEN** a `Work` with both a `cd` manifestation and a `vinyl` manifestation (or a movie `dvd` manifestation and a music `cd` manifestation), and a `UserWorkIntent` bound via `intent.manifestation_id` to the `vinyl` (or `dvd`) manifestation
 - **WHEN** a `SharedCollection` with `filters={"status": ["want_to_listen"], "tags": ["music"], "format": ["cd"]}` is requested
-- **THEN** that `vinyl`-bound `UserWorkIntent` MUST be excluded (and included only when `"vinyl"` matches `format`).
+- **THEN** that `vinyl`-bound (or `dvd`-bound) `UserWorkIntent` MUST be excluded by the SQL `sa.exists` predicate (and included only when the bound manifestation itself satisfies `tags`, `format`, `include_null_fmt`, and `excluded_formats`).

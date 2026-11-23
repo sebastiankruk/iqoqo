@@ -8,7 +8,7 @@ Define OpenObserve credential hygiene and drift detection, authenticated observa
 
 ### Requirement: OpenObserve Credential Quote Sanitization, Drift Detection, and Non-Destructive Auth Reset
 
-`scripts/ensure_env_secrets.py` MUST strip surrounding quotes when parsing `OPENOBSERVE_ROOT_USER`, `OPENOBSERVE_ROOT_PASSWORD`, and `OPENOBSERVE_BASIC_AUTH` from `.env`, and MUST probe a running local OpenObserve instance using `OPENOBSERVE_BASIC_AUTH` to detect credential drift against the persistent `openobserve_data` volume. Additionally, `Makefile` SHALL provide a `monitoring-reset-auth` target that enforces `--enforce-openobserve-password-policy` and `0600` permissions on the active env file (`--project-directory $(DEPLOY_DIR)` for `preview`), resets OpenObserve's `/data/db` metadata store while preserving `/data/stream` parquet telemetry files, recreates `openobserve`, `otel-collector`, `web`, `worker`, and `frontend` via `docker compose ... up -d --force-recreate --no-deps` so updated environment variables take effect, syncs rotated `OPENOBSERVE_BASIC_AUTH` into `InstanceSettings`, and re-provisions the RUM token by capturing `provision_rum_token.py` stdout cleanly without leaking `RUM_CLIENT_TOKEN` to terminal output.
+`scripts/ensure_env_secrets.py` MUST strip surrounding quotes when parsing `OPENOBSERVE_ROOT_USER`, `OPENOBSERVE_ROOT_PASSWORD`, and `OPENOBSERVE_BASIC_AUTH` from `.env`, and MUST probe a running local OpenObserve instance using `OPENOBSERVE_BASIC_AUTH` to detect credential drift against the persistent `openobserve_data` volume. Additionally, `Makefile` SHALL provide a `monitoring-reset-auth` target that enforces `--enforce-openobserve-password-policy` and `0600` permissions on the active env file (`--project-directory $(DEPLOY_DIR)` for `preview`), resets OpenObserve's `/data/db` metadata store while preserving `/data/stream` parquet telemetry files, recreates `openobserve`, `otel-collector`, `web`, `worker`, and `frontend` via `docker compose ... up -d --force-recreate --no-deps` so updated environment variables take effect, syncs rotated `OPENOBSERVE_BASIC_AUTH` into `InstanceSettings` by piping the secret via `stdin` (never via `-e OO_BASIC_AUTH` CLI arguments visible in `ps aux`), and re-provisions the RUM token by capturing `provision_rum_token.py` stdout cleanly without leaking `RUM_CLIENT_TOKEN` to terminal output.
 
 #### Scenario: Quote-wrapped OpenObserve credentials in .env produce clean Basic Auth token
 
@@ -32,7 +32,7 @@ Define OpenObserve credential hygiene and drift detection, authenticated observa
 
 - **GIVEN** `monitoring-reset-auth` rotates `OPENOBSERVE_ROOT_PASSWORD` and `OPENOBSERVE_BASIC_AUTH` in `$DEPLOY_ENV_FILE` while `web` and `db` are running
 - **WHEN** `monitoring-reset-auth` completes
-- **THEN** `OPENOBSERVE_BASIC_AUTH` MUST be synced into encrypted `InstanceSettings` and `web` / `worker` MUST be force-recreated so their process environments reflect the updated credentials.
+- **THEN** the token MUST be delivered via `stdin` to `docker compose ... exec -T web python3` (never passed as `-e OO_BASIC_AUTH=...` on the command line), `OPENOBSERVE_BASIC_AUTH` MUST be synced into encrypted `InstanceSettings`, and `web` / `worker` MUST be force-recreated so their process environments reflect the updated credentials.
 
 ### Requirement: End-to-End Authenticated OpenObserve and OTel Collector Verification in `make status`
 
