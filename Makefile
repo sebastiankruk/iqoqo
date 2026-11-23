@@ -457,7 +457,7 @@ preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSetting
 	 env_oo_port=$$(grep -E '^OPENOBSERVE_HOST_PORT=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true); \
 	 [ -n "$$env_oo_port" ] && oo_port="$$env_oo_port"; \
 	 oo_auth=$$(grep -E '^OPENOBSERVE_BASIC_AUTH=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true); \
-	 if [ -n "$$oo_auth" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'openobserve'; then \
+	 if [ -n "$$oo_auth" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -Eq '^iqoqo-preview-openobserve$$|^openobserve$$'; then \
 		oo_auth_code=$$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' \
 			-X POST \
 			-H "Authorization: Basic $${oo_auth}" \

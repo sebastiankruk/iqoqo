@@ -983,7 +983,7 @@ def get_shared_collection(token: str):
                 )
             )
         if filter_specs["formats"] or filter_specs["excluded_formats"]:
-            manif_sub = (
+            base_manif_corr = (
                 select(Manifestation.id)
                 .join(Expression, Manifestation.expression_id == Expression.id)
                 .where(
@@ -992,6 +992,7 @@ def get_shared_collection(token: str):
                     or_(UserWorkIntent.manifestation_id.is_(None), Manifestation.id == UserWorkIntent.manifestation_id),
                 )
             )
+            manif_sub = base_manif_corr
             if filter_specs["formats"]:
                 fmt_list = filter_specs["formats"]
                 fmt_clauses = [
@@ -1014,7 +1015,10 @@ def get_shared_collection(token: str):
                     func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
                 )
                 manif_sub = manif_sub.where(or_(resolved_manif_fmt.is_(None), ~resolved_manif_fmt.in_(excl_list)))
-            intent_stmt = intent_stmt.where(sa.exists(manif_sub))
+            if filter_specs["formats"] and not filter_specs["include_null_fmt"]:
+                intent_stmt = intent_stmt.where(sa.exists(manif_sub))
+            else:
+                intent_stmt = intent_stmt.where(or_(sa.exists(manif_sub), ~sa.exists(base_manif_corr)))
         matched_intents = [s for s in status_list if s in _INTENT_LEVEL_STATUSES]
         if matched_intents:
             intent_stmt = intent_stmt.where(UserWorkIntent.status.in_(matched_intents))

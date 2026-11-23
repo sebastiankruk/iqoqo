@@ -211,3 +211,27 @@ def test_federation_consent_friend_public_item_visibility(app) -> None:
 
         friend_graph = GraphService.build_library_graph(entity_types={"item"}, viewer_user_id=friend.id)
         assert {n["entity_id"] for n in friend_graph["nodes"]} == {pub_item.id, fr_item.id}
+
+
+def test_graph_truncation_flags_on_deep_cap_and_library_tier_quota(app) -> None:
+    """meta.truncated is True when deep per-node cap or library tier_quota caps results."""
+    from app.core.graph_service import MAX_NEIGHBORS_PER_NODE_DEEP, GraphService
+
+    with app.app_context():
+        works = [Work(title=f"Quota Work {i}", meta={}) for i in range(15)]
+        db.session.add_all(works)
+        db.session.flush()
+        expr = Expression(work_id=works[0].id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manifs = [Manifestation(expression_id=expr.id, format="book", meta={"title": f"Book {i}"}) for i in range(30)]
+        db.session.add_all(manifs)
+        db.session.commit()
+
+        deep_graph = GraphService.build_neighborhood("expression", expr.id, depth=4, max_nodes=150)
+        assert deep_graph is not None
+        assert len([n for n in deep_graph["nodes"] if n["entity_type"] == "manifestation"]) <= MAX_NEIGHBORS_PER_NODE_DEEP
+        assert deep_graph["meta"]["truncated"] is True
+
+        lib_graph = GraphService.build_library_graph(entity_types={"work", "expression", "manifestation"}, max_nodes=12)
+        assert lib_graph["meta"]["truncated"] is True

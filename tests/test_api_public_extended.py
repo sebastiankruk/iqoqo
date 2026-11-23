@@ -1042,3 +1042,42 @@ def test_wishlist_share_bound_manifestation_filters_strictly(app, client):
     res = client.get("/api/public/share/c146-bound-wl-cd-token")
     assert res.status_code == 200
     assert res.get_json()["data"]["items"] == []
+
+
+def test_wishlist_share_category_filter_preserves_unmanifested_work(app, client):
+    """Category-filtered wishlist shares preserve conceptual F1/F2 works without Manifestation rows."""
+    from app.db.models import Expression, SharedCollection, User, UserWorkIntent, Work, db
+
+    with app.app_context():
+        owner = User(email="wl_unman@iqoqo.local", public_username="wl_unman", visibility="public")
+        db.session.add(owner)
+        db.session.flush()
+
+        w_music = Work(title="Conceptual Unmanifested Album", meta={})
+        w_movie = Work(title="Conceptual Unmanifested Movie", meta={})
+        db.session.add_all([w_music, w_movie])
+        db.session.flush()
+        e_music = Expression(work_id=w_music.id, content_type="music")
+        e_movie = Expression(work_id=w_movie.id, content_type="movie")
+        db.session.add_all([e_music, e_movie])
+        db.session.flush()
+
+        db.session.add_all(
+            [
+                UserWorkIntent(user_id=owner.id, work_id=w_music.id, expression_id=e_music.id, status="want_to_listen", is_hidden=False),
+                UserWorkIntent(user_id=owner.id, work_id=w_movie.id, expression_id=e_movie.id, status="want_to_watch", is_hidden=False),
+                SharedCollection(
+                    user_id=owner.id,
+                    name="Music Wishlist Share",
+                    share_token="c147-unmanifested-music-wl",
+                    filters={"status": ["want_to_listen", "want_to_watch"], "tags": ["music"]},
+                ),
+            ]
+        )
+        db.session.commit()
+
+    res = client.get("/api/public/share/c147-unmanifested-music-wl")
+    assert res.status_code == 200
+    titles = {item["title"] for item in res.get_json()["data"]["items"]}
+    assert "Conceptual Unmanifested Album" in titles
+    assert "Conceptual Unmanifested Movie" not in titles

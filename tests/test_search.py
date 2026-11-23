@@ -382,3 +382,41 @@ def test_postgres_fts_matches_diacritics_without_ilike_fallback(app):
             assert ids[key][0] in m_ids, query
             _, rows = SearchService._pg_item_fts(query, user.id, 20, 0, ItemSearchFilters())
             assert ids[key][1] in [r["item_id"] for r in rows], query
+
+
+def test_search_items_accepts_excluded_formats_kwarg(app):
+    """SearchService.search_items accepts excluded_formats kwarg and filters matching items."""
+    from app.core.search_service import SearchService
+    from app.db.models import Expression, Item, Manifestation, User, Work, db
+
+    with app.app_context():
+        user = User(email="excl_fts@iqoqo.local", public_username="excl_fts", visibility="public")
+        db.session.add(user)
+        db.session.flush()
+
+        w = Work(title="Live Concert Special", meta={})
+        db.session.add(w)
+        db.session.flush()
+        e_music = Expression(work_id=w.id, content_type="music")
+        e_movie = Expression(work_id=w.id, content_type="movie")
+        db.session.add_all([e_music, e_movie])
+        db.session.flush()
+        m_cd = Manifestation(expression_id=e_music.id, format="cd", format_type="cd", meta={"format": "cd"})
+        m_dvd = Manifestation(expression_id=e_movie.id, format="dvd", format_type="dvd", meta={"format": "dvd"})
+        db.session.add_all([m_cd, m_dvd])
+        db.session.flush()
+        it_cd = Item(manifestation_id=m_cd.id, owner_id=user.id, visibility="public", is_hidden=False)
+        it_dvd = Item(manifestation_id=m_dvd.id, owner_id=user.id, visibility="public", is_hidden=False)
+        db.session.add_all([it_cd, it_dvd])
+        db.session.commit()
+
+        total, rows = SearchService.search_items(
+            q="Live Concert",
+            user_id=user.id,
+            limit=20,
+            offset=0,
+            excluded_formats=("dvd",),
+            owner_only=True,
+        )
+        assert total == 1
+        assert [r["item_id"] for r in rows] == [it_cd.id]

@@ -340,10 +340,11 @@ class GraphService:
             node_added = 0
 
             def bounded_enqueue(n_type: str, n_orm: Any, hop_val: int) -> str | None:
-                nonlocal node_added
+                nonlocal node_added, node_truncated
                 n_key = _node_key(n_type, n_orm.id)
                 was_present = n_key in nodes
                 if per_node_cap is not None and not was_present and node_added >= per_node_cap:
+                    node_truncated = True
                     return None
                 res = enqueue_neighbor(n_type, n_orm, hop_val)
                 if res is not None and not was_present:
@@ -351,9 +352,10 @@ class GraphService:
                 return res
 
             def bounded_try_add(n_key: str, n_payload: dict[str, Any]) -> bool:
-                nonlocal node_added
+                nonlocal node_added, node_truncated
                 was_present = n_key in nodes
                 if per_node_cap is not None and not was_present and node_added >= per_node_cap:
+                    node_truncated = True
                     return False
                 ok = try_add_node(n_key, n_payload)
                 if ok and not was_present:
@@ -498,7 +500,8 @@ class GraphService:
             )
 
         active_tiers = [t for t in VALID_LIBRARY_ENTITY_TYPES if t in allowed_entities]
-        tier_quota = effective_max_nodes if len(active_tiers) <= 1 else max(8, effective_max_nodes // len(active_tiers))
+        tier_quota = effective_max_nodes if len(active_tiers) <= 1 else max(1, effective_max_nodes // len(active_tiers))
+        quota_truncated = False
 
         # 1. Works & Series (partitioned quota + SQL work_kind filter before LIMIT)
         want_work = "work" in allowed_entities
@@ -509,12 +512,16 @@ class GraphService:
                 if len(active_tiers) <= 1 or set(active_tiers) <= {"work", "series"}
                 else min(effective_max_nodes, tier_quota * (2 if (want_work and want_series) else 1))
             )
-            work_stmt = select(Work).order_by(Work.id.asc()).limit(work_limit)
+            work_stmt = select(Work).order_by(Work.id.asc()).limit(work_limit + 1)
             if want_series and not want_work:
                 work_stmt = work_stmt.where(Work.work_kind == "series")
             elif want_work and not want_series:
                 work_stmt = work_stmt.where(or_(Work.work_kind.is_(None), Work.work_kind != "series"))
-            for w in db.session.execute(work_stmt).scalars().all():
+            work_rows = list(db.session.execute(work_stmt).scalars().all())
+            if len(work_rows) > work_limit:
+                quota_truncated = True
+                work_rows = work_rows[:work_limit]
+            for w in work_rows:
                 payload = _work_node_dict(w, hop=0, is_anchor=False)
                 if w.work_kind == "series" and want_series:
                     payload["entity_type"] = "series"
@@ -830,6 +837,7 @@ class GraphService:
                         mc.role,
                     )
 
+        node_truncated = node_truncated or quota_truncated
         truncated = node_truncated or edge_truncated
         truncated_reason: str | None = None
         if node_truncated and edge_truncated:

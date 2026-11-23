@@ -2965,8 +2965,6 @@ def _enrich_graph_from_db(
         if seen_manifestations:
             sem_clauses.append((SemanticLink.entity_type == "manifestation") & (SemanticLink.entity_id.in_(seen_manifestations)))
         if sem_clauses:
-            from sqlalchemy import or_
-
             sem_links = db.session.execute(select(SemanticLink).where(SemanticLink.status == "accepted", or_(*sem_clauses))).scalars().all()
             for sl in sem_links:
                 safe_ext = _safe_iri(sl.external_uri)
@@ -3131,8 +3129,10 @@ def _emit_cartographic_rdf_triples(g: Graph, m_uri: URIRef, meta: dict[str, Any]
             att_type = att.get("type") or "fold_out_insert"
             att_img = att.get("image_url")
 
+            from urllib.parse import quote
+
             att_id = str(att.get("id") or idx)
-            att_node = URIRef(f"{str(m_uri)}#map-{att_id}")
+            att_node = URIRef(f"{str(m_uri)}#map-{quote(att_id, safe='')}")
             g.add((m_uri, IQOQO.hasMapAttachment, att_node))
             g.add((att_node, RDF.type, IQOQO.MapAttachment))
             g.add((att_node, IQOQO.mapTitle, Literal(str(att_title), datatype=XSD.string)))

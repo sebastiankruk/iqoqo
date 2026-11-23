@@ -561,11 +561,13 @@ class SearchService:
                 extra_filters_sql += f" AND {fmt_coalesce} IN :format_filter"
 
         if filters.excluded_formats:
-            params["excluded_formats"] = tuple(str(f).strip().lower() for f in filters.excluded_formats if str(f).strip())
-            extra_filters_sql += (
-                " AND (COALESCE(m.format, m.format_type, m.meta ->> 'format') IS NULL"
-                " OR LOWER(COALESCE(m.format, m.format_type, m.meta ->> 'format')) NOT IN :excluded_formats)"
-            )
+            excl_tuple = tuple(str(f).strip().lower() for f in filters.excluded_formats if str(f).strip())
+            if excl_tuple:
+                params["excluded_formats"] = excl_tuple
+                extra_filters_sql += (
+                    " AND (COALESCE(m.format, m.format_type, m.meta ->> 'format') IS NULL"
+                    " OR LOWER(COALESCE(m.format, m.format_type, m.meta ->> 'format')) NOT IN :excluded_formats)"
+                )
 
         if missing_cover:
             extra_filters_sql += (
@@ -645,7 +647,7 @@ class SearchService:
         if format_filter:
             count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
-        if filters.excluded_formats:
+        if "excluded_formats" in params:
             count_stmt = count_stmt.bindparams(bindparam("excluded_formats", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("excluded_formats", expanding=True))
         if filters.visibility and "visibility_filter" in params:
