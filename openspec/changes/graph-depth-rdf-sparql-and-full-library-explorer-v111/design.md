@@ -57,10 +57,11 @@ All candidate backends MUST implement a shared `GraphQueryBackend` / `GraphServi
   - *Pros:* Delivers sub-second interactive UI performance within strict `512 MB` `sparql-runner` bounds while resolving the SPARQL N+1 and RDF parity debt cleanly.
   - *Cons:* Maintains two query projections (SQL graph JSON and RDF graph builder), requiring automated parity tests to ensure zero divergence in nodes, edges, visibility, or `FederationConsent`.
 
-- **Benchmark Selection Rule (Task 1 Gate):**
-  - Adopt **Option B** only if it passes all hard safety gates (`0` visibility/consent leaks, `< 256 MB` web RSS delta, `< 384 MB` `sparql-runner` RSS peak inside its `512 MB` cgroup, `0%` `10 MB`/`200k`-triple failures or `5xx`/timeouts at `concurrency=4`) AND meets latency gates (`depth 1..2 p95 <= 300 ms`, `depth 3..4 p95 <= 800 ms`, `full-library p95 <= 1500 ms`).
-  - Adopt **Option A** if Option B breaches RSS, snapshot-byte, triple-cap, or latency thresholds while batched SQL passes all gates.
-  - Adopt **Option C** if Option A is required for interactive `/graph` latency/RSS while RDF/SPARQL parity and scoped subgraph execution are retained for semantic queries/exports.
+- **Benchmark Selection Rule (Task 1 Gate — RECORDED 2026-11-22):**
+  - Ran `scripts/benchmark_graph_backends.py --scale-seed --iterations 3` (`400` works, `400` expressions, `800` manifestations, `800` items, `40` contributors, `90` series memberships, `40` work parts, `30` semantic links):
+    - **Option B (RDF/SPARQL `build_graph()` + `rdflib`):** `11,600` triples (`1.32 MB` N-Triples); `depth=1 p95=1626.36 ms`, `depth=2 p95=2061.06 ms`, `depth=3 p95=3741.62 ms`, `depth=4 p95=15053.89 ms` (breaches `<= 300 ms` / `<= 800 ms` gates and hits `15s` `QUERY_TIMEOUT` at depth 4). **Rejected for interactive `/api/catalog/graph`.**
+    - **Baseline unbatched SQL `GraphService`:** `depth=1 p95=111.04 ms (58 SQL)`, `depth=2 p95=966.38 ms (1,779 SQL)`, proving per-node queries must be replaced with **batched frontier `IN (...)` BFS**.
+  - **LOCKED DECISION: Option C (Hybrid) Selected** — Use **Batched SQL Frontier BFS** in `GraphService` for interactive `/api/catalog/graph` (`depth 1..4` and `mode=library` with calibrated defaults `MAX_GRAPH_DEPTH=4`, `MAX_GRAPH_NODES=150`, `MAX_GRAPH_EDGES=400`), while fixing `sparql_service.build_graph()` N+1 and `frbr_service._enrich_graph_from_db()` RDF relation parity for `/api/sparql` and LOD exports.
 
 ### Decision 2: Bounding Caps, Edge Limits, and Non-Starving Hop Fairness
 

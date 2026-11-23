@@ -98,7 +98,7 @@ def fetch_video_metadata(query: str) -> dict[str, Any] | None:
             "Description": best_match.get("overview", ""),
             "cover_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
             "ReleaseDate": release_date,
-            "Format": "video",
+            "Format": "unknown_video",
             "tmdb_media_type": media_type,
             "tmdb_id": best_match.get("id"),
             "Source": "TMDB",

@@ -593,22 +593,60 @@ def build_graph(
 
     Enforces resource limits on graph size to prevent memory exhaustion.
     """
+    from flask import has_app_context
+    from sqlalchemy import and_, or_, select
+    from sqlalchemy.orm import selectinload
+
+    from app.core.friend_service import get_friend_user_ids
+    from app.db.federation import FederationConsent
+    from app.db.models import db
+
+    viewer_uuid: Any = None
+    viewer_str = str(user_id) if user_id is not None else None
+    if user_id is not None:
+        try:
+            import uuid as _uuid
+
+            viewer_uuid = _uuid.UUID(str(user_id)) if not isinstance(user_id, _uuid.UUID) else user_id
+        except (ValueError, TypeError):
+            viewer_uuid = None
+
+    in_app_ctx = has_app_context()
+    friend_ids = get_friend_user_ids(viewer_uuid) if (in_app_ctx and viewer_uuid is not None) else set()
+    opted_out_ids: set[Any] = set()
+    if in_app_ctx:
+        opted_out_ids = set(
+            db.session.execute(select(FederationConsent.user_id).where(FederationConsent.federated_collection.is_(False))).scalars().all()
+        )
+
     if items is None:
-        from sqlalchemy import or_, select
+        from sqlalchemy import and_, or_, select
         from sqlalchemy.orm import selectinload
 
-        from app.db.models import Expression, Item, Manifestation, Work, db
+        from app.db.models import Expression, Item, Manifestation, Work
 
-        item_stmt = select(Item).options(
-            selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work)
+        public_clause = and_(
+            Item.is_hidden.is_(False),
+            Item.visibility == "public",
+            ~Item.owner_id.in_(opted_out_ids) if opted_out_ids else True,
         )
-        if user_id is not None:
-            item_stmt = item_stmt.where(or_(Item.is_hidden.is_(False), Item.owner_id == user_id))
-        else:
-            item_stmt = item_stmt.where(Item.is_hidden.is_(False))
+        vis_clauses = [public_clause]
+        if viewer_uuid is not None:
+            vis_clauses.append(Item.owner_id == viewer_uuid)
+            if friend_ids:
+                vis_clauses.append(
+                    and_(
+                        Item.owner_id.in_(friend_ids),
+                        Item.visibility.in_(("friends_only", "shared")),
+                    )
+                )
 
-        # Apply item count limit
-        item_stmt = item_stmt.limit(MAX_GRAPH_ITEMS)
+        item_stmt = (
+            select(Item)
+            .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            .where(or_(*vis_clauses))
+            .limit(MAX_GRAPH_ITEMS)
+        )
 
         db_items = list(db.session.execute(item_stmt).scalars().all())
 
@@ -633,43 +671,38 @@ def build_graph(
             items = items[:MAX_GRAPH_ITEMS]
 
         entities_to_serialize = []
-        from app.core.friend_service import is_friend_of
-        from app.core.item_access import is_item_publicly_visible
-
         for it in items:
             if isinstance(it, dict):
                 owner = it.get("owner_id")
-                vis = it.get("visibility", "public")
-                if owner is not None and user_id is not None and str(owner) == str(user_id):
-                    # Owner can always query their own item
-                    pass
-                elif (
-                    owner is not None
-                    and user_id is not None
-                    and vis in ("public", "friends_only", "shared")
-                    and is_friend_of(user_id, owner)
-                ):
-                    # Confirmed friend can see friends_only/shared items
-                    pass
-                elif not is_item_publicly_visible(it):
-                    continue
+                vis = str(it.get("visibility") or ("private" if it.get("is_hidden") else "public")).lower()
+                is_hidden = bool(it.get("is_hidden", False))
             elif hasattr(it, "owner_id"):
                 owner = getattr(it, "owner_id", None)
-                vis = getattr(it, "visibility", "public")
-                if owner is not None and user_id is not None and str(owner) == str(user_id):
-                    # Owner can always query their own item
-                    pass
-                elif (
-                    owner is not None
-                    and user_id is not None
-                    and vis in ("public", "friends_only", "shared")
-                    and is_friend_of(user_id, owner)
-                ):
-                    # Confirmed friend can see friends_only/shared items
-                    pass
-                elif not is_item_publicly_visible(it):
-                    continue
-            entities_to_serialize.append(it)
+                is_hidden = bool(getattr(it, "is_hidden", False))
+                vis = str(getattr(it, "visibility", None) or ("private" if is_hidden else "public")).lower()
+            else:
+                entities_to_serialize.append(it)
+                continue
+
+            owner_uuid: Any = None
+            if owner is not None:
+                try:
+                    import uuid as _uuid
+
+                    owner_uuid = _uuid.UUID(str(owner)) if not isinstance(owner, _uuid.UUID) else owner
+                except (ValueError, TypeError):
+                    owner_uuid = owner
+
+            if (
+                owner is not None
+                and viewer_str is not None
+                and (str(owner) == viewer_str or (owner_uuid is not None and viewer_uuid is not None and owner_uuid == viewer_uuid))
+            ):
+                entities_to_serialize.append(it)
+            elif owner_uuid is not None and owner_uuid in friend_ids and vis in ("public", "friends_only", "shared"):
+                entities_to_serialize.append(it)
+            elif vis == "public" and not is_hidden and owner_uuid not in opted_out_ids:
+                entities_to_serialize.append(it)
 
     try:
         graph = build_collection_rdf_graph(entities_to_serialize, base_url or get_lod_base_url())

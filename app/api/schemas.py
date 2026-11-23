@@ -655,6 +655,55 @@ class SharedCollectionCreateSchema(BaseModel):
             if not isinstance(nested_scope, str) or nested_scope.strip() not in SHARED_VISIBILITY_SCOPES:
                 raise ValueError(f"Invalid filters.visibility_scope '{nested_scope}'. Must be one of {SHARED_VISIBILITY_SCOPES}")
             copied["visibility_scope"] = nested_scope.strip()
+
+        from app.core.format_normalizer import FormatNormalizer
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, MediaCategory, MediaFormat
+
+        valid_categories = set(MediaCategory.ALL)
+        for cat_key in ("tags", "category"):
+            if cat_key in copied and copied[cat_key] is not None:
+                raw_cats = copied[cat_key]
+                cat_list = raw_cats if isinstance(raw_cats, list) else [raw_cats]
+                norm_cats: list[str] = []
+                for item in cat_list:
+                    if not isinstance(item, str):
+                        raise ValueError(f"Invalid category filter value: {item!r}")
+                    cleaned = item.strip().lower()
+                    if not cleaned:
+                        continue
+                    mapped = FORMAT_ALIAS_TO_CATEGORY.get(cleaned, cleaned)
+                    if mapped not in valid_categories:
+                        raise ValueError(f"Invalid category '{item}' in filters.{cat_key}")
+                    if mapped not in norm_cats:
+                        norm_cats.append(mapped)
+                copied[cat_key] = norm_cats
+
+        valid_formats = set(MediaFormat.ALL)
+        for fmt_key in ("format", "formats"):
+            if fmt_key in copied and copied[fmt_key] is not None:
+                raw_fmts = copied[fmt_key]
+                fmt_list = raw_fmts if isinstance(raw_fmts, list) else [raw_fmts]
+                norm_fmts: list[str] = []
+                for item in fmt_list:
+                    if not isinstance(item, str):
+                        raise ValueError(f"Invalid format filter value: {item!r}")
+                    cleaned = item.strip().lower()
+                    if not cleaned:
+                        continue
+                    if cleaned in valid_formats:
+                        resolved = cleaned
+                    else:
+                        FormatNormalizer._load_mappings()
+                        if cleaned in FormatNormalizer._mappings:
+                            resolved = FormatNormalizer._mappings[cleaned]
+                        elif cleaned in FORMAT_ALIAS_TO_CATEGORY:
+                            resolved = FormatNormalizer.normalize(cleaned)
+                        else:
+                            raise ValueError(f"Invalid format '{item}' in filters.{fmt_key}")
+                    if resolved not in norm_fmts:
+                        norm_fmts.append(resolved)
+                copied[fmt_key] = norm_fmts
+
         return copied
 
     @field_validator("expires_in_days", mode="before")

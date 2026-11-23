@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 
 import { buildPaginationWindow } from "@/lib/pagination";
+import { resolveSchemaType } from "@/lib/schema-org";
 import { resolveApiUrl } from "@/lib/utils";
 import { Footer } from "@/components/dashboard/footer";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -175,9 +176,9 @@ export async function renderSharedCollectionJsonLdView(token: string, requestedP
     "@context": {
       "@vocab": "https://schema.org/",
       t: "name",
-      a: "byArtist",
-      f: "musicReleaseFormat",
-      l: "recordLabel",
+      a: "creator",
+      f: "encodingFormat",
+      l: "publisher",
       c: "catalogNumber",
       y: "datePublished",
       g: "gtin13",
@@ -192,6 +193,7 @@ export async function renderSharedCollectionJsonLdView(token: string, requestedP
     ...(currentPage < totalPages ? { nextPage: pageUrl(currentPage + 1) } : {}),
     pages: windowPages.map(pageUrl),
     itemListElement: items.map((item: SharedCollectionItem) => ({
+      "@type": resolveSchemaType(item.content_type, undefined, item.format),
       t: item.title,
       ...(item.authors && item.authors.length > 0 ? { a: item.authors.join(", ") } : {}),
       ...(item.format || item.content_type ? { f: item.format || item.content_type } : {}),

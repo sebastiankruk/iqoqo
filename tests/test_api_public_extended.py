@@ -945,3 +945,55 @@ def test_shared_collection_query_filter_includes_friends_only_and_excludes_hidde
     anon_fr = client.get(f"/api/public/share/{fr_tok}")
     assert anon_fr.status_code == 200
     assert {i["id"] for i in anon_fr.json["data"]["items"]} == {pub_id, fr_id}
+
+
+def test_music_share_excludes_movie_dvd_even_with_drifted_content_type(client, app):
+    """C141: Music-filtered shares exclude movie DVDs (including drifted Expression.content_type='music')."""
+    from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
+
+    with app.app_context():
+        owner = User(email="c141-share@example.com", display_name="C141 Owner", is_active=True)
+        owner.set_password("StrongPass123!")
+        db.session.add(owner)
+        db.session.flush()
+
+        w_cd = Work(title="Kind of Blue")
+        w_dvd = Work(title="Drifted Movie DVD")
+        db.session.add_all([w_cd, w_dvd])
+        db.session.flush()
+
+        e_cd = Expression(work_id=w_cd.id, content_type="music", language="en")
+        # Simulate corrupted/drifted Expression.content_type='music' on a movie DVD
+        e_dvd = Expression(work_id=w_dvd.id, content_type="music", language="en")
+        db.session.add_all([e_cd, e_dvd])
+        db.session.flush()
+
+        m_cd = Manifestation(expression_id=e_cd.id, format="cd", format_type="cd", meta={"title": "Kind of Blue CD", "format": "cd"})
+        m_dvd = Manifestation(
+            expression_id=e_dvd.id,
+            format="dvd",
+            format_type="dvd",
+            catalog_number="DVD-123",
+            meta={"title": "Drifted Movie DVD", "format": "dvd"},
+        )
+        db.session.add_all([m_cd, m_dvd])
+        db.session.flush()
+
+        it_cd = Item(manifestation_id=m_cd.id, owner_id=owner.id, visibility="public", is_hidden=False, status="unread")
+        it_dvd = Item(manifestation_id=m_dvd.id, owner_id=owner.id, visibility="public", is_hidden=False, status="unread")
+        db.session.add_all([it_cd, it_dvd])
+
+        sc = SharedCollection(
+            user_id=owner.id,
+            name="Music Share",
+            share_token="c141-music-share-token",
+            filters={"tags": ["music"]},
+        )
+        db.session.add(sc)
+        db.session.commit()
+
+    res = client.get("/api/public/share/c141-music-share-token")
+    assert res.status_code == 200
+    titles = {item["title"] for item in res.get_json()["data"]["items"]}
+    assert "Kind of Blue" in titles
+    assert "Drifted Movie DVD" not in titles

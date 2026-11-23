@@ -328,3 +328,22 @@ def test_fetch_shared_collection_by_token_pg_search_offset(app, monkeypatch) -> 
 
         assert captured_calls == [{"limit": 1, "offset": 1}]
         assert [r.id for r in results] == [item.id]
+
+
+def test_dvd_with_catalog_number_never_emits_music_album():
+    """C141: A movie DVD with catalog_number and drifted content_type='music' must not emit MusicAlbum/MusicRelease."""
+    from rdflib import RDF, Graph, URIRef
+
+    from app.core.frbr_service import SCHEMA, _emit_audio_rdf_triples
+
+    g = Graph()
+    m_uri = URIRef("https://iqoqo.cc/manifestation/999")
+    _emit_audio_rdf_triples(
+        g,
+        m_uri,
+        None,
+        {"format": "dvd", "catalog_number": "CAT-999"},
+        content_type="music",
+    )
+    assert (m_uri, RDF.type, SCHEMA.MusicAlbum) not in g
+    assert (m_uri, RDF.type, SCHEMA.MusicRelease) not in g

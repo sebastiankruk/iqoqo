@@ -2691,6 +2691,11 @@ def _enrich_graph_from_db(
             seen_works.add(item.id)
 
     try:
+        from sqlalchemy import or_
+
+        from app.db.core import WorkExpansionLink
+        from app.db.games import ContainerAggregation
+
         # WorkContributions
         if seen_works:
             contribs = (
@@ -2917,11 +2922,65 @@ def _enrich_graph_from_db(
                 g.add((w_uri, SCHEMA.partOfSeries, s_uri))
                 if sm.sequence is not None:
                     g.add((w_uri, SCHEMA.position, Literal(sm.sequence, datatype=XSD.integer)))
+
+            # WorkExpansionLink (expansion_work -> base_work)
+            exp_links = (
+                db.session.execute(
+                    select(WorkExpansionLink).where(
+                        (WorkExpansionLink.expansion_work_id.in_(seen_works)) | (WorkExpansionLink.base_work_id.in_(seen_works))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for el in exp_links:
+                exp_uri = _frbr_uri("work", el.expansion_work_id, base_url)
+                base_uri = _frbr_uri("work", el.base_work_id, base_url)
+                g.add((exp_uri, SCHEMA.isPartOf, base_uri))
+                g.add((base_uri, SCHEMA.hasPart, exp_uri))
+
+            # ContainerAggregation (container_work -> aggregated_work / aggregated_item)
+            aggs = (
+                db.session.execute(select(ContainerAggregation).where(ContainerAggregation.container_work_id.in_(seen_works)))
+                .scalars()
+                .all()
+            )
+            for agg in aggs:
+                c_uri = _frbr_uri("work", agg.container_work_id, base_url)
+                if agg.aggregated_type == "work" and agg.aggregated_work_id:
+                    t_uri = _frbr_uri("work", agg.aggregated_work_id, base_url)
+                    g.add((c_uri, SCHEMA.hasPart, t_uri))
+                    g.add((t_uri, SCHEMA.isPartOf, c_uri))
+                elif agg.aggregated_type == "item" and agg.aggregated_item_id:
+                    t_uri = _frbr_uri("item", agg.aggregated_item_id, base_url)
+                    g.add((c_uri, SCHEMA.hasPart, t_uri))
+                    g.add((t_uri, SCHEMA.isPartOf, c_uri))
+
+        # Accepted SemanticLinks for Work, Expression, and Manifestation
+        sem_clauses = []
+        if seen_works:
+            sem_clauses.append((SemanticLink.entity_type == "work") & (SemanticLink.entity_id.in_(seen_works)))
+        if seen_expressions:
+            sem_clauses.append((SemanticLink.entity_type == "expression") & (SemanticLink.entity_id.in_(seen_expressions)))
+        if seen_manifestations:
+            sem_clauses.append((SemanticLink.entity_type == "manifestation") & (SemanticLink.entity_id.in_(seen_manifestations)))
+        if sem_clauses:
+            from sqlalchemy import or_
+
+            sem_links = db.session.execute(select(SemanticLink).where(SemanticLink.status == "accepted", or_(*sem_clauses))).scalars().all()
+            for sl in sem_links:
+                safe_ext = _safe_iri(sl.external_uri)
+                if safe_ext is None:
+                    continue
+                subj_uri = _frbr_uri(sl.entity_type, sl.entity_id, base_url)
+                ext_ref = URIRef(safe_ext)
+                g.add((subj_uri, OWL.sameAs, ext_ref))
+                g.add((subj_uri, SCHEMA.sameAs, ext_ref))
     except (SQLAlchemyError, AttributeError, KeyError):
         pass
 
 
-_AUDIO_CONTENT_TYPES = {"music", "audio"}
+_AUDIO_CONTENT_TYPES = {"music", "audio", "sound"}
 _AUDIO_RELEASE_FORMATS = {
     "vinyl",
     "cd",
@@ -2935,6 +2994,9 @@ _AUDIO_RELEASE_FORMATS = {
     "reel_to_reel",
     "tape",
     "8_track",
+    "bluray_audio",
+    "cd_dvd_combo",
+    "unknown_audio",
 }
 
 
@@ -2946,15 +3008,23 @@ def _emit_audio_rdf_triples(
     content_type: str | None = None,
 ) -> None:
     """Emit Schema.org MusicAlbum/MusicRelease and pressing triples for audio manifestations."""
+    from app.core.taxonomy import FORMAT_TO_CATEGORY
+
     meta_dict = meta if isinstance(meta, dict) else {}
     raw_format = (
         meta_dict.get("music_release_format")
         or meta_dict.get("format")
         or (getattr(m_elem, "format", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
+        or (getattr(m_elem, "format_type", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
         or (m_elem.get("format") if isinstance(m_elem, dict) else None)
     )
     norm_ct = (content_type or "").strip().lower()
     norm_fmt = str(raw_format or "").strip().lower()
+
+    # Never emit audio pressing triples if the resolved carrier format belongs to a non-music category (e.g. movie DVD)
+    mapped_cat = FORMAT_TO_CATEGORY.get(norm_fmt)
+    if mapped_cat is not None and mapped_cat != "music":
+        return
 
     has_audio_hint = any(meta_dict.get(k) for k in ("catalog_number", "catno", "record_label", "matrix_runout", "music_release_format"))
     if norm_ct not in _AUDIO_CONTENT_TYPES and norm_fmt not in _AUDIO_RELEASE_FORMATS and not has_audio_hint:
@@ -3061,7 +3131,8 @@ def _emit_cartographic_rdf_triples(g: Graph, m_uri: URIRef, meta: dict[str, Any]
             att_type = att.get("type") or "fold_out_insert"
             att_img = att.get("image_url")
 
-            att_node = BNode()
+            att_id = str(att.get("id") or idx)
+            att_node = URIRef(f"{str(m_uri)}#map-{att_id}")
             g.add((m_uri, IQOQO.hasMapAttachment, att_node))
             g.add((att_node, RDF.type, IQOQO.MapAttachment))
             g.add((att_node, IQOQO.mapTitle, Literal(str(att_title), datatype=XSD.string)))

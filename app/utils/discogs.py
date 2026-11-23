@@ -78,15 +78,9 @@ def _normalize_release_data(release: dict) -> dict:
             elif isinstance(item, str):
                 format_labels.append(item)
 
-    media_format = (
-        "vinyl"
-        if any(label == "Vinyl" for label in format_labels)
-        else (
-            "bluray_audio"
-            if any(str(label).strip().lower() in _BLURAY_AUDIO_LABELS for label in format_labels)
-            else "cd" if any(label == "CD" for label in format_labels) else "audio"
-        )
-    )
+    from app.core.format_normalizer import detect_audio_carrier_from_labels
+
+    media_format = detect_audio_carrier_from_labels(format_labels) or "unknown_audio"
 
     return {
         "title": title,
