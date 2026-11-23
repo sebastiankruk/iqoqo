@@ -126,7 +126,7 @@ The project's `Makefile` SHALL provide a `fix-physical-kinds` target that invoke
 
 ### Requirement: Deterministic raw_payload carrier recovery and ambiguous unknown_audio backfill
 
-Both the linear Alembic backfill migration (`v1_1_1_norm_legacy_formats.py`, off `v1_1_0_serial_issn_issues`) and `scripts/fix_physical_kinds.py --apply` SHALL inspect `Manifestation.raw_payload` (passing `content_type` context for MusicBrainz `media[*].format`, Discogs `formats`/`format`, OpenLibrary, TMDb, and Allegro carrier parameters) whenever format columns contain legacy generic format values (`"music"`, `"audio"`, `"sound"`, `"movie"`, `"video"`, `"moving image"`) OR when all three format columns (`format`, `format_type`, `meta['format']`) are `NULL`/blank and `raw_payload` is present. Furthermore, when only a subset of the three format columns is populated with a canonical value (e.g., `format = NULL, format_type = NULL, meta['format'] = "vinyl"`), both the migration and `--apply` SHALL backfill all three columns to that canonical value, and whenever an unambiguous video or text carrier (`"dvd"`, `"bluray"`, `"vcd"`, `"book"`) is resolved on a row whose parent `Expression.content_type` was mis-tagged as `"music"`, both the migration and `--apply` SHALL repair `Expression.content_type` to match `FORMAT_TO_CATEGORY[target_fmt]`.
+Both the linear Alembic backfill migration (`v1_1_1_norm_legacy_formats.py`, off `v1_1_0_serial_issn_issues`) and `scripts/fix_physical_kinds.py --apply` SHALL inspect `Manifestation.raw_payload` (passing `content_type` context for MusicBrainz `media[*].format`, Discogs `formats`/`format`, OpenLibrary, TMDb, and Allegro carrier parameters) whenever format columns contain legacy generic format values (`"music"`, `"audio"`, `"sound"`, `"movie"`, `"video"`, `"moving image"`) OR when all three format columns (`format`, `format_type`, `meta['format']`) are `NULL`/blank and `raw_payload` is present. Furthermore, when only a subset of the three format columns is populated with a canonical value (e.g., `format = NULL, format_type = NULL, meta['format'] = "vinyl"`) OR when any format column contains mixed-case characters (e.g., uniform `"Vinyl"`, `"Vinyl"`, `"Vinyl"`), both the migration and `--apply` SHALL synchronize all three columns to the lowercased canonical value, and whenever an unambiguous video or text carrier (`"dvd"`, `"bluray"`, `"vcd"`, `"book"`) is resolved on a row whose parent `Expression.content_type` was mis-tagged as `"music"`, both the migration and `--apply` SHALL repair `Expression.content_type` to match `FORMAT_TO_CATEGORY[target_fmt]`.
 
 #### Scenario: MusicBrainz or Discogs raw_payload recovers specific carrier on backfill
 
@@ -136,9 +136,9 @@ Both the linear Alembic backfill migration (`v1_1_1_norm_legacy_formats.py`, off
 
 #### Scenario: Single-column canonical format backfills remaining NULL format columns
 
-- **GIVEN** an existing `Manifestation` with `format = NULL`, `format_type = NULL`, and `meta['format'] = "vinyl"` (or `format_type = "dvd"` and `format = NULL`)
+- **GIVEN** an existing `Manifestation` with `format = NULL`, `format_type = NULL`, and `meta['format'] = "vinyl"` (or `format_type = "dvd"` and `format = NULL`), or with uniform mixed-case `"Vinyl"` across all three format fields
 - **WHEN** the Alembic backfill migration or `scripts/fix_physical_kinds.py --apply` runs
-- **THEN** `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']` MUST all be synchronized to `"vinyl"` (or `"dvd"`).
+- **THEN** `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']` MUST all be synchronized to lowercased `"vinyl"` (or `"dvd"`).
 
 #### Scenario: Ambiguous music/audio/sound row without raw_payload normalizes to unknown_audio
 
