@@ -147,31 +147,16 @@ def _declared_test_names(tree: ast.Module) -> dict[str, list[str]]:
 
 
 def test_no_test_class_or_function_is_defined_twice_in_one_file() -> None:
-    """A second definition of the same test name silently replaces the first.
-
-    The account-deletion suite defined three of its classes twice -- once in a
-    block that had been superseded and again, byte-identical, at the bottom of
-    the file. Python binds the later one, so the earlier copy never ran and
-    nothing reported it: ``pytest`` collected 56 tests while the file declared
-    66, and the ten unreachable tests sat in the highest-risk security suite in
-    the repository.
-
-    A maintainer editing the dead copy gets green tests as feedback, because
-    the live copy still passes. This check is deliberately a plain AST scan
-    rather than a diff against ``main``: the defect is not that a copy is old,
-    it is that a name is bound twice in one module.
-
-    Bounded to the account-deletion suite today, but the check is generic and
-    the scan is cheap -- widen ``paths`` rather than adding a second copy of
-    this test.
-    """
-    paths = [TESTS_DIR / "test_account_deletion.py"]
+    """A second definition of the same test name silently replaces the first across all tests/**/test_*.py."""
+    paths = sorted(TESTS_DIR.rglob("test_*.py"))
     offenders: list[str] = []
 
     for path in paths:
         declared: dict[str, int] = {}
-        for name in _declared_test_names(ast.parse(path.read_text(encoding="utf-8"))):
-            declared[name] = declared.get(name, 0) + 1
+        for scope, methods in _declared_test_names(ast.parse(path.read_text(encoding="utf-8"))).items():
+            for method_name in methods:
+                full_name = f"{scope}.{method_name}" if scope != "<module>" else method_name
+                declared[full_name] = declared.get(full_name, 0) + 1
         for name, count in sorted(declared.items()):
             if count > 1:
                 offenders.append(f"{path.relative_to(REPO_ROOT)}: {name} defined {count} times")
@@ -180,6 +165,116 @@ def test_no_test_class_or_function_is_defined_twice_in_one_file() -> None:
         "these test names are defined more than once per module; the later "
         "definition wins and the earlier one never runs:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_no_orphaned_backend_script_or_e2e_test_files() -> None:
+    """Every test file must be discovered by its canonical runner without silent orphans."""
+    from scripts import run_tests_parallel
+
+    # 1. Parallel runner must include every non-PG-gated tests/**/test_*.py file
+    expected_backend = {
+        p.relative_to(REPO_ROOT).as_posix()
+        for p in sorted(TESTS_DIR.rglob("test_*.py"))
+        if not p.relative_to(REPO_ROOT).as_posix().startswith("tests/integration/db/")
+    }
+    parallel_discovered = set(run_tests_parallel.get_all_test_files())
+    missing_parallel = sorted(expected_backend - parallel_discovered)
+    assert not missing_parallel, f"Orphaned test files missed by scripts/run_tests_parallel.py: {missing_parallel}"
+
+    # 2. Makefile test-scripts-python must include tests/scripts/
+    makefile_text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    scripts_target = makefile_text.split("test-scripts-python:", 1)[1].split("\n\n", 1)[0]
+    assert "tests/scripts/" in scripts_target, "test-scripts-python must include tests/scripts/"
+
+    # 3. No orphaned frontend/tests/e2e directory outside Playwright's __tests__/e2e testDir
+    orphaned_e2e_dir = REPO_ROOT / "frontend" / "tests" / "e2e"
+    assert (
+        not orphaned_e2e_dir.exists()
+    ), f"Orphaned E2E directory {orphaned_e2e_dir} exists outside Playwright testDir frontend/__tests__/e2e"
+
+
+def test_module_coverage_across_app_scripts_and_frontend() -> None:
+    """Verify every app module, operational script, and frontend module has test coverage or explicit exemption."""
+    backend_test_corpus = "\n".join(
+        p.read_text(encoding="utf-8", errors="ignore") for p in sorted(TESTS_DIR.rglob("*")) if p.is_file() and "__pycache__" not in p.parts
+    )
+
+    # 1. Every non-__init__.py module in app/ must be referenced in tests/
+    uncovered_app = []
+    for py_file in sorted((REPO_ROOT / "app").rglob("*.py")):
+        if py_file.name == "__init__.py" or "__pycache__" in py_file.parts:
+            continue
+        mod = py_file.with_suffix("").relative_to(REPO_ROOT).as_posix().replace("/", ".")
+        if mod not in backend_test_corpus and py_file.stem not in backend_test_corpus:
+            uncovered_app.append(py_file.relative_to(REPO_ROOT).as_posix())
+    assert not uncovered_app, f"Backend app modules with no test reference: {uncovered_app}"
+
+    # 2. Operational scripts in scripts/ must be referenced in tests/ (excluding bounded standalone dev utilities)
+    script_exemptions = {
+        "scripts/allegro_auth.py",
+        "scripts/benchmark_graph_backends.py",
+        "scripts/maintain_deploy_dir.py",
+        "scripts/phash_cover.py",
+        "scripts/run_secret_scan.py",
+        "scripts/setup-ios-tools.sh",
+        "scripts/update_bgg_mechanics.py",
+    }
+    uncovered_scripts = []
+    for script_file in sorted((REPO_ROOT / "scripts").rglob("*")):
+        if not script_file.is_file() or "__pycache__" in script_file.parts or script_file.suffix not in {".py", ".sh"}:
+            continue
+        rel = script_file.relative_to(REPO_ROOT).as_posix()
+        if rel in script_exemptions:
+            continue
+        if script_file.name not in backend_test_corpus and script_file.stem not in backend_test_corpus:
+            uncovered_scripts.append(rel)
+    assert not uncovered_scripts, f"Operational scripts with no test reference: {uncovered_scripts}"
+
+    # 3. Frontend modules under app/, components/, lib/, hooks/ must be referenced in __tests__/ or allowlisted
+    fe_root = REPO_ROOT / "frontend"
+    fe_test_corpus = "\n".join(
+        p.read_text(encoding="utf-8", errors="ignore")
+        for p in list((fe_root / "__tests__").rglob("*")) + list((fe_root / "tests").rglob("*"))
+        if p.is_file()
+    )
+    fe_exemptions = {
+        "app/account/delete/page.tsx",
+        "app/account/verify/page.tsx",
+        "app/admin/federation/page.tsx",
+        "app/admin/groups/page.tsx",
+        "app/admin/sparql/page.tsx",
+        "app/apple-icon.tsx",
+        "app/help/[slug]/page.tsx",
+        "app/legal/privacy/page.tsx",
+        "app/legal/terms/page.tsx",
+        "components/admin/cover-editor/editor-toolbar.tsx",
+        "components/admin/frbr/manifestation-editor.tsx",
+        "components/help/help-article-detail-client.tsx",
+        "components/item/discovery-pivot.tsx",
+        "components/item/extended-metadata-puzzle.tsx",
+        "components/item/sidebar/constants.ts",
+        "components/item/sidebar/use-item-sidebar-actions.ts",
+        "components/social/frbr-notes.tsx",
+        "components/ui/bgg-attribution.tsx",
+        "components/ui/bibliographic-attribution.tsx",
+        "components/ui/discogs-attribution.tsx",
+        "components/ui/igdb-attribution.tsx",
+        "components/ui/tmdb-attribution.tsx",
+        "lib/api/server-client.ts",
+    }
+    uncovered_fe = []
+    for folder in ("app", "components", "lib", "hooks"):
+        for fe_file in sorted((fe_root / folder).rglob("*")):
+            if fe_file.suffix not in {".ts", ".tsx"} or fe_file.name.endswith(".d.ts"):
+                continue
+            rel = fe_file.relative_to(fe_root).as_posix()
+            if rel in fe_exemptions:
+                continue
+            key = fe_file.parent.relative_to(fe_root).as_posix() if fe_file.stem in {"page", "layout", "route"} else fe_file.stem
+            rel_no_ext = rel.removesuffix(".tsx").removesuffix(".ts")
+            if key not in fe_test_corpus and rel_no_ext not in fe_test_corpus:
+                uncovered_fe.append(rel)
+    assert not uncovered_fe, f"Frontend modules with no test reference: {uncovered_fe}"
 
 
 def test_the_account_deletion_suite_declares_exactly_what_pytest_collects() -> None:

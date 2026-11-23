@@ -69,9 +69,16 @@ API_PATTERNS: tuple[str, ...] = (
 
 
 def get_all_test_files() -> list[str]:
-    """Discover all root test_*.py test files."""
+    """Discover all test_*.py files recursively under tests/ (excluding PG-gated DB suite unless enabled)."""
     test_dir = ROOT / "tests"
-    return sorted(p.name for p in test_dir.glob("test_*.py"))
+    include_pg = os.environ.get("ENABLE_FTS_TESTS") == "true"
+    files: list[str] = []
+    for path in sorted(test_dir.rglob("test_*.py")):
+        rel = path.relative_to(ROOT).as_posix()
+        if rel.startswith("tests/integration/db/") and not include_pg:
+            continue
+        files.append(rel)
+    return files
 
 
 def partition_backend_tests() -> tuple[list[str], list[str], list[str]]:
@@ -85,14 +92,14 @@ def partition_backend_tests() -> tuple[list[str], list[str], list[str]]:
     stream_api: list[str] = []
     stream_tooling: list[str] = []
 
-    for name in all_files:
-        name_lower = name.lower()
+    for rel_path in all_files:
+        name_lower = Path(rel_path).name.lower()
         if any(pat in name_lower for pat in DOMAIN_PATTERNS):
-            stream_domain.append(f"tests/{name}")
+            stream_domain.append(rel_path)
         elif any(pat in name_lower for pat in API_PATTERNS):
-            stream_api.append(f"tests/{name}")
+            stream_api.append(rel_path)
         else:
-            stream_tooling.append(f"tests/{name}")
+            stream_tooling.append(rel_path)
 
     return stream_domain, stream_api, stream_tooling
 
@@ -180,13 +187,20 @@ def build_stream_definitions() -> dict[str, dict]:
     }
 
     # Stream 4: Tooling, Services, ETL, Telemetry & BATS
-    bats_cmd = ["bats", "tests/bash/"] if Path("/usr/bin/bats").exists() or Path("/usr/local/bin/bats").exists() else None
-    if not bats_cmd and (ROOT / "node_modules/.bin/bats").exists():
-        bats_cmd = [str(ROOT / "node_modules/.bin/bats"), "tests/bash/"]
+    bats_bin = (
+        "bats"
+        if Path("/usr/bin/bats").exists() or Path("/usr/local/bin/bats").exists()
+        else (str(ROOT / "node_modules/.bin/bats") if (ROOT / "node_modules/.bin/bats").exists() else None)
+    )
 
-    tooling_cmds = [[pytest_bin] + pytest_args + tooling_files]
-    if bats_cmd:
-        tooling_cmds.append(bats_cmd)
+    tooling_cmds: list[list[str]] = [[pytest_bin] + pytest_args + tooling_files]
+    if bats_bin:
+        if AI_MODE:
+            tooling_cmds.append(
+                ["bash", "-o", "pipefail", "-c", f"{bats_bin} --formatter tap tests/bash/ | {sys.executable} scripts/format_bats_ai.py"]
+            )
+        else:
+            tooling_cmds.append([bats_bin, "tests/bash/"])
 
     stream_tooling = {
         "title": "Stream 4 — Services, Tooling, Scripts & BATS",
@@ -228,11 +242,12 @@ def main() -> int:
 
     target_streams = [args.stream] if args.stream else list(streams.keys())
 
-    print("=" * 60)
-    print(f"Starting {len(target_streams)} Test Stream(s) in Parallel")
-    for s in target_streams:
-        print(f"  * [{s}] {streams[s]['title']}")
-    print("=" * 60)
+    if not AI_MODE:
+        print("=" * 60)
+        print(f"Starting {len(target_streams)} Test Stream(s) in Parallel")
+        for s in target_streams:
+            print(f"  * [{s}] {streams[s]['title']}")
+        print("=" * 60)
 
     start_total = time.time()
     results: dict[str, tuple[bool, float, str]] = {}
@@ -254,14 +269,27 @@ def main() -> int:
             try:
                 sid, success, elapsed, output = future.result()
                 results[sid] = (success, elapsed, output)
-                status_str = "PASSED" if success else "FAILED"
-                print(f"[{sid}] {status_str} in {elapsed:.2f}s")
+                if not AI_MODE:
+                    status_str = "PASSED" if success else "FAILED"
+                    print(f"[{sid}] {status_str} in {elapsed:.2f}s")
             except Exception as exc:
                 results[stream_id] = (False, 0.0, str(exc))
                 print(f"[{stream_id}] ERROR: {exc}")
 
     total_elapsed = time.time() - start_total
     all_passed = all(success for success, _, _ in results.values())
+
+    if AI_MODE:
+        for sid in target_streams:
+            success, elapsed, output = results[sid]
+            status_label = "PASS" if success else "FAIL"
+            print(f"[{sid}] {status_label} ({elapsed:.2f}s)")
+            if not success:
+                lines = [line for line in output.splitlines() if line.strip()]
+                for line in lines[-25:]:
+                    print(f"  {line}")
+        print(f"Parallel summary: {'PASS' if all_passed else 'FAIL'} ({total_elapsed:.2f}s)")
+        return 0 if all_passed else 1
 
     print("\n" + "=" * 60)
     print(f"Parallel Test Execution Summary ({total_elapsed:.2f}s total)")

@@ -32,7 +32,7 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
 
-    ...(isAiMode ? { reporter: "dot" } : {}),
+    ...(isAiMode ? { reporter: "dot", onConsoleLog: () => false } : {}),
 
     // Inject vi, describe, it, expect etc. as globals (no need to import them).
     globals: true,

@@ -269,6 +269,36 @@ jobs:
           PY
           pytest tests/test_migration_index_names.py -v -p no:randomly
 
+          # Run PostgreSQL-gated FTS, trigger, and FRBR merge integrity suites
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+          admin_url = os.environ["IQOQO_TEST_PG_ADMIN_URL"] + "postgres"
+          engine = sa.create_engine(admin_url, isolation_level="AUTOCOMMIT")
+          with engine.connect() as conn:
+              conn.execute(sa.text("DROP DATABASE IF EXISTS iqoqo_pg_gated_test"))
+              conn.execute(sa.text("CREATE DATABASE iqoqo_pg_gated_test"))
+          gated_engine = sa.create_engine(os.environ["IQOQO_TEST_PG_ADMIN_URL"] + "iqoqo_pg_gated_test", isolation_level="AUTOCOMMIT")
+          with gated_engine.connect() as conn:
+              for schema in ("auth", "catalog", "inventory", "social", "federation", "config"):
+                  conn.execute(sa.text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+              conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
+          PY
+          ENABLE_FTS_TESTS=true \
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/iqoqo_pg_gated_test" \
+          SECRET_KEY="$(python -c 'import secrets;print(secrets.token_hex(32))')" \
+          pytest tests/integration/db/test_fts_postgres.py \
+            tests/test_frbr_merge_coverage.py \
+            tests/test_frbr_merge_integrity.py -v -p no:randomly
+          ENABLE_FTS_TESTS=true \
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/iqoqo_pg_gated_test" \
+          SECRET_KEY="$(python -c 'import secrets;print(secrets.token_hex(32))')" \
+          pytest tests/test_search.py -k "postgres_fts" -v -p no:randomly
+          ENABLE_FTS_TESTS=true \
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/iqoqo_pg_gated_test" \
+          SECRET_KEY="$(python -c 'import secrets;print(secrets.token_hex(32))')" \
+          pytest tests/test_security_constraints.py -k "postgres_lending_trigger" -v -p no:randomly
+
   image-size-gate:
     # The size budget is enforced at build time, but deploy.yml builds with
     # `push: true` and buildx never leaves a local image behind, so the published

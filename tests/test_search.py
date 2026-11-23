@@ -267,7 +267,11 @@ def _seed_diacritic_catalog(app):
 
     ids = {}
     with app.app_context():
-        user = User.query.filter_by(email="test_user@iqoqo.local").one()
+        user = User.query.filter_by(email="test_user@iqoqo.local").first()
+        if user is None:
+            user = User(email="test_user@iqoqo.local", public_username="test_user", visibility="public")
+            db.session.add(user)
+            db.session.flush()
 
         w1 = Work(title="Dziennik", meta={})
         w2 = Work(title="Prawda", meta={"authors": ["Remigiusz Mr\u00f3z"]})  # meta only, no Contributor row

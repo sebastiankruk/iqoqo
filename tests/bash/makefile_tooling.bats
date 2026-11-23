@@ -98,6 +98,43 @@
   run make -n test-backend IQOQO_AI_MODE=1
   [ "$status" -eq 0 ]
   [[ "$output" != *"echo \"Running backend tests...\""* ]]
+  [[ "$output" == *"-q --tb=short --no-header"* ]]
+}
+
+@test "Makefile test-backend-pg in AI mode suppresses verbose flags and echo" {
+  run make -n test-backend-pg IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"echo \"Running PostgreSQL-dependent"* ]]
+  [[ "$output" == *"-q --tb=short --no-header"* ]]
+  [[ "$output" != *"pytest tests/integration/db/ -v"* ]]
+}
+
+@test "Makefile test-scripts-python includes tests/scripts/ and AI flags" {
+  run make -n test-scripts-python IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tests/scripts/"* ]]
+  [[ "$output" == *"-q --tb=short --no-header"* ]]
+}
+
+@test "Makefile test-frontend in AI mode passes --reporter=dot" {
+  run make -n test-frontend IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--reporter=dot"* ]]
+  [[ "$output" != *"echo \"Running frontend unit tests"* ]]
+}
+
+@test "Makefile test-scripts-bash in AI mode pipes TAP output to format_bats_ai.py" {
+  run make -n test-scripts-bash IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--formatter tap"* ]]
+  [[ "$output" == *"format_bats_ai.py"* ]]
+}
+
+@test "Makefile test-e2e-federation dry-run does not execute live containers" {
+  run make -n test-e2e-federation IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"federated_friend_request.spec.ts"* ]]
+  [[ "$output" != *"help_hub_workflow.spec.ts"* ]]
 }
 
 @test "Makefile status can retrieve the helper from the preview backend image" {
