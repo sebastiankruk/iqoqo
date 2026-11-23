@@ -40,6 +40,7 @@ SRC_NAME="${SRC_NAME:-${CLONE_SRC_NAME:-prod}}"
 DST_LOC="${DST_LOC:-${CLONE_DST_LOC:-/opt/pre.iqoqo}}"
 DST_NAME="${DST_NAME:-${CLONE_DST_NAME:-preview}}"		
 SKIP_CLONE="${SKIP_CLONE:-0}"
+SKIP_BUILD="${SKIP_BUILD:-0}"
 FEDERATION_PAIR="${FEDERATION_PAIR:-0}"
 
 while [ $# -gt 0 ]; do
@@ -82,18 +83,22 @@ while [ $# -gt 0 ]; do
         --skip-clone)
             SKIP_CLONE="1"
             ;;
+        --skip-build)
+            SKIP_BUILD="1"
+            ;;
         --federation-pair|--federation)
             FEDERATION_PAIR="1"
             ;;
         -h|--help)
             echo "Usage: $0 [options]"
             echo "Options:"
-            echo "  --src-host <host>     Source host for prod clone (default: \$SRC_HOST or h.kruk.me)"
+            echo "  --src-host <host>     Source host for prod clone (default: \$SRC_HOST or prod.iqoqo.cc)"
             echo "  --src-loc <path>      Source location (default: \$SRC_LOC or /opt/iqoqo)"
             echo "  --src-name <name>     Source stack name (default: \$SRC_NAME or prod)"
             echo "  --dst-loc <path>      Destination location (default: \$DST_LOC or /opt/pre.iqoqo)"
             echo "  --dst-name <name>     Destination stack name (default: \$DST_NAME or preview)"
             echo "  --skip-clone          Skip database and volume clone"
+            echo "  --skip-build          Skip local Docker image build (use existing or prebuilt images)"
             echo "  --federation-pair     Start paired federation preview stack (peer-web, peer-frontend, peer-db)"
             exit 0
             ;;
@@ -108,11 +113,15 @@ done
 make version
 make preview-down DEPLOY_DIR="$DST_LOC"
 
-# 2. Build local Docker images tagged with 'preview'
-echo "🔨 Building preview Docker images..."
-if ! make docker-build-preview; then
-    echo "💥 ERROR: Preview Docker image build failed! Stop immediately so old container does not run." >&2
-    exit 1
+# 2. Build local Docker images tagged with 'preview' unless --skip-build is set
+if [ "$SKIP_BUILD" = "1" ]; then
+    echo "⏭️ Skipping preview Docker image build (--skip-build set)"
+else
+    echo "🔨 Building preview Docker images..."
+    if ! make docker-build-preview; then
+        echo "💥 ERROR: Preview Docker image build failed! Stop immediately so old container does not run." >&2
+        exit 1
+    fi
 fi
 
 # 3. Clone database and assets unless skipped
@@ -203,77 +212,10 @@ if [ "$has_oo" -eq 1 ] || [ "$has_otel" -eq 1 ]; then
         exit 1
     fi
 
-    if [ "$has_oo" -eq 1 ] && [ -f "$DST_LOC/.env" ]; then
-        oo_auth=$(grep -E '^OPENOBSERVE_BASIC_AUTH=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
-        if [ -n "$oo_auth" ]; then
-            oo_auth_code=$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' \
-                -X POST \
-                -H "Authorization: Basic ${oo_auth}" \
-                -H "Content-Type: application/json" \
-                -d '{"query":{"sql":"SELECT 1","size":1}}' \
-                "http://127.0.0.1:${oo_port}/api/default/_search" 2>/dev/null || echo "000")
-            if [ "$oo_auth_code" = "401" ] || [ "$oo_auth_code" = "403" ]; then
-                echo "🔑 OpenObserve auth mismatch (HTTP ${oo_auth_code}); resetting OpenObserve auth state from $DST_LOC/.env..."
-                MODE=preview DEPLOY_DIR="$DST_LOC" make monitoring-reset-auth
-            fi
-        fi
-    fi
 fi
 
-# Reconcile cloned InstanceSettings rows (in-memory re-encryption) and push authoritative $DST_LOC/.env overrides
-if [ -f "$DST_LOC/.env" ] && [ -f "$DST_LOC/docker-compose.prebuilt.yml" ]; then
-    echo "🔐 Reconciling encrypted InstanceSettings & preview overrides from $DST_LOC/.env..."
-    SRC_SECRET_KEY=""
-    if [ "$SKIP_CLONE" != "1" ]; then
-        src_env_named="${SRC_LOC}/.env.${SRC_NAME}"
-        src_env_default="${SRC_LOC}/.env"
-        if [ -n "$SRC_HOST" ]; then
-            # shellcheck disable=SC2029
-            SRC_SECRET_KEY=$(ssh "$SRC_HOST" "f='${src_env_named}'; [ -f \"\$f\" ] || f='${src_env_default}'; if [ -f \"\$f\" ]; then grep -E '^[[:space:]]*SECRET_KEY=' \"\$f\" | tail -n1 | cut -d= -f2- | tr -d '\r'; fi" 2>/dev/null || true)
-        else
-            src_env_file="$src_env_named"
-            [ -f "$src_env_file" ] || src_env_file="$src_env_default"
-            if [ -f "$src_env_file" ]; then
-                SRC_SECRET_KEY=$(grep -E '^[[:space:]]*SECRET_KEY=' "$src_env_file" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true)
-            fi
-        fi
-        SRC_SECRET_KEY="${SRC_SECRET_KEY#\"}"
-        SRC_SECRET_KEY="${SRC_SECRET_KEY%\"}"
-        SRC_SECRET_KEY="${SRC_SECRET_KEY#\'}"
-        SRC_SECRET_KEY="${SRC_SECRET_KEY%\'}"
-    fi
-
-    SRC_SECRET_KEY="$SRC_SECRET_KEY" DST_ENV_PATH="$DST_LOC/.env" python3 -c "
-import json, os
-from pathlib import Path
-
-dst_env = {}
-env_path = Path(os.environ['DST_ENV_PATH'])
-for raw_line in env_path.read_text(encoding='utf-8').splitlines():
-    line = raw_line.strip()
-    if not line or line.startswith('#'):
-        continue
-    if line.startswith('export '):
-        line = line[len('export '):].lstrip()
-    if '=' not in line:
-        continue
-    k, _, v = line.partition('=')
-    k = k.strip()
-    v = v.strip()
-    if (v.startswith('\"') and v.endswith('\"')) or (v.startswith(\"'\") and v.endswith(\"'\")):
-        v = v[1:-1]
-    elif ' #' in v:
-        v = v.split(' #', 1)[0].strip()
-    if k and v:
-        dst_env[k] = v
-
-print(json.dumps({
-    'src_secret_key': os.environ.get('SRC_SECRET_KEY', ''),
-    'dst_env': dst_env,
-}))
-" | COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory "$DST_LOC" --env-file "$DST_LOC/.env" -f "$DST_LOC/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py
-    unset SRC_SECRET_KEY
-fi
+# 5b. Delegate OpenObserve auth check/reset, InstanceSettings re-encryption, and RUM/container sync to make preview-reconcile
+DEPLOY_DIR="$DST_LOC" SRC_HOST="$SRC_HOST" SRC_LOC="$SRC_LOC" SRC_NAME="$SRC_NAME" SKIP_CLONE="$SKIP_CLONE" make preview-reconcile
 
 DEPLOY_DIR="$DST_LOC" make status preview
 

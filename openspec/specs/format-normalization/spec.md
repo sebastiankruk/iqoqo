@@ -2,7 +2,9 @@
 
 ## Purpose
 Define format string resolution, custom format alias mappings, and unknown format fallback rules.
+
 ## Requirements
+
 ### Requirement: Format normalizer resolves non-canonical values at read-time
 
 The system SHALL provide a `FormatNormalizer` that accepts a raw format string and a content type and returns a canonical `MediaFormat` value. The normalizer SHALL be invoked whenever `Manifestation.meta['format']` is read for display, filtering, or facet computation.
@@ -106,7 +108,7 @@ Applying the normalizer to an already-canonical value SHALL produce the same val
 
 ### Requirement: Facet aggregation uses normalized format values
 
-When computing Physical Kind facet counts for the faceted navigation panel, the system SHALL normalize each manifestation's format value before grouping, ensuring non-canonical values are counted under their resolved canonical format (or `unknown_*` placeholder).
+When computing Physical Kind facet counts for the faceted navigation panel, the system SHALL resolve each manifestation's format across `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']` and SHALL normalize each value with `Expression.content_type` context before grouping, ensuring non-canonical values and `NULL` formats are counted under their resolved canonical format (or `unknown_*` placeholder).
 
 #### Scenario: Facet counts group normalized values
 
@@ -118,19 +120,29 @@ When computing Physical Kind facet counts for the faceted navigation panel, the 
 - **WHEN** 4 manifestations with content type `"movie"` have `meta['format'] = "video"` and no user mapping exists
 - **THEN** the Physical Kind facet SHALL show count 4 for `"unknown_video"`
 
+#### Scenario: Facet counts include NULL and promoted-column formats with content-type context
+
+- **WHEN** the database contains 2 music manifestations with `NULL` format across `format`, `format_type`, and `meta['format']`, and 1 music manifestation with `Manifestation.format = "vinyl"` and `meta['format'] = NULL`
+- **THEN** the Physical Kind facet SHALL include count 2 under `"unknown_audio"` and count 1 under `"vinyl"`.
+
 ### Requirement: Format filter resolves non-canonical values
 
-When a client passes `?format=unknown_video` or `?format=dvd`, the backend SHALL return items whose normalized format matches the filter value. Items whose raw format normalizes to the same canonical value SHALL be included.
+When a client passes `?format=unknown_video`, `?format=unknown_audio`, or `?format=dvd`, the backend (`CatalogFilterBuilder._apply_format`, `SearchService` PostgreSQL FTS and SQLite `ILIKE`, `DataManager.get_filtered_works`, and `expand_format_filter`) SHALL evaluate `LOWER(COALESCE(Manifestation.format, Manifestation.format_type, Manifestation.meta['format']))` case-insensitively against lowercased expanded format tokens, expanding canonical filters across both `shared/format_mappings.yaml` (using pre-computed lowercased reverse alias lookups) and `FORMAT_ALIAS_TO_CATEGORY` aliases plus matching `NULL` rows (`OR COALESCE(Manifestation.format, Manifestation.format_type, Manifestation.meta['format']) IS NULL`) whenever `filter_includes_null_format()` is true, and SHALL apply `excluded_formats` inside SQL/FTS queries prior to `LIMIT`.
 
 #### Scenario: Filter by unknown_video returns unresolved items
 
 - **WHEN** the client requests `?format=unknown_video`
-- **THEN** the response SHALL include all movie items whose `meta['format']` normalizes to `"unknown_video"`
+- **THEN** the response SHALL include all movie items whose `format`, `format_type`, or `meta['format']` normalizes to `"unknown_video"` (including unmapped `"video"`/`"movie"`/`"moving image"` values and movie items with `NULL` format across both PostgreSQL FTS and SQLite search paths)
 
 #### Scenario: Filter by canonical format includes normalized items
 
-- **WHEN** `"video"` is mapped to `"dvd"` and the client requests `?format=dvd`
-- **THEN** the response SHALL include items with raw format `"video"` (normalized to `"dvd"`) AND items with raw format `"dvd"`
+- **WHEN** `"video"` is mapped to `"dvd"` and the client requests `?format=dvd` against rows storing `"DVD"`, `"Płyta DVD"`, or `"video"`
+- **THEN** the response SHALL include all matching items across `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']` in `CatalogFilterBuilder`, PostgreSQL FTS, SQLite search, and `DataManager.get_filtered_works`
+
+#### Scenario: Filter by unknown_audio catches legacy music/audio/sound aliases and NULL audio rows
+
+- **WHEN** the database contains music items with `format = "music"`, `format_type = "audio"`, `meta['format'] = "sound"`, and `NULL` format
+- **THEN** `expand_format_filter(["unknown_audio"])` and `?format=unknown_audio` queries MUST return all four items across PostgreSQL FTS, SQLite `ILIKE`, `CatalogFilterBuilder`, and `DataManager.get_filtered_works`.
 
 ### Requirement: Normalizer resolves BluRay audio raw values to bluray_audio
 
@@ -145,3 +157,42 @@ The `FormatNormalizer` SHALL resolve raw format values denoting BluRay audio rel
 
 - **WHEN** the normalizer receives a BluRay-audio raw value with no user mapping but a built-in alias exists
 - **THEN** the normalizer SHALL return `bluray_audio` and SHALL NOT fall back to a video placeholder such as `unknown_video`
+
+### Requirement: Ingest and write paths prevent generic category strings from persisting as carrier formats
+
+External audio/video enrichers (`app/utils/musicbrainz.py`, `app/utils/discogs.py`, `app/utils/tmdb.py`) and all `Manifestation` write and validation paths (`IngestService.ingest_from_meta`, `ingest_audio_from_barcode`, `ingest_video_from_barcode`, `ingest_from_isbn`, `ingest_game_from_barcode`, `ingest_puzzle_from_barcode`, `app/core/f3_validation.py`, `app/api/scanner.py`, `add_item_manual`, `persist_isbn_manifestation`, `update_manifestation`, `frbr_service.create_manifestation`, `frbr_service.update_manifestation`, and `DataManager.import_data`) SHALL extract specific canonical `MediaFormat` carriers where available, SHALL normalize explicit carrier aliases (e.g., `"płyta dvd"`, `"płyta blu-ray"`, `"płyta vcd"`, `"książka papierowa"`, `"lp"`) to their canonical `MediaFormat` when `strict=False`, and SHALL normalize any residual generic category tokens (`"music"`, `"audio"`, `"sound"`, `"movie"`, `"video"`, `"moving image"`) to canonical `MediaFormat` placeholders (`"unknown_audio"`, `"unknown_video"`) rather than persisting category names or guessing `"cd"`.
+
+#### Scenario: MusicBrainz and Discogs enrichers extract full audio carrier vocabulary with unknown_audio fallback
+
+- **WHEN** MusicBrainz `media[*].format` or Discogs `formats[*].name`/`descriptions`/`format` specifies `"CD"`, `"Vinyl"`/`"LP"`, `"Cassette"`, `"SACD"`, `"MiniDisc"`, `"CD/DVD"`, or `"Blu-ray Audio"`
+- **THEN** the enricher SHALL return the corresponding canonical `MediaFormat` (`"cd"`, `"vinyl"`, `"cassette"`, `"sacd"`, `"minidisc"`, `"cd_dvd_combo"`, `"bluray_audio"`)
+- **AND** when the upstream carrier is absent or unrecognized, the enricher SHALL return `"unknown_audio"` instead of `"audio"`.
+
+#### Scenario: Ingest and manual write paths reject or normalize generic category strings
+
+- **WHEN** an ingest call, scanner preview/save, manual item creation, `create_manifestation`/`update_manifestation`, or `validate_format_type(..., strict=False)` receives `"format": "music"`, `"audio"`, `"sound"`, `"movie"`, `"video"`, `"moving image"`, or a configured alias such as `"płyta dvd"` or `"płyta vcd"`
+- **THEN** the validated and persisted `Manifestation` MUST store the canonical `MediaFormat` (`"unknown_audio"`, `"unknown_video"`, `"dvd"`, or `"vcd"`), never the raw category or un-normalized alias string, and strict F3 validation (`strict=True`) SHALL reject un-normalized category strings when bypassed.
+
+### Requirement: Multi-field Manifestation format synchronization and raw_payload preservation
+
+Every `Manifestation` creation, update, and import path (`IngestService`, `frbr_service`, `scanner.py`, `items.py`, `manifestations.py`, `DataManager.import_data`) SHALL synchronize the canonical normalized value across `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']`, and `IngestService` barcode/metadata ingestion SHALL preserve the upstream provider dict in `Manifestation.raw_payload` whenever an external payload was retrieved.
+
+#### Scenario: Audio barcode ingest populates all three format columns and raw_payload
+
+- **GIVEN** an upstream MusicBrainz or Discogs payload for a vinyl LP barcode
+- **WHEN** `IngestService.ingest_audio_from_barcode` (or `ingest_from_meta`) creates a `Manifestation`
+- **THEN** `Manifestation.format`, `Manifestation.format_type`, and `Manifestation.meta['format']` MUST all equal `"vinyl"`, and `Manifestation.raw_payload` MUST retain the upstream release payload.
+
+#### Scenario: Display projection reads synchronized or normalized format without falling back to raw category names
+
+- **WHEN** `meta_display.build_display_projection` or `_serialize_shared_collection_item` formats a `Manifestation` whose legacy columns diverge
+- **THEN** it SHALL resolve the canonical `FormatNormalizer` output rather than surfacing un-normalized `"music"`, `"audio"`, or `"sound"`.
+
+### Requirement: Default checked-in format mappings do not guess cd for ambiguous audio
+
+The git-tracked `shared/format_mappings.yaml` configuration SHALL map `"audio"`, `"music"`, and `"sound"` to `"unknown_audio"` rather than unconditionally guessing `"cd"`, ensuring non-CD audio releases without carrier evidence are never mislabeled as compact discs.
+
+#### Scenario: Checked-in shared/format_mappings.yaml resolves audio, music, and sound to unknown_audio
+
+- **WHEN** `FormatNormalizer.normalize(val, "music")` runs against the checked-in `shared/format_mappings.yaml` for `"audio"`, `"music"`, or `"sound"`
+- **THEN** each call SHALL return `"unknown_audio"` rather than `"cd"`.

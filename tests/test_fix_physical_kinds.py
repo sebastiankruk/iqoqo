@@ -306,3 +306,32 @@ class TestEmptyMappingsWarning:
                 ret = apply_mode()
                 # Must exit non-zero for empty mappings
                 assert ret != 0
+
+
+def test_get_non_canonical_rows_detects_cross_column_drift_and_repairs_expression(app):
+    """Cross-column drift (format='dvd', format_type='płyta vcd') is flagged and repaired."""
+    from scripts.fix_physical_kinds import _update_manifestation_format, get_non_canonical_rows
+
+    with app.app_context():
+        w = Work(title="Palimpsest Drift", meta={})
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="music")
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id, format="dvd", format_type="płyta vcd", meta={"format": "dvd"})
+        db.session.add(m)
+        db.session.commit()
+
+        rows = get_non_canonical_rows()
+        assert any("Palimpsest Drift" in str(r["titles"]) or r["count"] >= 1 for r in rows)
+
+        updated = _update_manifestation_format("płyta vcd", "vcd")
+        assert updated == 1
+        db.session.expire_all()
+        reloaded_m = db.session.get(Manifestation, m.id)
+        reloaded_e = db.session.get(Expression, e.id)
+        assert reloaded_m.format == "vcd"
+        assert reloaded_m.format_type == "vcd"
+        assert reloaded_m.meta["format"] == "vcd"
+        assert reloaded_e.content_type == "movie"

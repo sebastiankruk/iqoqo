@@ -223,6 +223,7 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
       expect(payload.pages).toHaveLength(7);
       expect(payload.nextPage).toMatch(/^https?:\/\/.*\/share\/tok-ai\/jsonld\/2$/);
       expect(payload.itemListElement[0]).toEqual({
+        "@type": "MusicAlbum",
         t: "Kind of Blue",
         a: "Miles Davis",
         f: "vinyl",

@@ -25,12 +25,12 @@ include:
 
 services:
   migration:
-    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
     volumes: !reset []
 
   web:
-    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
     volumes: !override
       - ./exports:/usr/src/app/exports
@@ -41,7 +41,7 @@ services:
       - ./docs/ontology:/usr/src/app/docs/ontology:ro
 
   worker:
-    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
     command: >-
       sh -c "if command -v opentelemetry-instrument >/dev/null 2>&1; then exec opentelemetry-instrument celery -A app.core.celery_app:celery worker -Q celery,federation --loglevel=info --pool=$${CELERY_POOL:-threads} --concurrency=$${CELERY_CONCURRENCY:-4}; else exec celery -A app.core.celery_app:celery worker -Q celery,federation --loglevel=info --pool=$${CELERY_POOL:-threads} --concurrency=$${CELERY_CONCURRENCY:-4}; fi"
@@ -53,17 +53,17 @@ services:
       - ./data:/usr/src/app/data
 
   nginx:
-    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-nginx:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}iqoqo-nginx:${APP_VERSION:-latest}
     build: !reset null
     volumes: !override
       - ./app/static/covers:/usr/share/nginx/html/covers:ro
       - ./app/static/gallery:/usr/share/nginx/html/gallery:ro
 
   frontend:
-    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-latest}
     build: !reset null
 
   sparql-runner:
-    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-sparql:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/sebastiankruk/}iqoqo-sparql:${APP_VERSION:-latest}
     build: !reset null
 

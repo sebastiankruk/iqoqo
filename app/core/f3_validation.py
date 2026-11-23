@@ -272,13 +272,25 @@ def validate_format_type(format_type: str | None, strict: bool = False) -> str |
     # Check if format is in the known taxonomy
     known_formats = {attr.lower() for attr in dir(MediaFormat) if not attr.startswith("_") and isinstance(getattr(MediaFormat, attr), str)}
 
+    generic_category_tokens = frozenset({"music", "audio", "sound", "movie", "video", "moving image"})
+    if cleaned in generic_category_tokens:
+        if strict:
+            raise FormatTypeValidationError(
+                f"Generic category token '{format_type}' is not a valid physical format. Known formats: {sorted(known_formats)}"
+            )
+        from app.core.format_normalizer import FormatNormalizer
+
+        return FormatNormalizer.normalize(cleaned)
+
     if cleaned not in known_formats:
         if strict:
             raise FormatTypeValidationError(f"Unknown format type: {format_type}. " f"Known formats: {sorted(known_formats)}")
-        # In non-strict mode, accept unknown formats to ensure forward compatibility with
-        # external metadata imports and newly emerging physical media formats.
-        # Tradeoff: Accepts risk of taxonomy pollution (misspellings, near-duplicates).
-        # Switch to strict=True for new deployments or when catalog taxonomy has stabilized.
+        from app.core.format_normalizer import FormatNormalizer
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        FormatNormalizer._load_mappings()
+        if cleaned in FormatNormalizer._mappings or cleaned in FORMAT_ALIAS_TO_CATEGORY:
+            return FormatNormalizer.normalize(cleaned)
         return cleaned
 
     return cleaned
@@ -347,7 +359,14 @@ def normalize_manifestation_meta(
                 normalized_publisher = None
 
     # Extract and normalize format_type
-    normalized_format_type = format_type
+    normalized_format_type: str | None = None
+    if format_type and isinstance(format_type, str):
+        try:
+            normalized_format_type = validate_format_type(format_type, strict=strict)
+        except FormatTypeValidationError:
+            if strict:
+                raise
+            normalized_format_type = None
     if not normalized_format_type:
         # Try multiple possible keys
         raw_format = (
@@ -363,6 +382,8 @@ def normalize_manifestation_meta(
                 if strict:
                     raise
                 normalized_format_type = None
+    if normalized_format_type and "format" in meta_copy:
+        meta_copy["format"] = normalized_format_type
 
     # Prune promoted keys from metadata
     promoted_keys = ["isbn13", "isbn", "publisher", "format_type"]

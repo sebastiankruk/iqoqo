@@ -42,7 +42,7 @@ def test_fetch_video_metadata_success(mock_get):
     result = fetch_video_metadata("0123456789")
     assert result["Title"] == "Inception"
     assert result["cover_url"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
-    assert result["Format"] == "video"
+    assert result["Format"] == "unknown_video"
 
 
 @patch.dict(os.environ, {}, clear=True)
@@ -73,5 +73,5 @@ def test_fetch_video_metadata_with_cast_and_director(mock_get):
 
     assert result["Title"] == "Inception"
     assert result["cover_url"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
-    assert result["Format"] == "video"
+    assert result["Format"] == "unknown_video"
     assert mock_get.called

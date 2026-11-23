@@ -82,9 +82,11 @@ export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareColl
       // Auto-generate a name based on filters
       const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
       const categories = activeFilters.filter(f => f.type === "category").map(f => f.value);
+      const formats = activeFilters.filter(f => f.type === "format").map(f => f.value);
       let defaultName = t("defaultNameAll");
       if (statuses.length === 1) defaultName = t("defaultNameStatus", { status: statuses[0].replace(/_/g, " ") });
       if (categories.length === 1) defaultName = t("defaultNameCategory", { category: categories[0] });
+      if (formats.length === 1) defaultName = t("defaultNameFormat", { format: formats[0].replace(/_/g, " ") });
       if (appliedQuery) defaultName = t("defaultNameSearch", { query: appliedQuery });
       setName(defaultName);
     }
@@ -105,6 +107,7 @@ export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareColl
       };
       const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
       const categories = activeFilters.filter(f => f.type === "category").map(f => f.value);
+      const formats = activeFilters.filter(f => f.type === "format").map(f => f.value);
 
       // Send every selected status, not just the first. The collection page
       // allows multi-select, so passing statuses[0] published a link covering
@@ -112,6 +115,7 @@ export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareColl
       if (statuses.length === 1) filtersPayload.status = statuses[0];
       else if (statuses.length > 1) filtersPayload.status = statuses;
       if (categories.length > 0) filtersPayload.tags = categories;
+      if (formats.length > 0) filtersPayload.format = formats;
       if (appliedQuery) filtersPayload.query = appliedQuery;
 
       const response = await apiClient.post("/sharing/", {

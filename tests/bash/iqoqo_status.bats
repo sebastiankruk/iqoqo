@@ -342,3 +342,12 @@ EOF
   [[ "$output" =~ "App OTel Export" ]]
 }
 
+
+
+@test "iqoqo-status.sh uses check_encrypted_settings_drift and warns on missing HTTPS preview Browser RUM" {
+  run grep -F 'check_encrypted_settings_drift' scripts/iqoqo-status.sh
+  [ "$status" -eq 0 ]
+
+  run grep -F 'OPENOBSERVE_RUM_CLIENT_TOKEN missing in frontend despite HTTPS preview origin' scripts/iqoqo-status.sh
+  [ "$status" -eq 0 ]
+}

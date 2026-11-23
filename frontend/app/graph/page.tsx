@@ -24,10 +24,13 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
 import { FRBRRelationGraph } from "@/components/graph/frbr-relation-graph";
-import { useCatalogGraph } from "@/lib/api/hooks/catalog";
+import { useCatalogGraph, useCatalogLibraryGraph } from "@/lib/api/hooks/catalog";
 import type { GraphAnchorEntityType } from "@/types/frbr";
 
 const VALID_TYPES = new Set<string>(["work", "expression", "manifestation", "item"]);
+const PRIMARY_LIBRARY_ENTITY_TYPES = ["work", "expression", "manifestation", "item"] as const;
+const SECONDARY_LIBRARY_ENTITY_TYPES = ["series", "contributor", "map", "lod"] as const;
+const LIBRARY_ENTITY_TYPES = [...PRIMARY_LIBRARY_ENTITY_TYPES, ...SECONDARY_LIBRARY_ENTITY_TYPES] as const;
 
 /** Inner client graph explorer reading query params inside a Suspense boundary. */
 function GraphExplorerContent() {
@@ -38,13 +41,31 @@ function GraphExplorerContent() {
   const rawType = (searchParams.get("type") || "").toLowerCase();
   const rawId = Number(searchParams.get("id") || 0);
   const rawDepth = Number(searchParams.get("depth") || 2);
-  const depth = rawDepth === 1 ? 1 : 2;
+  const depth: 1 | 2 | 3 | 4 = rawDepth === 1 ? 1 : rawDepth === 3 ? 3 : rawDepth >= 4 ? 4 : 2;
+  const rawMode = (searchParams.get("mode") || "").toLowerCase();
+  const rawEntities = searchParams.get("entities") || "";
 
   const isValidAnchor = VALID_TYPES.has(rawType) && Number.isInteger(rawId) && rawId > 0;
+  const isLibraryMode = rawMode === "library" || !isValidAnchor;
+  const [showMoreEntityTypes, setShowMoreEntityTypes] = React.useState(false);
 
-  const { data: graph, isLoading, isError } = useCatalogGraph(rawType, rawId, depth, isValidAnchor);
+  const {
+    data: anchorGraph,
+    isLoading: anchorLoading,
+    isError: anchorError,
+  } = useCatalogGraph(rawType, rawId, depth, !isLibraryMode && isValidAnchor);
 
-  const handleDepthChange = (nextDepth: 1 | 2) => {
+  const {
+    data: libraryGraph,
+    isLoading: libraryLoading,
+    isError: libraryError,
+  } = useCatalogLibraryGraph(rawEntities || undefined, undefined, isLibraryMode);
+
+  const graph = isLibraryMode ? libraryGraph : anchorGraph;
+  const isLoading = isLibraryMode ? libraryLoading : anchorLoading;
+  const isError = isLibraryMode ? libraryError : anchorError;
+
+  const handleDepthChange = (nextDepth: 1 | 2 | 3 | 4) => {
     if (!isValidAnchor) return;
     router.push(`/graph?type=${encodeURIComponent(rawType)}&id=${rawId}&depth=${nextDepth}`);
   };
@@ -53,17 +74,40 @@ function GraphExplorerContent() {
     router.push(`/graph?type=${encodeURIComponent(entityType)}&id=${entityId}&depth=${depth}`);
   };
 
+  const activeEntityTypes = new Set(
+    rawEntities
+      .split(",")
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const toggleEntityType = (ent: string) => {
+    const next = new Set(activeEntityTypes.size > 0 ? activeEntityTypes : LIBRARY_ENTITY_TYPES);
+    if (next.has(ent)) {
+      if (next.size > 1) next.delete(ent);
+    } else {
+      next.add(ent);
+    }
+    const param = next.size === LIBRARY_ENTITY_TYPES.length ? "" : `&entities=${Array.from(next).join(",")}`;
+    router.push(`/graph?mode=library${param}`);
+  };
+
   return (
     <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            {isValidAnchor && (
+            {!isLibraryMode && isValidAnchor && (
               <Button asChild variant="ghost" size="sm" className="-ml-2 gap-1.5 text-muted-foreground">
                 <Link href={`/${rawType}/${rawId}`}>
                   <ArrowLeft className="h-4 w-4" />
                   <span>{t("openEntity")}</span>
                 </Link>
+              </Button>
+            )}
+            {!isLibraryMode && (
+              <Button asChild variant="outline" size="sm" data-testid="graph-mode-library">
+                <Link href="/graph?mode=library">{t("libraryMode")}</Link>
               </Button>
             )}
           </div>
@@ -74,40 +118,81 @@ function GraphExplorerContent() {
           <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
         </div>
 
-        {isValidAnchor && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">{t("depthLabel")}:</span>
+        {!isLibraryMode && isValidAnchor ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground mr-1">{t("depthLabel")}:</span>
+            {([1, 2, 3, 4] as const).map(d => (
+              <Button
+                key={d}
+                type="button"
+                size="sm"
+                variant={depth === d ? "default" : "outline"}
+                data-testid={`graph-depth-${d}`}
+                onClick={() => handleDepthChange(d)}
+              >
+                {t(`hop${d}`)}
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <div
+            className="relative flex flex-wrap items-center gap-1.5"
+            role="group"
+            aria-label="Entity type filters"
+            data-testid="graph-entity-type-filters"
+          >
+            {PRIMARY_LIBRARY_ENTITY_TYPES.map(ent => {
+              const active = activeEntityTypes.size === 0 || activeEntityTypes.has(ent);
+              return (
+                <Button
+                  key={ent}
+                  type="button"
+                  size="sm"
+                  variant={active ? "default" : "outline"}
+                  data-testid={`graph-entity-${ent}`}
+                  onClick={() => toggleEntityType(ent)}
+                >
+                  {t(`nodeTypes.${ent}`)}
+                </Button>
+              );
+            })}
             <Button
               type="button"
               size="sm"
-              variant={depth === 1 ? "default" : "outline"}
-              data-testid="graph-depth-1"
-              onClick={() => handleDepthChange(1)}
+              variant="outline"
+              aria-expanded={showMoreEntityTypes}
+              data-testid="graph-entity-more-toggle"
+              onClick={() => setShowMoreEntityTypes(prev => !prev)}
             >
-              {t("hop1")}
+              {t("moreTypes")}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={depth === 2 ? "default" : "outline"}
-              data-testid="graph-depth-2"
-              onClick={() => handleDepthChange(2)}
-            >
-              {t("hop2")}
-            </Button>
+            {showMoreEntityTypes && (
+              <div
+                className="absolute right-0 top-full z-20 mt-1 flex flex-wrap gap-1.5 rounded-lg border border-border bg-card p-2 shadow-md"
+                data-testid="graph-entity-more-menu"
+              >
+                {SECONDARY_LIBRARY_ENTITY_TYPES.map(ent => {
+                  const active = activeEntityTypes.size === 0 || activeEntityTypes.has(ent);
+                  return (
+                    <Button
+                      key={ent}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      data-testid={`graph-entity-${ent}`}
+                      onClick={() => toggleEntityType(ent)}
+                    >
+                      {t(`nodeTypes.${ent}`)}
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {!isValidAnchor ? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center space-y-3">
-          <h2 className="font-serif text-lg font-semibold text-foreground">{t("missingParamsTitle")}</h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">{t("missingParamsDescription")}</p>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/collection">{t("backToCollection")}</Link>
-          </Button>
-        </div>
-      ) : isLoading ? (
+      {isLoading ? (
         <div className="flex h-96 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -123,11 +208,19 @@ function GraphExplorerContent() {
               className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-200"
             >
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>{t("truncatedBanner", { max: graph.meta.max_nodes })}</span>
+              <span>
+                {graph.meta.max_edges
+                  ? t("truncatedEdgesBanner", { maxNodes: graph.meta.max_nodes, maxEdges: graph.meta.max_edges })
+                  : t("truncatedBanner", { max: graph.meta.max_nodes })}
+              </span>
             </div>
           )}
 
-          <FRBRRelationGraph key={`${rawType}:${rawId}:${depth}`} graph={graph} onRecenter={handleRecenter} />
+          <FRBRRelationGraph
+            key={isLibraryMode ? `library:${rawEntities}` : `${rawType}:${rawId}:${depth}`}
+            graph={graph}
+            onRecenter={handleRecenter}
+          />
         </>
       )}
     </main>

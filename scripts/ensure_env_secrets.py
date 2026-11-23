@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import os
 import re
 import secrets
 import sys
@@ -46,6 +47,44 @@ def is_placeholder_or_empty(val: str | None, min_length: int = 16) -> bool:
         return True
     lower = cleaned.lower()
     return any(p in lower for p in ("changeme", "placeholder", "your_super_secret"))
+
+
+def is_openobserve_password_strong(val: str | None) -> bool:
+    """Check the password policy enforced by OpenObserve (>= v0.91) on root auth init.
+
+    A fresh ``/data/db`` boot panics with ``ZO_ROOT_USER_PASSWORD is too weak``
+    unless the password has 8-128 chars and all four character classes.
+    """
+    password = strip_quotes(val)
+    if not 8 <= len(password) <= 128:
+        return False
+    return all(re.search(pattern, password) for pattern in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^A-Za-z0-9]"))
+
+
+def generate_openobserve_password(length: int = 43) -> str:
+    """Generate a root password that always satisfies the OpenObserve policy.
+
+    ``secrets.token_urlsafe`` alone does not guarantee a digit or a special
+    character, so pick one char from each required class and shuffle the rest.
+    Exclude shell-significant characters (quotes, backticks, ``$``, ``\\``)
+    because ``update_env_lines`` writes a double-quoted value that is later
+    sourced by ``run.sh``.
+    """
+    length = max(16, min(length, 128))
+    lowercase = "abcdefghijklmnopqrstuvwxyz"
+    uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    digits = "0123456789"
+    special = "-_@#%+=:,."
+    alphabet = lowercase + uppercase + digits + special
+    chars = [
+        secrets.choice(lowercase),
+        secrets.choice(uppercase),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    chars.extend(secrets.choice(alphabet) for _ in range(length - len(chars)))
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 def parse_env_file(file_path: Path) -> tuple[list[str], dict[str, str]]:
@@ -93,8 +132,15 @@ def update_env_lines(lines: list[str], key: str, value: str) -> list[str]:
     return new_lines
 
 
-def ensure_secrets_in_env_file(file_path: Path) -> dict[str, str]:
-    """Ensure all required infrastructure and auth secrets exist in the file."""
+def ensure_secrets_in_env_file(file_path: Path, enforce_openobserve_password_policy: bool = False) -> dict[str, str]:
+    """Ensure all required infrastructure and auth secrets exist in the file.
+
+    A missing root password is always generated with the character classes
+    OpenObserve requires. Existing weak passwords are left untouched unless
+    ``enforce_openobserve_password_policy`` is set (used when the auth store is
+    about to be reinitialized), so routine starts never invalidate credentials
+    that are already working against an existing volume.
+    """
     lines, current = parse_env_file(file_path)
     modified = False
 
@@ -131,9 +177,16 @@ def ensure_secrets_in_env_file(file_path: Path) -> dict[str, str]:
         modified = True
 
     # 5. OPENOBSERVE_ROOT_PASSWORD
+    # A fresh /data/db boot panics unless the root password has all four char
+    # classes. Always generate a compliant password when one is missing; only
+    # rotate an existing weak value when the caller is resetting the auth store.
     oo_password = strip_quotes(current.get("OPENOBSERVE_ROOT_PASSWORD"))
-    if is_placeholder_or_empty(oo_password, min_length=16):
-        oo_password = secrets.token_urlsafe(32)
+    if is_placeholder_or_empty(oo_password, min_length=16) or (
+        enforce_openobserve_password_policy and not is_openobserve_password_strong(oo_password)
+    ):
+        if oo_password and not is_placeholder_or_empty(oo_password, min_length=16):
+            print("⚠️ OPENOBSERVE_ROOT_PASSWORD does not meet OpenObserve's complexity policy; regenerating it.")
+        oo_password = generate_openobserve_password()
         lines = update_env_lines(lines, "OPENOBSERVE_ROOT_PASSWORD", oo_password)
         current["OPENOBSERVE_ROOT_PASSWORD"] = oo_password
         modified = True
@@ -150,7 +203,10 @@ def ensure_secrets_in_env_file(file_path: Path) -> dict[str, str]:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         content = "\n".join(lines).rstrip() + "\n"
         file_path.write_text(content, encoding="utf-8")
+        os.chmod(file_path.resolve(), 0o600)
         print(f"✅ Auto-provisioned missing secrets in {file_path}")
+    elif file_path.exists():
+        os.chmod(file_path.resolve(), 0o600)
 
     return current
 
@@ -233,11 +289,22 @@ def main() -> None:
         action="store_true",
         help="Mirror secrets into application database InstanceSettings table",
     )
+    parser.add_argument(
+        "--enforce-openobserve-password-policy",
+        action="store_true",
+        help=(
+            "Rotate an existing weak OPENOBSERVE_ROOT_PASSWORD so a freshly initialized "
+            "OpenObserve auth store can boot (use only with monitoring-reset-auth)"
+        ),
+    )
     args = parser.parse_args()
 
     target_file = args.env_file or args.env_file_pos or Path(".env")
     env_path = target_file.resolve()
-    resolved = ensure_secrets_in_env_file(env_path)
+    resolved = ensure_secrets_in_env_file(
+        env_path,
+        enforce_openobserve_password_policy=args.enforce_openobserve_password_policy,
+    )
 
     if args.sync_db:
         sync_secrets_to_db(resolved)

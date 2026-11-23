@@ -828,25 +828,32 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                 elif openapi_path in ("/api/catalog/graph", "/api/v1/catalog/graph") and method == "get":
                     graph_query_params = [
                         {
+                            "name": "mode",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string", "enum": ["neighborhood", "library"], "default": "neighborhood"},
+                            "description": "Graph explorer mode: 'neighborhood' (anchored) or 'library' (unanchored concept overview).",
+                        },
+                        {
                             "name": "entity_type",
                             "in": "query",
-                            "required": True,
+                            "required": False,
                             "schema": {"type": "string", "enum": ["work", "expression", "manifestation", "item"]},
-                            "description": "Root FRBR entity type for neighborhood traversal.",
+                            "description": "Root FRBR entity type for neighborhood traversal (required when mode=neighborhood).",
                         },
                         {
                             "name": "entity_id",
                             "in": "query",
-                            "required": True,
+                            "required": False,
                             "schema": {"type": "integer", "minimum": 1},
-                            "description": "Root FRBR entity primary key ID.",
+                            "description": "Root FRBR entity primary key ID (required when mode=neighborhood).",
                         },
                         {
                             "name": "depth",
                             "in": "query",
                             "required": False,
-                            "schema": {"type": "integer", "default": 1, "minimum": 1, "maximum": 2},
-                            "description": "BFS hop depth from anchor node (clamped to 1..2).",
+                            "schema": {"type": "integer", "default": 1, "minimum": 1, "maximum": 4},
+                            "description": "BFS hop depth from anchor node (clamped to 1..4).",
                         },
                         {
                             "name": "max_nodes",
@@ -854,6 +861,20 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             "required": False,
                             "schema": {"type": "integer", "default": 150, "minimum": 1, "maximum": 150},
                             "description": "Maximum number of nodes returned (clamped to 1..150).",
+                        },
+                        {
+                            "name": "max_edges",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 400, "minimum": 1, "maximum": 600},
+                            "description": "Maximum number of edges returned (clamped to 1..600).",
+                        },
+                        {
+                            "name": "entity_types",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Comma-separated concept types for mode=library (work,series,contributor,expression,manifestation,item,map,lod).",
                         },
                         {
                             "name": "edge_types",

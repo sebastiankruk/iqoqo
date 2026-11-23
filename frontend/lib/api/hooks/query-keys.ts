@@ -200,4 +200,6 @@ export const queryKeys = {
   federationKeyFingerprint: ["admin", "federation", "key-fingerprint"] as const,
   catalogGraph: (entityType: string, entityId: number, depth = 1) =>
     ["catalog-graph", entityType, entityId, depth] as const,
+  catalogLibraryGraph: (entityTypes?: string, edgeTypes?: string) =>
+    ["catalog-library-graph", entityTypes || "all", edgeTypes || "all"] as const,
 };

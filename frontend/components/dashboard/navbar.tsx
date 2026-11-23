@@ -20,6 +20,7 @@ import {
   Search,
   ScanLine,
   Library,
+  GitBranch,
   Loader2,
   Settings,
   User,
@@ -221,6 +222,13 @@ export function Navbar() {
             >
               <Library className="h-3.5 w-3.5" />
               {t("collection")}
+            </Link>
+            <Link
+              href="/graph?mode=library"
+              className="hidden items-center gap-1.5 rounded-full border border-primary-foreground/20 px-3.5 py-1.5 text-xs font-medium text-primary-foreground/80 transition-colors hover:border-primary-foreground/40 hover:text-primary-foreground md:flex dark:border-white/20 dark:text-white/90 dark:hover:text-white dark:hover:bg-transparent"
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+              {t("graph")}
             </Link>
             {mounted && profile && (
               <Link

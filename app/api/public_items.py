@@ -327,6 +327,172 @@ def is_shared_collection_private_cache(token: str, viewer_id: Any = None) -> boo
     return is_private_cache
 
 
+def _parse_share_filter_list(raw: Any) -> tuple[bool, list[str]]:
+    """Return (was_present, cleaned_strings) for a share filter key."""
+    if raw is None:
+        return False, []
+    items = raw if isinstance(raw, list) else [raw]
+    cleaned = [str(x).strip().lower() for x in items if isinstance(x, str) and x.strip()]
+    return True, cleaned
+
+
+def _resolve_share_filter_specs(filters: dict[str, Any] | Any) -> dict[str, Any]:
+    """Extract canonical statuses, categories, and formats from SharedCollection.filters."""
+    from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
+    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY
+
+    if not isinstance(filters, dict):
+        return {
+            "fail_closed": False,
+            "statuses": None,
+            "categories": None,
+            "formats": None,
+            "include_null_fmt": False,
+            "excluded_formats": (),
+        }
+
+    fail_closed = False
+    statuses: list[str] | None = None
+    if "status" in filters:
+        _, statuses_clean = _parse_share_filter_list(filters.get("status"))
+        if not statuses_clean:
+            fail_closed = True
+        statuses = statuses_clean
+
+    categories: list[str] | None = None
+    has_tags = "tags" in filters and filters.get("tags") is not None
+    has_cat = "category" in filters and filters.get("category") is not None
+    if has_tags or has_cat:
+        raw_cat_vals: list[str] = []
+        if has_tags:
+            _, t_vals = _parse_share_filter_list(filters.get("tags"))
+            raw_cat_vals.extend(t_vals)
+        if has_cat:
+            _, c_vals = _parse_share_filter_list(filters.get("category"))
+            raw_cat_vals.extend(c_vals)
+        if not raw_cat_vals:
+            fail_closed = True
+            categories = []
+        else:
+            categories = list(dict.fromkeys(FORMAT_ALIAS_TO_CATEGORY.get(v, v) for v in raw_cat_vals))
+
+    formats: list[str] | None = None
+    include_null_fmt = False
+    has_fmt = "format" in filters and filters.get("format") is not None
+    has_fmts = "formats" in filters and filters.get("formats") is not None
+    if has_fmt or has_fmts:
+        raw_fmt_vals: list[str] = []
+        if has_fmt:
+            _, f_vals = _parse_share_filter_list(filters.get("format"))
+            raw_fmt_vals.extend(f_vals)
+        if has_fmts:
+            _, fs_vals = _parse_share_filter_list(filters.get("formats"))
+            raw_fmt_vals.extend(fs_vals)
+        if not raw_fmt_vals:
+            fail_closed = True
+            formats = []
+        else:
+            formats = expand_format_filter(raw_fmt_vals) or raw_fmt_vals
+            include_null_fmt = filter_includes_null_format(raw_fmt_vals)
+
+    excluded_formats: tuple[str, ...] = ()
+    if categories:
+        allowed_cats = set(categories)
+        excluded_formats = tuple(fmt for fmt, cat in FORMAT_TO_CATEGORY.items() if cat not in allowed_cats)
+
+    return {
+        "fail_closed": fail_closed,
+        "statuses": statuses,
+        "categories": categories,
+        "formats": formats,
+        "include_null_fmt": include_null_fmt,
+        "excluded_formats": excluded_formats,
+    }
+
+
+def _apply_share_item_filters(
+    query: Any,
+    filters: dict[str, Any] | Any,
+    *,
+    user_id: Any,
+    allowed_vis: tuple[str, ...],
+    include_hidden: bool,
+    limit: int,
+    offset: int,
+) -> tuple[Any, bool, bool, dict[str, Any]]:
+    """Apply unified status, category, format, FORMAT_TO_CATEGORY guard, and query filters."""
+    specs = _resolve_share_filter_specs(filters)
+    if specs["fail_closed"]:
+        return query.where(sa.false()), False, True, specs
+
+    statuses = specs["statuses"]
+    if statuses is not None:
+        query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
+
+    categories = specs["categories"]
+    formats = specs["formats"]
+    excluded_formats = specs["excluded_formats"]
+    needs_frbr_join = bool(categories or formats or excluded_formats)
+
+    if needs_frbr_join:
+        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+
+    if categories:
+        query = query.where(Expression.content_type.in_(categories))
+
+    resolved_fmt_expr = func.lower(func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string()))
+    if excluded_formats:
+        query = query.where(or_(resolved_fmt_expr.is_(None), ~resolved_fmt_expr.in_(excluded_formats)))
+
+    if formats:
+        fmt_clauses = [
+            func.lower(Manifestation.format).in_(formats),
+            func.lower(Manifestation.format_type).in_(formats),
+            func.lower(Manifestation.meta["format"].as_string()).in_(formats),
+        ]
+        if specs["include_null_fmt"]:
+            fmt_clauses.append(
+                sa.and_(
+                    Manifestation.format.is_(None),
+                    Manifestation.format_type.is_(None),
+                    Manifestation.meta["format"].as_string().is_(None),
+                )
+            )
+        query = query.where(or_(*fmt_clauses))
+
+    pg_search_paginated = False
+    search_query = filters.get("query") if isinstance(filters, dict) else None
+    if search_query:
+        if db.engine.dialect.name == "postgresql":
+            _, results = SearchService.search_items(
+                q=search_query,
+                user_id=user_id,
+                limit=limit,
+                offset=max(0, offset),
+                statuses=statuses,
+                category=categories,
+                format_filter=formats,
+                excluded_formats=excluded_formats,
+                owner_only=True,
+                include_hidden=include_hidden or any(v != "public" for v in allowed_vis),
+                visibility=list(allowed_vis),
+            )
+            item_ids = [r["item_id"] for r in results]
+            if not item_ids:
+                return query.where(sa.false()), False, True, specs
+            query = query.where(Item.id.in_(item_ids))
+            pg_search_paginated = True
+        else:
+            if not needs_frbr_join:
+                query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            query = query.outerjoin(Work, Expression.work_id == Work.id)
+            query = query.where(build_ilike_search_clause(search_query))
+
+    return query, pg_search_paginated, False, specs
+
+
 def fetch_shared_collection_with_cache_policy(
     token: str,
     limit: int = 50,
@@ -346,53 +512,17 @@ def fetch_shared_collection_with_cache_policy(
 
     allowed_vis, include_hidden, is_private_cache = _resolve_shared_visibilities(collection, viewer_id=resolved_viewer)
     query = select(Item).where(Item.owner_id == user.id, _build_shared_visibility_predicate(allowed_vis, include_hidden))
-    filters = collection.filters
-
-    if "status" in filters:
-        status_val = filters["status"]
-        statuses = status_val if isinstance(status_val, list) else [status_val]
-        statuses = [s for s in statuses if isinstance(s, str) and s]
-        if statuses:
-            query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
-        else:
-            query = query.where(sa.false())
-
-    if "tags" in filters:
-        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-        tags_list = filters["tags"]
-        if tags_list:
-            query = query.where(Expression.content_type.in_(tags_list))
-
-    pg_search_paginated = False
-    if "query" in filters:
-        search_query = filters["query"]
-        if search_query:
-            if db.engine.dialect.name == "postgresql":
-                statuses_list = statuses if "status" in filters else None
-                tags_list = filters.get("tags")
-                _, results = SearchService.search_items(
-                    q=search_query,
-                    user_id=user.id,
-                    limit=limit,
-                    offset=max(0, offset),
-                    statuses=statuses_list,
-                    category=tags_list,
-                    owner_only=True,
-                    include_hidden=include_hidden or any(v != "public" for v in allowed_vis),
-                    visibility=list(allowed_vis),
-                )
-                item_ids = [r["item_id"] for r in results]
-                if not item_ids:
-                    return ([] if not stream else iter([])), is_private_cache
-                query = query.where(Item.id.in_(item_ids))
-                pg_search_paginated = True
-            else:
-                if "tags" not in filters:
-                    query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                    query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-                query = query.outerjoin(Work, Expression.work_id == Work.id)
-                query = query.where(build_ilike_search_clause(search_query))
+    query, pg_search_paginated, empty_result, _ = _apply_share_item_filters(
+        query,
+        collection.filters,
+        user_id=user.id,
+        allowed_vis=allowed_vis,
+        include_hidden=include_hidden,
+        limit=limit,
+        offset=max(0, offset),
+    )
+    if empty_result:
+        return ([] if not stream else iter([])), is_private_cache
 
     query = query.order_by(Item.updated_at.desc())
     if not pg_search_paginated:
@@ -781,63 +911,15 @@ def get_shared_collection(token: str):
     query = select(Item).where(Item.owner_id == user.id, _build_shared_visibility_predicate(allowed_vis, include_hidden))
 
     filters = collection.filters
-
-    if "status" in filters:
-        # 'status' maps to either Item.status or Item.collection_status.
-        #
-        # The value may be a single status or a list of them. It is a list
-        # whenever the sharer had several statuses selected on /collection,
-        # which its filters allow -- and the share dialog used to pass only
-        # statuses[0], silently publishing a link to a subset of what was on
-        # screen. Accepting both shapes keeps every already-shared link working
-        # while making the multi-status case mean what the sharer intended.
-        status_val = filters["status"]
-        statuses = status_val if isinstance(status_val, list) else [status_val]
-        statuses = [s for s in statuses if isinstance(s, str) and s]
-        if statuses:
-            query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
-        else:
-            # A malformed value must not widen the link to the whole library.
-            query = query.where(sa.false())
-
-    if "tags" in filters:
-        # tags array maps to Expression.content_type
-        # We need to join Expression if it's not already joined
-        query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-        query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-        tags_list = filters["tags"]
-        if tags_list:
-            query = query.where(Expression.content_type.in_(tags_list))
-
-    if "query" in filters:
-        search_query = filters["query"]
-        if search_query:
-            if db.engine.dialect.name == "postgresql":
-                statuses_list = statuses if "status" in filters else None
-                tags_list = filters.get("tags")
-                _, results = SearchService.search_items(
-                    q=search_query,
-                    user_id=user.id,
-                    limit=MAX_SHARED_COLLECTION_LIMIT,
-                    offset=0,
-                    statuses=statuses_list,
-                    category=tags_list,
-                    owner_only=True,
-                    include_hidden=include_hidden or any(v != "public" for v in allowed_vis),
-                    visibility=list(allowed_vis),
-                )
-                item_ids = [r["item_id"] for r in results]
-                if not item_ids:
-                    query = query.where(sa.false())
-                else:
-                    query = query.where(Item.id.in_(item_ids))
-            else:
-                # Join Work and Manifestation if not joined
-                if "tags" not in filters:
-                    query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                    query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-                query = query.outerjoin(Work, Expression.work_id == Work.id)
-                query = query.where(build_ilike_search_clause(search_query))
+    query, _, _, filter_specs = _apply_share_item_filters(
+        query,
+        filters,
+        user_id=user.id,
+        allowed_vis=allowed_vis,
+        include_hidden=include_hidden,
+        limit=MAX_SHARED_COLLECTION_LIMIT,
+        offset=0,
+    )
 
     total_count = int(
         db.session.execute(select(func.count()).select_from(query.subquery())).scalar_one() or 0
@@ -880,9 +962,63 @@ def get_shared_collection(token: str):
             intent_conditions.append(UserWorkIntent.is_hidden.is_(False))
         intent_stmt = (
             select(UserWorkIntent)
-            .options(joinedload(UserWorkIntent.work).selectinload(Work.expressions).selectinload(Expression.manifestations))
+            .options(
+                joinedload(UserWorkIntent.work).selectinload(Work.expressions).selectinload(Expression.manifestations),
+                joinedload(UserWorkIntent.expression),
+                joinedload(UserWorkIntent.manifestation),
+            )
             .where(*intent_conditions)
         )
+        if filter_specs["fail_closed"]:
+            intent_stmt = intent_stmt.where(sa.false())
+        if filter_specs["categories"]:
+            cat_list = filter_specs["categories"]
+            intent_stmt = intent_stmt.where(
+                sa.exists(
+                    select(Expression.id).where(
+                        Expression.work_id == UserWorkIntent.work_id,
+                        or_(UserWorkIntent.expression_id.is_(None), Expression.id == UserWorkIntent.expression_id),
+                        Expression.content_type.in_(cat_list),
+                    )
+                )
+            )
+        if filter_specs["formats"] or filter_specs["excluded_formats"]:
+            base_manif_corr = (
+                select(Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .where(
+                    Expression.work_id == UserWorkIntent.work_id,
+                    or_(UserWorkIntent.expression_id.is_(None), Expression.id == UserWorkIntent.expression_id),
+                    or_(UserWorkIntent.manifestation_id.is_(None), Manifestation.id == UserWorkIntent.manifestation_id),
+                )
+            )
+            manif_sub = base_manif_corr
+            if filter_specs["formats"]:
+                fmt_list = filter_specs["formats"]
+                fmt_clauses = [
+                    func.lower(Manifestation.format).in_(fmt_list),
+                    func.lower(Manifestation.format_type).in_(fmt_list),
+                    func.lower(Manifestation.meta["format"].as_string()).in_(fmt_list),
+                ]
+                if filter_specs["include_null_fmt"]:
+                    fmt_clauses.append(
+                        sa.and_(
+                            Manifestation.format.is_(None),
+                            Manifestation.format_type.is_(None),
+                            Manifestation.meta["format"].as_string().is_(None),
+                        )
+                    )
+                manif_sub = manif_sub.where(or_(*fmt_clauses))
+            if filter_specs["excluded_formats"]:
+                excl_list = filter_specs["excluded_formats"]
+                resolved_manif_fmt = func.lower(
+                    func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
+                )
+                manif_sub = manif_sub.where(or_(resolved_manif_fmt.is_(None), ~resolved_manif_fmt.in_(excl_list)))
+            if filter_specs["formats"] and not filter_specs["include_null_fmt"]:
+                intent_stmt = intent_stmt.where(sa.exists(manif_sub))
+            else:
+                intent_stmt = intent_stmt.where(or_(sa.exists(manif_sub), ~sa.exists(base_manif_corr)))
         matched_intents = [s for s in status_list if s in _INTENT_LEVEL_STATUSES]
         if matched_intents:
             intent_stmt = intent_stmt.where(UserWorkIntent.status.in_(matched_intents))
@@ -960,12 +1096,29 @@ def get_shared_collection(token: str):
             intents = list(db.session.execute(ordered_intent_stmt.limit(limit_val)).scalars().all())
         for intent in intents:
             work = intent.work
-            manifestation = None
-            if work:
-                for expr in work.expressions:
-                    if expr.manifestations:
-                        manifestation = expr.manifestations[0]
+            expr = intent.expression
+            manifestation = intent.manifestation
+            if manifestation is None and expr is not None and expr.manifestations:
+                manifestation = expr.manifestations[0]
+            if manifestation is None and work:
+                for w_expr in work.expressions:
+                    if w_expr.manifestations:
+                        if expr is None:
+                            expr = w_expr
+                        manifestation = w_expr.manifestations[0]
                         break
+            if expr is None and manifestation is not None:
+                expr = manifestation.expression
+            if expr is None and work and work.expressions:
+                expr = work.expressions[0]
+
+            m_meta = manifestation.meta if manifestation and isinstance(manifestation.meta, dict) else {}
+            resolved_fmt = (manifestation.format or manifestation.format_type or m_meta.get("format")) if manifestation else None
+            resolved_year = None
+            if manifestation:
+                resolved_year = manifestation.publication_year or (
+                    manifestation.publication_date.year if manifestation.publication_date else None
+                )
 
             items_list.append(
                 {
@@ -975,11 +1128,15 @@ def get_shared_collection(token: str):
                     "collection_status": "wish_list",
                     "title": work.title if work else None,
                     "authors": work.meta.get("authors", []) if work and work.meta else [],
-                    "cover_url": (
-                        manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None)
-                        if manifestation
-                        else None
-                    ),
+                    "content_type": expr.content_type if expr else None,
+                    "format": resolved_fmt,
+                    "ean": manifestation.ean if manifestation else None,
+                    "upc": manifestation.upc if manifestation else None,
+                    "publisher": manifestation.publisher if manifestation else None,
+                    "publication_year": resolved_year,
+                    "catalog_number": manifestation.catalog_number if manifestation else m_meta.get("catalog_number"),
+                    "country": m_meta.get("country"),
+                    "cover_url": (manifestation.cover_url or m_meta.get("cover_url") if manifestation else None),
                 }
             )
 

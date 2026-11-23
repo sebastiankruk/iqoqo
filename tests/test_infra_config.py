@@ -32,7 +32,7 @@ class TestRunScripts(unittest.TestCase):
         self.script_path.write_text(self.run_sh.read_text())
         self.script_path.chmod(0o755)
 
-        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "1.1.0"')
+        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "1.1.1"')
 
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
@@ -402,7 +402,9 @@ exit 0
         self.assertIn("otel_http_port", iqopretest)
         self.assertIn("exit 1", iqopretest)
         self.assertIn('DEPLOY_DIR="$DST_LOC" make status preview', iqopretest)
-        self.assertIn("reconcile_preview_settings.py", iqopretest)
+        self.assertIn("make preview-reconcile", iqopretest)
+        makefile_text = (self.repo_root / "Makefile").read_text()
+        self.assertIn("reconcile_preview_settings.py", makefile_text)
 
 
 if __name__ == "__main__":

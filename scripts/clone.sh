@@ -292,3 +292,6 @@ echo "🔑 Ensuring write permissions for application container on static assets
 chmod -R a+rwX "${DST_DIR}/app/static" "${DST_DIR}/exports" 2>/dev/null || true
 
 echo "🎉 Data clone complete from '$SRC_NAME' to '$DST_NAME'!"
+if [ "$DST_NAME" = "preview" ]; then
+    echo "ℹ️  Next step for preview: run 'make preview-reconcile DEPLOY_DIR=\"$DST_DIR\"' (or 'make start preview prebuilt DEPLOY_DIR=\"$DST_DIR\"') to reconcile InstanceSettings, OpenObserve auth, and Browser RUM."
+fi

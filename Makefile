@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop monitoring-reset-auth ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain install-wizard presync-check
+.PHONY: help status start stop monitoring-start monitoring-stop monitoring-reset-auth ensure-secrets ensure-mount-perms preview-up preview-down preview-reconcile preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain install-wizard presync-check
 
 SHELL := /bin/bash
 
@@ -337,16 +337,53 @@ ensure-mount-perms: ## Ensure host bind-mount paths exist and have permissive wr
 	@if [ -d data/keys ]; then chmod 1777 data/keys 2>/dev/null || true; chmod 600 data/keys/*.pem 2>/dev/null || true; fi
 
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
+ABS_COMPOSE_ENV_FILE = $(if $(filter /%,$(COMPOSE_ENV_FILE)),$(COMPOSE_ENV_FILE),$(CURDIR)/$(COMPOSE_ENV_FILE))
 start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@echo "Deploying $(COMPOSE_PROJECT) (prebuilt)..."
 	@echo "Project version: $(IQOQO_VERSION)"
 	@echo "Prebuilt tag: $(PREBUILT_TAG)"
+	@if [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then chmod 0600 "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null || true; fi
 	@docker image prune -f --filter "dangling=true"
 	@if [ -n "$(IMAGE_PREFIX)" ]; then \
-		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file $(ABS_COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
 	fi
-	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+	@if [ "$(MODE)" = "preview" ] && [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then \
+		env_dir="$$(dirname "$(ABS_COMPOSE_ENV_FILE)")"; env_base="$$(basename "$(ABS_COMPOSE_ENV_FILE)")"; \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml run --rm --no-deps -T --user "$$(id -u):$$(id -g)" -v "$$env_dir:/tmp/envdir" --entrypoint python3 web /usr/src/app/scripts/ensure_env_secrets.py --env-file "/tmp/envdir/$$env_base" || echo "⚠️ Warning: container ensure_env_secrets.py failed for $(ABS_COMPOSE_ENV_FILE)" >&2; \
+		chmod 0600 "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null || true; \
+	fi
+	@if [ "$(MODE)" = "preview" ] && [ -f docker-compose.monitoring.yml ]; then \
+		otel_exp=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OTEL_TRACES_EXPORTER=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		if [ "$${otel_exp:-otlp}" != "none" ]; then \
+			COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file "$(ABS_COMPOSE_ENV_FILE)",) -f docker-compose.monitoring.yml up -d || true; \
+		fi; \
+	fi
+	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file $(ABS_COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+	@if [ "$(MODE)" = "preview" ] && [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then \
+		cat "$(ABS_COMPOSE_ENV_FILE)" | IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py --dotenv-stdin 2>/dev/null || echo "⚠️ Warning: container reconcile_preview_settings failed for $(ABS_COMPOSE_ENV_FILE)" >&2; \
+		export MODE="preview"; \
+		origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		[ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		oo_rum_site=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_RUM_SITE=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		if [ -z "$$oo_rum_site" ] && [ -n "$$origin_url" ]; then \
+			case "$$origin_url" in \
+				https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
+			esac; \
+		elif [ -n "$$oo_rum_site" ]; then \
+			export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
+		fi; \
+		rum_out="$$(IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/provision_rum_token.py --mgmt-host openobserve 2>/dev/null || true)"; \
+		rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
+		rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
+		rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
+		if [ -n "$$rum_token" ] && [ -n "$$rum_site" ]; then \
+			export OPENOBSERVE_RUM_CLIENT_TOKEN="$$rum_token"; \
+			export OPENOBSERVE_RUM_SITE="$$rum_site"; \
+			export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
+			IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml up -d --force-recreate --no-deps frontend || true; \
+		fi; \
+	fi
 else
 start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
@@ -409,6 +446,75 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	 fi; \
 	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay up -d
 
+preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSettings, RUM token, and selective container env
+	@set -euo pipefail; \
+	 if [ ! -f "$(DEPLOY_ENV_FILE)" ]; then \
+		echo "⚠️ $(DEPLOY_ENV_FILE) not found; skipping preview-reconcile."; \
+		exit 0; \
+	 fi; \
+	 chmod 0600 "$(DEPLOY_ENV_FILE)" 2>/dev/null || true; \
+	 oo_port="$${OPENOBSERVE_HOST_PORT:-5080}"; \
+	 env_oo_port=$$(grep -E '^OPENOBSERVE_HOST_PORT=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true); \
+	 [ -n "$$env_oo_port" ] && oo_port="$$env_oo_port"; \
+	 oo_auth=$$(grep -E '^OPENOBSERVE_BASIC_AUTH=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true); \
+	 if [ -n "$$oo_auth" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -Eq '^iqoqo-preview-openobserve$$|^openobserve$$'; then \
+		oo_auth_code=$$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' \
+			-X POST \
+			-H "Authorization: Basic $${oo_auth}" \
+			-H "Content-Type: application/json" \
+			-d '{"query":{"sql":"SELECT 1","size":1}}' \
+			"http://127.0.0.1:$${oo_port}/api/default/_search" 2>/dev/null || echo "000"); \
+		if [ "$$oo_auth_code" = "401" ] || [ "$$oo_auth_code" = "403" ]; then \
+			echo "🔑 OpenObserve auth mismatch (HTTP $${oo_auth_code}); resetting OpenObserve auth state from $(DEPLOY_ENV_FILE)..."; \
+			MODE=preview DEPLOY_DIR="$(DEPLOY_DIR)" $(MAKE) monitoring-reset-auth; \
+		fi; \
+	 fi; \
+	 src_secret="$${SRC_SECRET_KEY:-}"; \
+	 if [ -z "$$src_secret" ] && [ "$${SKIP_CLONE:-1}" != "1" ] && [ -n "$${SRC_LOC:-}" ]; then \
+		src_env_named="$${SRC_LOC}/.env.$${SRC_NAME:-prod}"; \
+		src_env_default="$${SRC_LOC}/.env"; \
+		if [ -n "$${SRC_HOST:-}" ]; then \
+			src_secret=$$(ssh "$${SRC_HOST}" "f='$${src_env_named}'; [ -f \"\$$f\" ] || f='$${src_env_default}'; if [ -f \"\$$f\" ]; then grep -E '^[[:space:]]*SECRET_KEY=' \"\$$f\" | tail -n1 | cut -d= -f2- | tr -d '\r'; fi" 2>/dev/null || true); \
+		else \
+			src_env_file="$$src_env_named"; \
+			[ -f "$$src_env_file" ] || src_env_file="$$src_env_default"; \
+			if [ -f "$$src_env_file" ]; then \
+				src_secret=$$(grep -E '^[[:space:]]*SECRET_KEY=' "$$src_env_file" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true); \
+			fi; \
+		fi; \
+		src_secret="$${src_secret#\"}"; src_secret="$${src_secret%\"}"; \
+		src_secret="$${src_secret#\'}"; src_secret="$${src_secret%\'}"; \
+	 fi; \
+	 if [ -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" ]; then \
+		echo "🔐 Reconciling encrypted InstanceSettings & preview overrides from $(DEPLOY_ENV_FILE)..."; \
+		SRC_SECRET_KEY="$$src_secret" DST_ENV_PATH="$(DEPLOY_ENV_FILE)" python3 -c 'import json, os; from pathlib import Path; dst_env = {}; [dst_env.__setitem__(k.strip(), (v[1:-1] if (len(v) >= 2 and ((v[0] == "\"" and v[-1] == "\"") or (v[0] == "'"'"'" and v[-1] == "'"'"'"))) else (v.split(" #", 1)[0].strip() if " #" in v else v))) for raw in Path(os.environ["DST_ENV_PATH"]).read_text(encoding="utf-8").splitlines() for line in [raw.strip()] if line and not line.startswith("#") for clean in [line[7:].lstrip() if line.startswith("export ") else line] if "=" in clean for k, _, v in [clean.partition("=")] for v in [v.strip()] if k.strip() and v]; print(json.dumps({"src_secret_key": os.environ.get("SRC_SECRET_KEY", ""), "dst_env": {k: val for k, val in dst_env.items() if val}}))' \
+		| COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=$${APP_VERSION:-preview} docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py; \
+	 fi; \
+	 unset src_secret SRC_SECRET_KEY; \
+	 export MODE="$${MODE:-preview}"; \
+	 origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	 [ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	 oo_rum_site=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_RUM_SITE=' "$(DEPLOY_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	 if [ -z "$$oo_rum_site" ] && [ -n "$$origin_url" ]; then \
+		case "$$origin_url" in \
+			https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
+		esac; \
+	 elif [ -n "$$oo_rum_site" ]; then \
+		export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
+	 fi; \
+	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file "$(DEPLOY_ENV_FILE)" 2>/dev/null || true)"; \
+	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
+	 rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
+	 rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
+	 if [ -n "$$rum_token" ] && [ -n "$$rum_site" ]; then \
+		export OPENOBSERVE_RUM_CLIENT_TOKEN="$$rum_token"; \
+		export OPENOBSERVE_RUM_SITE="$$rum_site"; \
+		export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
+	 fi; \
+	 if [ -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" ]; then \
+		COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=$${APP_VERSION:-preview} docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" up -d --force-recreate --no-deps web worker frontend; \
+	 fi
+
 preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
 	@fed_overlay=""; \
 	 if [ -f $(DEPLOY_DIR)/docker-compose.federation-preview.yml ] || [ -f docker-compose.federation-preview.yml ]; then \
@@ -464,12 +570,21 @@ monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while 
 		cproject="iqoqo-preview"; \
 		cfile="$(DEPLOY_DIR)/docker-compose.monitoring.yml"; \
 		cenv="$(DEPLOY_ENV_FILE)"; \
+		cpdir="$(DEPLOY_DIR)"; \
+		pfile="$(DEPLOY_DIR)/docker-compose.prebuilt.yml"; \
 	else \
 		cproject="$(COMPOSE_PROJECT)"; \
 		cfile="docker-compose.monitoring.yml"; \
 		cenv="$(COMPOSE_ENV_FILE)"; \
+		cpdir="$(CURDIR)"; \
+		pfile="$(COMPOSE_FILE)"; \
 	fi; \
 	echo "🔄 Resetting OpenObserve authentication state for $$cproject..."; \
+	if [ -f "$$cenv" ]; then \
+		chmod 0600 "$$cenv" 2>/dev/null || true; \
+		python3 scripts/ensure_env_secrets.py --env-file "$$cenv" --enforce-openobserve-password-policy; \
+		chmod 0600 "$$cenv" 2>/dev/null || true; \
+	fi; \
 	docker stop "$${cproject}-openobserve" 2>/dev/null || true; \
 	vol_name=$$(docker volume ls -q | grep -E "^$${cproject}_openobserve_data$$|^openobserve_data$$" | head -1 || echo ""); \
 	if [ -z "$$vol_name" ]; then \
@@ -484,15 +599,40 @@ monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while 
 		else \
 			echo "No existing /data/db found in volume."; \
 		fi'; \
-	if [ -f "$$cenv" ]; then \
-		python3 scripts/ensure_env_secrets.py --env-file "$$cenv"; \
+	echo "🚀 Recreating OpenObserve and OTel Collector..."; \
+	docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$cfile" --env-file "$$cenv" up -d --force-recreate --no-deps openobserve otel-collector; \
+	if [ -f "$$cenv" ] && [ -f "$$pfile" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "$${cproject}-web"; then \
+		oo_auth=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_BASIC_AUTH=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+		if [ -n "$$oo_auth" ]; then \
+			if ! printf '%s' "$$oo_auth" | docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" exec -T web env PYTHONPATH=/usr/src/app python3 -c "import sys; from app import create_app; from app.db.settings import InstanceSettings; raw = sys.stdin.read().strip(); app = create_app(); app.app_context().push(); InstanceSettings.set_value('OPENOBSERVE_BASIC_AUTH', raw)" 2>/dev/null; then \
+				echo "⚠️ Warning: failed to sync OPENOBSERVE_BASIC_AUTH into InstanceSettings." >&2; \
+			fi; \
+		fi; \
 	fi; \
-	echo "🚀 Restarting OpenObserve and OTel Collector..."; \
-	docker start "$${cproject}-openobserve" 2>/dev/null || \
-		docker compose -p "$$cproject" -f "$$cfile" --env-file "$$cenv" up -d openobserve; \
-	docker restart "$${cproject}-otel-collector" 2>/dev/null || true; \
 	echo "🔑 Re-provisioning OpenObserve RUM token..."; \
-	python3 scripts/provision_rum_token.py --env-file "$$cenv" || true; \
+	export MODE="$$stack"; \
+	origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	[ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	oo_rum_site=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?OPENOBSERVE_RUM_SITE=' "$$cenv" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
+	if [ -z "$$oo_rum_site" ] && [ -n "$$origin_url" ]; then \
+		case "$$origin_url" in \
+			https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
+		esac; \
+	elif [ -n "$$oo_rum_site" ]; then \
+		export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
+	fi; \
+	rum_out="$$(python3 scripts/provision_rum_token.py --env-file "$$cenv" 2>/dev/null || true)"; \
+	rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
+	rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
+	rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
+	if [ -n "$$rum_token" ] && [ -n "$$rum_site" ]; then \
+		export OPENOBSERVE_RUM_CLIENT_TOKEN="$$rum_token"; \
+		export OPENOBSERVE_RUM_SITE="$$rum_site"; \
+		export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
+	fi; \
+	if [ -f "$$pfile" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "$${cproject}-web"; then \
+		docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" up -d --force-recreate --no-deps web worker frontend; \
+	fi; \
 	echo "✅ OpenObserve root authentication successfully reset from $$cenv!"
 
 
@@ -556,7 +696,7 @@ status: ## Show health status of all iQoQo services
 				fi; \
 			fi; \
 			status_code=0; \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack" || status_code=$$?; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg || status_code=$$?; \
 			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
 			exit 0; \
 		fi
@@ -757,20 +897,20 @@ test-fast: test-parallel
 test-streams: test-parallel
 
 test-backend-pg: .venv/bin/activate
-	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
-	@echo "Ensuring test database exists..."
+	$(AI_ECHO) "Running PostgreSQL-dependent integration tests against iqoqo_test..."
+	$(AI_ECHO) "Ensuring test database exists..."
 	@psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
 		-tc "SELECT 1 FROM pg_database WHERE datname='iqoqo_test'" 2>/dev/null \
 		| grep -q 1 \
-		&& echo "iqoqo_test already exists." \
+		&& ([ "$(IQOQO_AI_MODE)" = "1" ] || echo "iqoqo_test already exists.") \
 		|| (psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
-			-c "CREATE DATABASE iqoqo_test" && echo "Created iqoqo_test.")
+			-c "CREATE DATABASE iqoqo_test" && ([ "$(IQOQO_AI_MODE)" = "1" ] || echo "Created iqoqo_test."))
 	ENABLE_FTS_TESTS=true \
 	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
 	$(MAKE) pg-create-schemas
 	ENABLE_FTS_TESTS=true \
 	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
-	.venv/bin/pytest tests/integration/db/ -v
+	.venv/bin/pytest $(if $(PYTEST_FLAGS),$(PYTEST_FLAGS),-v) tests/integration/db/
 
 test-frontend: lint-ts
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
@@ -803,13 +943,13 @@ test-scripts-bash:
 
 test-scripts-python: .venv/bin/activate
 	$(AI_ECHO) "Running Python script logic tests..."
-	.venv/bin/pytest $(PYTEST_FLAGS) tests/test_scripts.py tests/test_script_utilities.py
+	.venv/bin/pytest $(PYTEST_FLAGS) tests/test_scripts.py tests/test_script_utilities.py tests/scripts/
 
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
 	@if command -v psql > /dev/null 2>&1 && echo "$$DATABASE_URL" | grep -q 'postgresql'; then \
-		echo "Creating PostgreSQL schemas (auth, catalog, inventory, social, federation) if missing..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Creating PostgreSQL schemas (auth, catalog, inventory, social, federation) if missing..."; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
@@ -828,7 +968,7 @@ export E2E_SELECTED_DATABASE_URL
 test-e2e-db-up: .venv/bin/activate
 	@set -euo pipefail; \
 		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
-		echo "Starting only the isolated E2E PostgreSQL service..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Starting only the isolated E2E PostgreSQL service..."; \
 		$(E2E_COMPOSE) up -d e2e-db; \
 		for i in $$(seq 1 45); do \
 			if $(E2E_COMPOSE) exec -T e2e-db pg_isready -U iqoqo_e2e -d iqoqo_e2e_test >/dev/null 2>&1; then break; fi; \
@@ -842,25 +982,29 @@ test-e2e: test-e2e-db-up
 
 test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite against paired containers
 	@set -euo pipefail; \
-	echo "🚀 Orchestrating live federation pair test run..."; \
+	[ "$(IQOQO_AI_MODE)" = "1" ] || echo "🚀 Orchestrating live federation pair test run..."; \
 	REPO_ROOT="$$(pwd)"; \
 	PREVIEW_STARTED=0; \
 	if ! docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
-		echo "Starting paired federation preview stack..."; \
-		if FEDERATION_PAIR=1 $(MAKE) preview-up; then \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Starting paired federation preview stack..."; \
+		if FEDERATION_PAIR=1 make preview-up; then \
 			PREVIEW_STARTED=1; \
-			trap 'if [ "$$PREVIEW_STARTED" -eq 1 ]; then $(MAKE) -C "$$REPO_ROOT" preview-down; fi' EXIT; \
+			trap 'if [ "$$PREVIEW_STARTED" -eq 1 ]; then make -C "$$REPO_ROOT" preview-down; fi' EXIT; \
 		else \
-			echo "⚠️ Paired preview stack could not be launched; proceeding with local fallback verification."; \
+			[ "$(IQOQO_AI_MODE)" = "1" ] || echo "⚠️ Paired preview stack could not be launched; proceeding with local fallback verification."; \
 		fi; \
 	fi; \
 	if docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
 		bash scripts/verify_federation_preview.sh; \
 		(cd frontend && FEDERATION_PAIR_LIVE=1 $(NPX) playwright test --project=chromium __tests__/e2e/federation_pair_live.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
 	else \
-		echo "⚠️ Paired preview containers could not be started in this environment; verifying preflight scripts and standalone test contracts."; \
-		npx bats tests/bash/verify_federation_preview.bats; \
-		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/help_hub_workflow.spec.ts $(args)); \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "⚠️ Paired preview containers could not be started in this environment; verifying preflight scripts and standalone test contracts."; \
+		if [ "$(IQOQO_AI_MODE)" = "1" ]; then \
+			npx bats --formatter tap tests/bash/verify_federation_preview.bats | .venv/bin/python scripts/format_bats_ai.py; \
+		else \
+			npx bats tests/bash/verify_federation_preview.bats; \
+		fi; \
+		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/federated_friend_request.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
 	fi
 
 # FRBR merge integrity against a real PostgreSQL instance.
@@ -878,10 +1022,10 @@ test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite agains
 test-merge-integrity-pg: .venv/bin/activate
 	@set -euo pipefail; \
 		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
-		$(MAKE) --no-print-directory test-e2e-db-up; \
+		make --no-print-directory test-e2e-db-up; \
 		admin="$${E2E_SELECTED_DATABASE_URL%/*}/postgres"; \
 		probe="$${E2E_SELECTED_DATABASE_URL%/*}/iqoqo_merge_integrity"; \
-		echo "Recreating throwaway merge-integrity database..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Recreating throwaway merge-integrity database..."; \
 		psql "$$admin" -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'iqoqo_merge_integrity'" >/dev/null; \
 		psql "$$admin" -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS iqoqo_merge_integrity' >/dev/null; \
 		psql "$$admin" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE iqoqo_merge_integrity' >/dev/null; \
@@ -892,20 +1036,20 @@ test-merge-integrity-pg: .venv/bin/activate
 			-c 'CREATE SCHEMA IF NOT EXISTS inventory' \
 			-c 'CREATE SCHEMA IF NOT EXISTS social' \
 			-c 'CREATE SCHEMA IF NOT EXISTS config' >/dev/null; \
-		echo "Running FRBR merge integrity suite against PostgreSQL..."; \
-		echo "(ENABLE_FTS_TESTS=true stops conftest forcing sqlite:///:memory:; the"; \
-		echo " app fixture then runs db.create_all() against PostgreSQL, which is the"; \
-		echo " code path that rejected the unparenthesized pair-index DDL)"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Running FRBR merge integrity suite against PostgreSQL..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "(ENABLE_FTS_TESTS=true stops conftest forcing sqlite:///:memory:; the"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " app fixture then runs db.create_all() against PostgreSQL, which is the"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " code path that rejected the unparenthesized pair-index DDL)"; \
 		ENABLE_FTS_TESTS=true DATABASE_URL="$$probe" \
 			SECRET_KEY="$$(.venv/bin/python -c 'import secrets;print(secrets.token_hex(32))')" \
-			.venv/bin/pytest tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
-				tests/test_duplicate_detection.py -q -p no:randomly; \
-		echo "Running the schema-qualified index-name regression suite..."; \
-		echo "(v0_8_2_fk_index_names exists because a schema-qualified index=True makes"; \
-		echo " SQLAlchemy generate a schema-prefixed name, which autogenerate could never"; \
-		echo " converge on -- invisible to the SQLite suite, so it needs PostgreSQL too)"; \
+			.venv/bin/pytest $(if $(PYTEST_FLAGS),$(PYTEST_FLAGS),-q) tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
+				tests/test_duplicate_detection.py -p no:randomly; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Running the schema-qualified index-name regression suite..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "(v0_8_2_fk_index_names exists because a schema-qualified index=True makes"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " SQLAlchemy generate a schema-prefixed name, which autogenerate could never"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " converge on -- invisible to the SQLite suite, so it needs PostgreSQL too)"; \
 		IQOQO_TEST_PG_ADMIN_URL="$${E2E_SELECTED_DATABASE_URL%/*}/" \
-			.venv/bin/pytest tests/test_migration_index_names.py -q -p no:randomly
+			.venv/bin/pytest $(if $(PYTEST_FLAGS),$(PYTEST_FLAGS),-q) tests/test_migration_index_names.py -p no:randomly
 
 # Internal: verify runtime identity immediately before reset and again before
 # Playwright startup. set -e makes every failed prepare step fail closed.
@@ -913,15 +1057,15 @@ _test-e2e-run:
 	@set -euo pipefail; \
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		if [ -z '$(NO_RESET)' ]; then \
-			echo "Resetting the verified dedicated E2E database..."; \
+			[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Resetting the verified dedicated E2E database..."; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social' -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public'; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset --force; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" SECRET_KEY=test-secret-key-not-for-production ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_auth.py; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py; \
-		else echo "Skipping E2E database reset (NO_RESET=1); isolated target identity was still verified."; fi; \
+		else [ "$(IQOQO_AI_MODE)" = "1" ] || echo "Skipping E2E database reset (NO_RESET=1); isolated target identity was still verified."; fi; \
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		IQOQO_E2E_NEXT_DIST_DIR=".next-e2e-$${UID}-$$"; export IQOQO_E2E_NEXT_DIST_DIR; \
-		echo "Running Playwright against the verified isolated E2E database..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Running Playwright against the verified isolated E2E database..."; \
 		cd frontend; FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true E2E_RESET_SECRET=e2e-reset-shared-secret ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
 
 

@@ -1,0 +1,43 @@
+## Why
+
+The `/item/[id]` collector detail page suffers from high visual and interactive clutter that buries core actions on both mobile (`390x844`) and desktop (`1280x800`) viewports: an inverted mobile DOM order places 10+ ungrouped `ItemSidebar` controls and a duplicated cover image ahead of `ItemHeader` (`"Explore Graph"`) and pushes polymorphic primary consumption actions (`"Now Listening"`, `"Log Reading Progress"`, `"Mark as Watched"`, `"Log Play"`) below `ItemTabs` to the bottom of the page. Meanwhile, `ItemActions` exposes a redundant raw-ID `"FRBR Hierarchy"` accordion, uses an inline accordion for `"Admin Actions"` instead of a labeled dropdown, leaks owner-restricted controls (`"Remove from library"`, `"Replace Cover"`, `"Regenerate Cover"`) to non-owner `user`-role viewers, and ships a broken `"Replace Cover"` flow across duplicated triggers, missing guards, `FormData` headers, Radix dialog focus/click races, stale React Query caches/polling, and stranded queue-unavailable uploads.
+
+For `v1.1.2`, `/item/[id]` must be decluttered around a single primary CTA per view and `<= 4` visible buttons per bar while explicitly **fixing** (not removing) `"Replace Cover"` so collectors can reliably update physical item covers from any device.
+
+## What Changes
+
+- **Explicitly fix `"Replace Cover"` end-to-end (do NOT remove):**
+  - Consolidate duplicate `"Replace Cover"` / `"Contribute Cover"` triggers (`SidebarActions` and `ItemActions`) into a single canonical trigger on `/item/[id]`, hoisting `CoverUploadPicker`'s `<AlertDialog>` and `<input type="file">` outside any `DropdownMenuContent` so menu dismissal never unmounts the dialog or file inputs.
+  - Gate the trigger strictly on `PermissionName.UPLOAD_COVER`, `(isOwner || isAdmin)`, and `Boolean(item.manifestation_id)`, and detect existing covers via `item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]`.
+  - Fix `CoverUploadPicker` (`cover-upload-picker.tsx`) and `apiClient` (`client.ts`): strip `Content-Type` automatically when sending `FormData` so the browser generates the multipart boundary, trigger file `.click()` safely without Radix `AlertDialog` teardown/focus-lock cancellation (using `sr-only` inputs safe for mobile WebView/Capacitor), move `resizeImageFile` inside `try/finally`, and honor `inline` + `buttonClassName`.
+  - Fix client cache and polling: replace `router.refresh()`-only upload completion in `useItemSidebarActions.handleUploadComplete` (and `ManifestationDetailClient`) with optimistic `cover_status: "processing"` updates and React Query invalidation (`queryKeys.item(id)`, `queryKeys.manifestation(id)`, `["items"]`), update `useManifestationWithPolling` to poll both `"pending"` and `"processing"` while removing the competing `useQuery` in `ItemActions`, and align `ItemHeader` to pass `getCoverTimestamp(meta, item.meta)`.
+  - Fix backend `POST /api/manifestations/<id>/cover` (`app/api/manifestations.py`) and `process_cover_pipeline` (`app/utils/covers.py`): execute a synchronous Tier 1 user-photo processing fallback when `task_id is None` (queue unavailable) instead of leaving raw uploads stranded in `RAW_DIR` as `"pending"`, and ensure `os.makedirs(COVERS_DIR, exist_ok=True)` runs before saving.
+- **Declutter `/item/[id]` and elevate `"Explore Graph"` + primary CTA above the fold:**
+  - Eliminate duplicate cover rendering between `SidebarCover` and `ItemHeader` and reorder responsive layout so cover, `ItemHeader` semantic FRBR breadcrumb, `"Explore Graph"` (`graph.exploreGraph` for `item.id > 0`), and the single owner-gated polymorphic primary consumption CTA (`"Now Listening"` / `"Mark as Listened"`, `"Log Reading Progress"` / `"Mark as Read"`, `"Mark as Watched"`, `"Log Play"`) appear above the fold on both mobile (`390x844`) and desktop (`1280x800`).
+  - Enforce `iqoqo-ux-auditor` limits (`<= 4` visible buttons per bar/container, `1` primary CTA per view, `<= 3` taps to secondary flows) by grouping secondary owner actions in `SidebarActions` into compact overflow/disclosure controls while preserving `Collection status` & `Item status` selects, `ReadingDurationCard`, `CoverProvenance`, `"Reassign Owner"`, and the pure-props boundary enforced by `sidebar-architecture.test.ts`.
+- **Remove redundant FRBR raw-ID accordion & convert `"Admin Actions"` to a labeled `DropdownMenu`:**
+  - Remove the redundant `"FRBR Hierarchy"` raw-ID collapsible block (`Work ID`, `Expression ID`, `Manifestation ID`, `Item ID`) from `ItemActions` while strictly preserving `ItemHeader`'s semantic FRBR breadcrumb (`Work -> Expression -> Manifestation -> Item` per `frbr-collection-navigation`) and `SidebarFrbrInfo`.
+  - Convert `"Admin Actions"` in `ItemActions` into a **labeled** Shadcn `DropdownMenu` (`"Admin Actions"`), updating `user-requests-manifestation-layout` cleanly while keeping the `"Requests"` accordion and pending escalation status card intact.
+- **Fix RBAC UI leaks & complete `next-intl` localization:**
+  - Tighten UI RBAC guards so `"Remove from library"`, `"Replace Cover"`/`"Regenerate Cover"`, and `"Admin Actions"` visibility require `(isOwner || isAdmin)` where item ownership is mandated by the backend, and align `ItemTabs` `History` tab visibility to `isOwner || isBorrower || isAdmin`.
+  - Replace hardcoded English labels in `ItemHeader`, `ItemActions`, and `SidebarActions` with `next-intl` keys (`graph.exploreGraph`, `ItemDetail.*`), using sentence case in `frontend/messages/pl.json`.
+
+## Capabilities
+
+### New Capabilities
+
+- `item-detail-ux-declutter`: Responsive `/item/[id]` layout declutter (`<= 4` visible buttons per bar, `1` primary CTA per view), above-the-fold polymorphic primary consumption CTA, secondary owner control consolidation, removal of the redundant `"FRBR Hierarchy"` raw-ID accordion while preserving `ItemHeader` semantic FRBR breadcrumbs, RBAC UI alignment, and `ItemDetail.*` i18n parity (`en.json` and sentence-case `pl.json`).
+
+### Modified Capabilities
+
+- `dual-source-contribute-cover`: Consolidates duplicate `/item/[id]` cover triggers and specifies the end-to-end `"Replace Cover"` fix across permission/ownership/`manifestation_id`/`cover_url` guards, `CoverUploadPicker` `FormData` boundary & Radix dialog file-input activation, React Query optimistic invalidation and `"pending" | "processing"` polling, and synchronous Tier 1 backend fallback when the task queue is unavailable.
+- `user-requests-manifestation-layout`: Replaces the blanket prohibition on `<DropdownMenu>` for admin actions so `/item/[id]` (`ItemActions`) uses a **labeled** `"Admin Actions"` Shadcn `DropdownMenu` while preserving the `"Requests"` collapsible accordion and external pending request status card.
+- `visual-frbr-relation-graph`: Requires the localized `"Explore Graph"` (`graph.exploreGraph`) entry link on `/item/[id]` (`item.id > 0`) to be positioned prominently above the fold on both mobile (`390x844`) and desktop (`1280x800`) viewports.
+
+## Impact
+
+- **Frontend UI & Hooks:** `frontend/components/item/item-page-client.tsx`, `frontend/components/item/item-header.tsx`, `frontend/components/item/item-sidebar.tsx`, `frontend/components/item/sidebar/sidebar-cover.tsx`, `frontend/components/item/sidebar/sidebar-actions.tsx`, `frontend/components/item/sidebar/use-item-sidebar-actions.ts`, `frontend/components/item/item-actions.tsx`, `frontend/components/item/item-tabs.tsx`, `frontend/components/scanner/cover-upload-picker.tsx`, `frontend/components/manifestation/manifestation-detail-client.tsx`, `frontend/components/manifestation/manifestation-actions.tsx`, `frontend/lib/api/client.ts`, `frontend/lib/api/hooks/catalog.ts`.
+- **Frontend Localization:** `frontend/messages/en.json`, `frontend/messages/pl.json`.
+- **Backend API & Cover Pipeline:** `app/api/manifestations.py` (`upload_cover`), `app/utils/covers.py` (`process_cover_pipeline`).
+- **Tests:** Backend `pytest` cover/permission tests (`tests/test_covers.py`, `tests/test_permissions_cover.py`, `tests/test_api_covers.py`); frontend `Vitest` unit/component suites (`__tests__/components/item/*`, `__tests__/app/item/page.test.tsx`, `__tests__/components/scanner/cover-upload-picker.test.tsx`, `__tests__/lib/api/*`); `Playwright` mobile (`390x844`) and desktop (`1280x800`) `/item/[id]` E2E specs plus regression runs of existing item workflow E2E specs.
+- **FRBR & Schema Impact:** Zero database migrations; strictly preserves `Work -> Expression -> Manifestation -> Item` ontological boundaries (cover mutations remain `Manifestation`-scoped; reading/availability/condition/visibility remain `Item`-scoped).

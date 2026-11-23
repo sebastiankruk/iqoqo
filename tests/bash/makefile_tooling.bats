@@ -98,6 +98,43 @@
   run make -n test-backend IQOQO_AI_MODE=1
   [ "$status" -eq 0 ]
   [[ "$output" != *"echo \"Running backend tests...\""* ]]
+  [[ "$output" == *"-q --tb=short --no-header"* ]]
+}
+
+@test "Makefile test-backend-pg in AI mode suppresses verbose flags and echo" {
+  run make -n test-backend-pg IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"echo \"Running PostgreSQL-dependent"* ]]
+  [[ "$output" == *"-q --tb=short --no-header"* ]]
+  [[ "$output" != *"pytest tests/integration/db/ -v"* ]]
+}
+
+@test "Makefile test-scripts-python includes tests/scripts/ and AI flags" {
+  run make -n test-scripts-python IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tests/scripts/"* ]]
+  [[ "$output" == *"-q --tb=short --no-header"* ]]
+}
+
+@test "Makefile test-frontend in AI mode passes --reporter=dot" {
+  run make -n test-frontend IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--reporter=dot"* ]]
+  [[ "$output" != *"echo \"Running frontend unit tests"* ]]
+}
+
+@test "Makefile test-scripts-bash in AI mode pipes TAP output to format_bats_ai.py" {
+  run make -n test-scripts-bash IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--formatter tap"* ]]
+  [[ "$output" == *"format_bats_ai.py"* ]]
+}
+
+@test "Makefile test-e2e-federation dry-run does not execute live containers" {
+  run make -n test-e2e-federation IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"federated_friend_request.spec.ts"* ]]
+  [[ "$output" != *"help_hub_workflow.spec.ts"* ]]
 }
 
 @test "Makefile status can retrieve the helper from the preview backend image" {
@@ -112,5 +149,33 @@
 
 @test "status helper accepts an explicit host deployment root" {
   run grep -F 'IQOQO_ROOT="${IQOQO_STATUS_ROOT:-' scripts/iqoqo-status.sh
+  [ "$status" -eq 0 ]
+}
+
+
+@test "Makefile status fallback passes --deploy-dir for preview" {
+  run make -n status STACK=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--deploy-dir"* ]]
+}
+
+@test "Makefile monitoring-reset-auth pipes OPENOBSERVE_BASIC_AUTH via stdin instead of -e argv" {
+  run make -n monitoring-reset-auth MODE=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"-e OO_BASIC_AUTH"* ]]
+  [[ "$output" == *"sys.stdin.read().strip()"* ]]
+}
+
+@test "Makefile monitoring-reset-auth uses --project-directory and --force-recreate --no-deps" {
+  run make -n monitoring-reset-auth MODE=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--project-directory"* ]]
+  [[ "$output" == *"--enforce-openobserve-password-policy"* ]]
+  [[ "$output" == *"up -d --force-recreate --no-deps openobserve otel-collector"* ]]
+  [[ "$output" == *"up -d --force-recreate --no-deps web worker frontend"* ]]
+}
+
+@test "Makefile has preview-reconcile target" {
+  run grep -E '^preview-reconcile:' Makefile
   [ "$status" -eq 0 ]
 }

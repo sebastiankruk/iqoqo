@@ -112,3 +112,21 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Prebuilt tag: v0.7.17-custom" ]]
 }
+
+
+@test "make preview start prebuilt includes container-side reconciliation and monitoring pre-start without host python" {
+  run make -n preview start prebuilt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ensure_env_secrets.py"* ]]
+  [[ "$output" == *"reconcile_preview_settings"* ]]
+  [[ "$output" == *"provision_rum_token.py --mgmt-host openobserve"* ]]
+  [[ "$output" == *"chmod 0600"* ]]
+}
+
+@test "make preview start prebuilt supports absolute COMPOSE_ENV_FILE and mounts env dir with host uid" {
+  run make -n preview start prebuilt COMPOSE_ENV_FILE=/opt/preview.iqoqo/.env
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"$(pwd)//opt/preview.iqoqo/.env"* ]]
+  [[ "$output" == *'--user "$(id -u):$(id -g)"'* ]]
+  [[ "$output" == *"/tmp/envdir"* ]]
+}

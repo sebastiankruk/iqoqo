@@ -34,6 +34,7 @@ credentials never touch disk or process argv):
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
@@ -97,6 +98,7 @@ def _provider_configured(configured_keys: set[str], alternatives: tuple[tuple[st
 def reconcile_preview_state(
     dst_env: dict[str, str],
     src_secret_key: str = "",
+    purge_undecryptable: bool = False,
 ) -> dict[str, Any]:
     """Re-encrypt cloned settings, push dst_env overrides, sync admin, and audit APIs.
 
@@ -115,6 +117,7 @@ def reconcile_preview_state(
     reencrypted = 0
     cleared = 0
     overridden = 0
+    preserved_undecryptable: list[str] = []
 
     rows = db.session.execute(db.select(InstanceSettings)).scalars().all()
     for row in rows:
@@ -142,6 +145,9 @@ def reconcile_preview_state(
                 continue
             except (InvalidToken, ValueError, json.JSONDecodeError):
                 pass
+        elif not purge_undecryptable:
+            preserved_undecryptable.append(row.key)
+            continue
 
         db.session.delete(row)
         cleared += 1
@@ -196,6 +202,7 @@ def reconcile_preview_state(
         "reencrypted": reencrypted,
         "cleared": cleared,
         "overridden": overridden,
+        "preserved_undecryptable": sorted(preserved_undecryptable),
         "admin_synced": admin_synced,
         "admin_email": admin_email if admin_synced else None,
         "admin_warning": admin_warning,
@@ -205,13 +212,55 @@ def reconcile_preview_state(
     }
 
 
-def main() -> int:
-    """CLI entrypoint reading JSON reconciliation payload from stdin."""
-    raw_stdin = sys.stdin.read().strip()
-    payload: dict[str, Any] = json.loads(raw_stdin) if raw_stdin else {}
-    src_secret_key = str(payload.get("src_secret_key") or "")
-    raw_env = payload.get("dst_env")
-    dst_env: dict[str, str] = raw_env if isinstance(raw_env, dict) else {}
+def parse_env_text(raw_text: str) -> dict[str, str]:
+    """Parse raw .env file contents into a dictionary of stripped key/value pairs."""
+    dst_env: dict[str, str] = {}
+    for raw in raw_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        clean = line[7:].lstrip() if line.startswith("export ") else line
+        if "=" not in clean:
+            continue
+        key, _, val = clean.partition("=")
+        k = key.strip()
+        v = val.strip()
+        if not k or not v:
+            continue
+        if len(v) >= 2 and ((v[0] == '"' and v[-1] == '"') or (v[0] == "'" and v[-1] == "'")):
+            v = v[1:-1]
+        elif " #" in v:
+            v = v.split(" #", 1)[0].strip()
+        if v:
+            dst_env[k] = v
+    return dst_env
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entrypoint reading JSON reconciliation payload (or raw dotenv) from stdin."""
+    parser = argparse.ArgumentParser(description="Reconcile cloned InstanceSettings and preview credentials.")
+    parser.add_argument(
+        "--purge-undecryptable",
+        action="store_true",
+        help="Delete undecryptable cloned InstanceSettings rows when src_secret_key is missing/empty.",
+    )
+    parser.add_argument(
+        "--dotenv-stdin",
+        action="store_true",
+        help="Parse raw .env key=value text from stdin instead of JSON payload.",
+    )
+    args = parser.parse_args(argv)
+
+    raw_stdin = sys.stdin.read()
+    if args.dotenv_stdin:
+        src_secret_key = os.environ.get("SRC_SECRET_KEY", "")
+        dst_env = parse_env_text(raw_stdin)
+    else:
+        stripped = raw_stdin.strip()
+        payload: dict[str, Any] = json.loads(stripped) if stripped else {}
+        src_secret_key = str(payload.get("src_secret_key") or "")
+        raw_env = payload.get("dst_env")
+        dst_env = raw_env if isinstance(raw_env, dict) else {}
 
     # Suppress expected pre-reconciliation InvalidToken startup logs while building the app
     app_logger = logging.getLogger("app")
@@ -222,12 +271,23 @@ def main() -> int:
     finally:
         app_logger.setLevel(prev_level)
     with app.app_context():
-        summary = reconcile_preview_state(dst_env=dst_env, src_secret_key=src_secret_key)
+        summary = reconcile_preview_state(
+            dst_env=dst_env,
+            src_secret_key=src_secret_key,
+            purge_undecryptable=args.purge_undecryptable,
+        )
 
     print(
         f"✅ Encrypted settings reconciled (re-encrypted: {summary['reencrypted']}, "
         f"overridden from env: {summary['overridden']}, cleared stale: {summary['cleared']})"
     )
+    preserved = summary["preserved_undecryptable"]
+    if preserved:
+        print(
+            f"⚠️ WARNING: Preserved {len(preserved)} undecryptable cloned InstanceSettings row(s) "
+            f"because SRC_SECRET_KEY was unavailable ({', '.join(preserved)}). "
+            "Re-run with SRC_SECRET_KEY or pass --purge-undecryptable to delete."
+        )
     if summary["admin_synced"]:
         print(f"👤 Synced preview admin credentials for {summary['admin_email']}")
     elif summary["admin_warning"]:

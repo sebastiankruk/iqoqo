@@ -945,3 +945,139 @@ def test_shared_collection_query_filter_includes_friends_only_and_excludes_hidde
     anon_fr = client.get(f"/api/public/share/{fr_tok}")
     assert anon_fr.status_code == 200
     assert {i["id"] for i in anon_fr.json["data"]["items"]} == {pub_id, fr_id}
+
+
+def test_music_share_excludes_movie_dvd_even_with_drifted_content_type(client, app):
+    """C141: Music-filtered shares exclude movie DVDs (including drifted Expression.content_type='music')."""
+    from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
+
+    with app.app_context():
+        owner = User(email="c141-share@example.com", display_name="C141 Owner", is_active=True)
+        owner.set_password("StrongPass123!")
+        db.session.add(owner)
+        db.session.flush()
+
+        w_cd = Work(title="Kind of Blue")
+        w_dvd = Work(title="Drifted Movie DVD")
+        db.session.add_all([w_cd, w_dvd])
+        db.session.flush()
+
+        e_cd = Expression(work_id=w_cd.id, content_type="music", language="en")
+        # Simulate corrupted/drifted Expression.content_type='music' on a movie DVD
+        e_dvd = Expression(work_id=w_dvd.id, content_type="music", language="en")
+        db.session.add_all([e_cd, e_dvd])
+        db.session.flush()
+
+        m_cd = Manifestation(expression_id=e_cd.id, format="cd", format_type="cd", meta={"title": "Kind of Blue CD", "format": "cd"})
+        m_dvd = Manifestation(
+            expression_id=e_dvd.id,
+            format="dvd",
+            format_type="dvd",
+            catalog_number="DVD-123",
+            meta={"title": "Drifted Movie DVD", "format": "dvd"},
+        )
+        db.session.add_all([m_cd, m_dvd])
+        db.session.flush()
+
+        it_cd = Item(manifestation_id=m_cd.id, owner_id=owner.id, visibility="public", is_hidden=False, status="unread")
+        it_dvd = Item(manifestation_id=m_dvd.id, owner_id=owner.id, visibility="public", is_hidden=False, status="unread")
+        db.session.add_all([it_cd, it_dvd])
+
+        sc = SharedCollection(
+            user_id=owner.id,
+            name="Music Share",
+            share_token="c141-music-share-token",
+            filters={"tags": ["music"]},
+        )
+        db.session.add(sc)
+        db.session.commit()
+
+    res = client.get("/api/public/share/c141-music-share-token")
+    assert res.status_code == 200
+    titles = {item["title"] for item in res.get_json()["data"]["items"]}
+    assert "Kind of Blue" in titles
+    assert "Drifted Movie DVD" not in titles
+
+
+def test_wishlist_share_bound_manifestation_filters_strictly(app, client):
+    """Bound UserWorkIntent.manifestation_id excludes non-matching manifestations of same Work."""
+    from app.db.models import Expression, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
+
+    with app.app_context():
+        owner = User(email="wl_bound@iqoqo.local", public_username="wl_bound", visibility="public")
+        db.session.add(owner)
+        db.session.flush()
+
+        w = Work(title="Dual Edition Album", meta={})
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="music")
+        db.session.add(e)
+        db.session.flush()
+        m_cd = Manifestation(expression_id=e.id, format="cd", format_type="cd", meta={"format": "cd"})
+        m_vinyl = Manifestation(expression_id=e.id, format="vinyl", format_type="vinyl", meta={"format": "vinyl"})
+        db.session.add_all([m_cd, m_vinyl])
+        db.session.flush()
+
+        db.session.add(
+            UserWorkIntent(
+                user_id=owner.id,
+                work_id=w.id,
+                expression_id=e.id,
+                manifestation_id=m_vinyl.id,
+                status="want_to_listen",
+                is_hidden=False,
+            )
+        )
+        db.session.add(
+            SharedCollection(
+                user_id=owner.id,
+                name="CD Wishlist Share",
+                share_token="c146-bound-wl-cd-token",
+                filters={"status": ["want_to_listen"], "tags": ["music"], "format": ["cd"]},
+            )
+        )
+        db.session.commit()
+
+    res = client.get("/api/public/share/c146-bound-wl-cd-token")
+    assert res.status_code == 200
+    assert res.get_json()["data"]["items"] == []
+
+
+def test_wishlist_share_category_filter_preserves_unmanifested_work(app, client):
+    """Category-filtered wishlist shares preserve conceptual F1/F2 works without Manifestation rows."""
+    from app.db.models import Expression, SharedCollection, User, UserWorkIntent, Work, db
+
+    with app.app_context():
+        owner = User(email="wl_unman@iqoqo.local", public_username="wl_unman", visibility="public")
+        db.session.add(owner)
+        db.session.flush()
+
+        w_music = Work(title="Conceptual Unmanifested Album", meta={})
+        w_movie = Work(title="Conceptual Unmanifested Movie", meta={})
+        db.session.add_all([w_music, w_movie])
+        db.session.flush()
+        e_music = Expression(work_id=w_music.id, content_type="music")
+        e_movie = Expression(work_id=w_movie.id, content_type="movie")
+        db.session.add_all([e_music, e_movie])
+        db.session.flush()
+
+        db.session.add_all(
+            [
+                UserWorkIntent(user_id=owner.id, work_id=w_music.id, expression_id=e_music.id, status="want_to_listen", is_hidden=False),
+                UserWorkIntent(user_id=owner.id, work_id=w_movie.id, expression_id=e_movie.id, status="want_to_watch", is_hidden=False),
+                SharedCollection(
+                    user_id=owner.id,
+                    name="Music Wishlist Share",
+                    share_token="c147-unmanifested-music-wl",
+                    filters={"status": ["want_to_listen", "want_to_watch"], "tags": ["music"]},
+                ),
+            ]
+        )
+        db.session.commit()
+
+    res = client.get("/api/public/share/c147-unmanifested-music-wl")
+    assert res.status_code == 200
+    titles = {item["title"] for item in res.get_json()["data"]["items"]}
+    assert "Conceptual Unmanifested Album" in titles
+    assert "Conceptual Unmanifested Movie" not in titles

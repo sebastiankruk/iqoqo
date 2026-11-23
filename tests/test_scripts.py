@@ -716,9 +716,10 @@ def test_ensure_env_secrets_quote_stripping(tmp_path):
     from scripts.ensure_env_secrets import ensure_secrets_in_env_file, strip_quotes
 
     env_file = tmp_path / ".env"
+    password = "Test_Strong_Password_123"
     env_file.write_text(
         'OPENOBSERVE_ROOT_USER="admin@iqoqo.local"\n'
-        'OPENOBSERVE_ROOT_PASSWORD="test_strong_password_123"\n'
+        f'OPENOBSERVE_ROOT_PASSWORD="{password}"\n'
         'OPENOBSERVE_BASIC_AUTH="stale_or_quoted_token"\n'
     )
 
@@ -727,10 +728,10 @@ def test_ensure_env_secrets_quote_stripping(tmp_path):
 
     resolved = ensure_secrets_in_env_file(env_file)
     assert resolved["OPENOBSERVE_ROOT_USER"] == "admin@iqoqo.local"
-    assert resolved["OPENOBSERVE_ROOT_PASSWORD"] == "test_strong_password_123"
+    assert resolved["OPENOBSERVE_ROOT_PASSWORD"] == password
     import base64
 
-    expected = base64.b64encode(b"admin@iqoqo.local:test_strong_password_123").decode()
+    expected = base64.b64encode(f"admin@iqoqo.local:{password}".encode()).decode()
     assert resolved["OPENOBSERVE_BASIC_AUTH"] == expected
 
 
@@ -762,3 +763,17 @@ def test_probe_openobserve_auth_handles_responses():
         is_ok, msg = probe_openobserve_auth("any_auth", host_port=5080)
         assert is_ok is True
         assert "Unreachable" in msg
+
+
+def test_ensure_env_secrets_enforces_0600_on_symlink_target(tmp_path):
+    """ensure_secrets_in_env_file enforces POSIX 0o600 on resolved symlink target."""
+    from scripts.ensure_env_secrets import ensure_secrets_in_env_file
+
+    target = tmp_path / ".env.preview"
+    target.write_text("SECRET_KEY='already-long-enough-secret-key-0123456789abcdef'\n", encoding="utf-8")
+    os.chmod(target, 0o644)
+    link = tmp_path / ".env"
+    link.symlink_to(target)
+
+    ensure_secrets_in_env_file(link)
+    assert (target.stat().st_mode & 0o777) == 0o600

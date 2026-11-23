@@ -121,7 +121,7 @@ def test_monitoring_compose_accepts_valid_credentials() -> None:
 
 def test_ensure_env_secrets_provisions_missing_keys(tmp_path: Path) -> None:
     """ensure_env_secrets_in_env_file should auto-generate all required secrets into an empty or partial env file."""
-    from scripts.ensure_env_secrets import ensure_secrets_in_env_file
+    from scripts.ensure_env_secrets import ensure_secrets_in_env_file, is_openobserve_password_strong
 
     env_file = tmp_path / ".env.test_sample"
     env_file.write_text("SOME_EXISTING_KEY=hello\n", encoding="utf-8")
@@ -133,10 +133,69 @@ def test_ensure_env_secrets_provisions_missing_keys(tmp_path: Path) -> None:
     assert "JWT_SECRET_KEY" in result and len(result["JWT_SECRET_KEY"]) >= 32
     assert "AUTH_SECRET" in result and len(result["AUTH_SECRET"]) >= 24
     assert "OPENOBSERVE_ROOT_USER" in result
-    assert "OPENOBSERVE_ROOT_PASSWORD" in result and len(result["OPENOBSERVE_ROOT_PASSWORD"]) >= 16
+    assert "OPENOBSERVE_ROOT_PASSWORD" in result and is_openobserve_password_strong(result["OPENOBSERVE_ROOT_PASSWORD"])
     assert "OPENOBSERVE_BASIC_AUTH" in result and len(result["OPENOBSERVE_BASIC_AUTH"]) >= 16
 
     content = env_file.read_text(encoding="utf-8")
     assert "SECRET_KEY=" in content
     assert "OPENOBSERVE_ROOT_PASSWORD=" in content
     assert "OPENOBSERVE_BASIC_AUTH=" in content
+
+
+def test_ensure_env_secrets_regenerates_weak_openobserve_password_on_reset(tmp_path: Path) -> None:
+    """The auth-reset path rotates weak passwords so a fresh OO db can boot."""
+    import base64
+
+    from scripts.ensure_env_secrets import ensure_secrets_in_env_file, is_openobserve_password_strong
+
+    weak_password = "abcdefghijklmnopqrstuvwxyz0123456789"  # no uppercase / special
+    env_file = tmp_path / ".env.weak_oo_password"
+    env_file.write_text(
+        f"OPENOBSERVE_ROOT_USER=admin@iqoqo.local\nOPENOBSERVE_ROOT_PASSWORD={weak_password}\n",
+        encoding="utf-8",
+    )
+
+    resolved = ensure_secrets_in_env_file(env_file, enforce_openobserve_password_policy=True)
+
+    new_password = resolved["OPENOBSERVE_ROOT_PASSWORD"]
+    assert is_openobserve_password_strong(weak_password) is False
+    assert new_password != weak_password
+    assert is_openobserve_password_strong(new_password) is True
+    expected_auth = base64.b64encode(f"admin@iqoqo.local:{new_password}".encode()).decode()
+    assert resolved["OPENOBSERVE_BASIC_AUTH"] == expected_auth
+
+
+def test_ensure_env_secrets_preserves_existing_openobserve_password(tmp_path: Path) -> None:
+    """Routine starts do not rotate a weak-but-working root credential."""
+    from scripts.ensure_env_secrets import ensure_secrets_in_env_file
+
+    existing_password = "abcdefghijklmnopqrstuvwxyz0123456789"  # weak, but valid in existing volume
+    env_file = tmp_path / ".env.existing_oo_password"
+    env_file.write_text(f"OPENOBSERVE_ROOT_PASSWORD={existing_password}\n", encoding="utf-8")
+
+    resolved = ensure_secrets_in_env_file(env_file)
+
+    assert resolved["OPENOBSERVE_ROOT_PASSWORD"] == existing_password
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose CLI is unavailable")
+def test_prebuilt_compose_keeps_ghcr_prefix_when_image_prefix_empty() -> None:
+    """An empty IMAGE_PREFIX= in .env must not strip ghcr.io/sebastiankruk/ in docker-compose.prebuilt.yml."""
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "ENV_FILE": "/dev/null",
+        "IMAGE_PREFIX": "",
+        "POSTGRES_PASSWORD": "compose-test-password-only",
+        "OPENOBSERVE_ROOT_PASSWORD": "Valid!Password123",
+        "OPENOBSERVE_BASIC_AUTH": base64.b64encode(b"admin@iqoqo.local:Valid!Password123").decode("utf-8"),
+    }
+    result = subprocess.run(
+        ["docker", "compose", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.prebuilt.yml"), "config"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ghcr.io/sebastiankruk/iqoqo-backend:" in result.stdout

@@ -51,6 +51,7 @@ class FormatNormalizer:
     """
 
     _mappings: dict[str, str] = {}
+    _reverse_mappings: dict[str, set[str]] = {}
     _null_mappings: dict[str, str] = {}
     _loaded: bool = False
 
@@ -67,6 +68,7 @@ class FormatNormalizer:
             return
 
         cls._mappings = {}
+        cls._reverse_mappings = {}
         cls._null_mappings = {}
         cls._loaded = True
 
@@ -114,8 +116,10 @@ class FormatNormalizer:
                 mapping_parse_failures_total.add(1, {"reason": "invalid_format", "target": target_str})
                 continue
 
-            # Store lowercase key for case-insensitive lookup
-            cls._mappings[str(key).lower().strip()] = target_str
+            # Store lowercase key for case-insensitive lookup and pre-compute reverse map
+            raw_lower = str(key).lower().strip()
+            cls._mappings[raw_lower] = target_str
+            cls._reverse_mappings.setdefault(target_str, set()).add(raw_lower)
 
     @classmethod
     def normalize(cls, raw: str | None, content_type: str | None = None) -> str:
@@ -216,6 +220,7 @@ class FormatNormalizer:
     def reset(cls) -> None:
         """Clear cached mappings (useful for testing)."""
         cls._mappings = {}
+        cls._reverse_mappings = {}
         cls._null_mappings = {}
         cls._loaded = False
 
@@ -239,51 +244,124 @@ def normalize_format(raw: str | None, content_type: str | None = None) -> str:
 def expand_format_filter(format_list: list[str] | None) -> list[str] | None:
     """Expand format filter values to include raw values that normalize to them.
 
-    When a client filters by a canonical format like ``"dvd"``, this helper
-    finds all raw mapping keys (e.g. ``"video"``) whose normalisation target
-    is ``"dvd"`` and adds them to the filter list so the SQL ``IN`` clause
-    can match the raw values stored in the database.
-
-    For ``unknown_*`` filter values, adds ``None`` / NULL to the filter set
-    so that items with NULL format are also captured (they normalise to
-    unknown_* when no NULL mapping exists).  This is a best-effort expansion
-    — items whose raw non-NULL value normalises to unknown_* will also be
-    caught only after the DB is updated via the CLI tool.
-
-    Args:
-        format_list: The client-supplied format filter list, or ``None``.
-
-    Returns:
-        An expanded format list suitable for SQL ``IN`` filtering, or
-        ``None`` if *format_list* was ``None``.
+    When a client filters by a canonical format like ``"dvd"`` or
+    ``"unknown_audio"``, this helper finds all raw mapping keys (in both
+    ``shared/format_mappings.yaml`` and ``FORMAT_ALIAS_TO_CATEGORY``) whose
+    normalisation target matches and adds them so the SQL ``IN`` clause
+    captures legacy and normalized rows.
     """
     if not format_list:
         return format_list
 
     FormatNormalizer._load_mappings()
 
-    # Build reverse mapping: canonical → set of raw keys that map to it
-    reverse: dict[str, set[str]] = {}
-    for raw_key, target in FormatNormalizer._mappings.items():
-        reverse.setdefault(target, set()).add(raw_key)
+    # Reuse pre-computed reverse mapping + invert FORMAT_ALIAS_TO_CATEGORY -> unknown_{category}
+    reverse: dict[str, set[str]] = {k: set(v) for k, v in FormatNormalizer._reverse_mappings.items()}
+
+    # Also invert FORMAT_ALIAS_TO_CATEGORY -> unknown_{category}
+    for alias_key, cat in FORMAT_ALIAS_TO_CATEGORY.items():
+        placeholder = FormatNormalizer._category_to_unknown_placeholder(cat)
+        if placeholder:
+            reverse.setdefault(placeholder, set()).add(alias_key)
 
     expanded: set[str] = set()
     for fmt in format_list:
         fmt_clean = fmt.strip().lower()
         expanded.add(fmt_clean)
 
-        # Include raw keys whose mapping target is this format
         if fmt_clean in reverse:
             expanded.update(reverse[fmt_clean])
 
-        # For unknown_* formats, also consider NULL format items
-        # (they fall through to unknown_* when no explicit NULL mapping exists)
-        if fmt_clean in _UNKNOWN_FORMATS and None not in FormatNormalizer._null_mappings:
-            # We can't add None to the set, but we signal that NULL should be
-            # included by NOT filtering out NULL values for this format
-            pass
-
     return list(expanded) if expanded else None
+
+
+def filter_includes_null_format(format_list: list[str] | None) -> bool:
+    """Return True when *format_list* includes an ``unknown_*`` placeholder."""
+    if not format_list:
+        return False
+    return any(fmt.strip().lower() in _UNKNOWN_FORMATS for fmt in format_list if fmt)
+
+
+_BLURAY_AUDIO_LABELS: frozenset[str] = frozenset(
+    {
+        "blu-ray audio",
+        "bd-a",
+        "bluray hifi",
+        "pure audio blu-ray",
+        "blu-ray pure audio",
+        "bluray_audio",
+        "hfpa",
+        "high fidelity pure audio",
+    }
+)
+_CD_DVD_LABELS: frozenset[str] = frozenset({"cd+dvd", "cd/dvd", "dualdisc", "cd_dvd_combo"})
+_SACD_LABELS: frozenset[str] = frozenset({"sacd", "super audio cd", "hybrid sacd"})
+_MINIDISC_LABELS: frozenset[str] = frozenset({"minidisc", "md"})
+_CASSETTE_LABELS: frozenset[str] = frozenset({"cassette", "cass", "mc", "compact cassette"})
+_VINYL_LABELS: frozenset[str] = frozenset({"vinyl", "lp", '12"', '7"', '10"', "7_inch", "12_inch", "flexi-disc", "shellac"})
+_CD_LABELS: frozenset[str] = frozenset({"cd", "cdr", "cd-r", "hdcd", "shm-cd", "enhanced cd", "audio_cd"})
+
+
+def detect_audio_carrier_from_labels(labels: list[str]) -> str | None:
+    """Resolve a list of raw audio format/description labels to a canonical MediaFormat."""
+    cleaned = [str(lbl).strip().lower() for lbl in labels if isinstance(lbl, str) and lbl.strip()]
+    if not cleaned:
+        return None
+    label_set = set(cleaned)
+    if label_set & _CD_DVD_LABELS or (("cd" in label_set) and ("dvd" in label_set or "dvd-video" in label_set)):
+        return MediaFormat.CD_DVD_COMBO
+    if label_set & _BLURAY_AUDIO_LABELS or any("blu-ray" in lbl and "audio" in lbl for lbl in cleaned):
+        return MediaFormat.BLURAY_AUDIO
+    if label_set & _SACD_LABELS or any("sacd" in lbl for lbl in cleaned):
+        return MediaFormat.SACD
+    if label_set & _MINIDISC_LABELS or any("minidisc" in lbl for lbl in cleaned):
+        return MediaFormat.MINIDISC
+    if label_set & _CASSETTE_LABELS or any("cassette" in lbl for lbl in cleaned):
+        return MediaFormat.CASSETTE
+    if label_set & _VINYL_LABELS or any("vinyl" in lbl for lbl in cleaned):
+        return MediaFormat.VINYL
+    if label_set & _CD_LABELS or any(lbl.startswith("cd ") or lbl.endswith(" cd") for lbl in cleaned):
+        return MediaFormat.CD
+    return None
+
+
+def recover_carrier_from_raw_payload(raw_payload: dict | None, content_type: str | None = None) -> str | None:
+    """Deterministically recover a canonical carrier format from stored provider raw_payload."""
+    if not isinstance(raw_payload, dict):
+        return None
+    labels: list[str] = []
+    # MusicBrainz media list
+    for medium in raw_payload.get("media") or []:
+        if isinstance(medium, dict) and isinstance(medium.get("format"), str):
+            labels.append(medium["format"])
+    # Discogs search "format" / release "formats"
+    raw_fmt = raw_payload.get("format")
+    if isinstance(raw_fmt, str):
+        labels.append(raw_fmt)
+    elif isinstance(raw_fmt, list):
+        labels.extend(x for x in raw_fmt if isinstance(x, str))
+    for item in raw_payload.get("formats") or []:
+        if isinstance(item, dict):
+            if isinstance(item.get("name"), str):
+                labels.append(item["name"])
+            desc = item.get("descriptions")
+            if isinstance(desc, str):
+                labels.append(desc)
+            elif isinstance(desc, list):
+                labels.extend(x for x in desc if isinstance(x, str))
+        elif isinstance(item, str):
+            labels.append(item)
+
+    if labels:
+        audio_carrier = detect_audio_carrier_from_labels(labels)
+        if audio_carrier:
+            return audio_carrier
+        if content_type != "music":
+            for lbl in labels:
+                norm = lbl.strip().lower()
+                if norm in _CANONICAL_FORMATS and not norm.startswith("unknown_"):
+                    return norm
+    return None
 
 
 def normalize_format_counts(

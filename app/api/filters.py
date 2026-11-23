@@ -285,7 +285,24 @@ class CatalogFilterBuilder:
 
     def _apply_format(self, fmt: list[str] | None) -> None:
         if fmt:
-            self.query = self.query.filter(Manifestation.meta["format"].as_string().in_(fmt))
+            from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
+
+            expanded = [str(f).strip().lower() for f in (expand_format_filter(fmt) or fmt) if str(f).strip()]
+            include_null = filter_includes_null_format(fmt)
+            fmt_clauses = [
+                db.func.lower(Manifestation.format).in_(expanded),
+                db.func.lower(Manifestation.format_type).in_(expanded),
+                db.func.lower(Manifestation.meta["format"].as_string()).in_(expanded),
+            ]
+            if include_null:
+                fmt_clauses.append(
+                    db.and_(
+                        Manifestation.format.is_(None),
+                        Manifestation.format_type.is_(None),
+                        Manifestation.meta["format"].as_string().is_(None),
+                    )
+                )
+            self.query = self.query.filter(db.or_(*fmt_clauses))
 
     def _apply_missing_cover(self, missing_cover: bool) -> None:
         if missing_cover:

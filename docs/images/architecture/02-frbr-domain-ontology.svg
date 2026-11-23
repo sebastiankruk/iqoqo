@@ -16,8 +16,8 @@
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
 <svg id="svg-bp2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp2-title bp2-desc">
-            <title id="bp2-title">iqoqo v1.1.0 — FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions (Blueprint 2)</title>
-            <desc id="bp2-desc">Conceptual ER and domain class diagram for iqoqo v1.1.0 showing the WEMI backbone (Work, Expression, Manifestation, Item), F15/F16/F18 extensions, FRBRoo contribution events, UserWorkIntent, SemanticLink, and Work-level reading rollups.</desc>
+            <title id="bp2-title">iqoqo v1.1.1 — FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions (Blueprint 2)</title>
+            <desc id="bp2-desc">Conceptual ER and domain class diagram for iqoqo v1.1.1 showing the WEMI backbone (Work, Expression, Manifestation, Item), F15/F16/F18 extensions, FRBRoo contribution events, UserWorkIntent, SemanticLink, and Work-level reading rollups.</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
               .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 22px; font-weight: 700; fill: #2B3D4F; }
@@ -100,7 +100,7 @@
             <rect x="0" y="0" width="1440" height="980" fill="url(#b2-grid)"/>
 
             <!-- Header -->
-            <text x="32" y="38" class="title-text">iqoqo v1.1.0 — FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions</text>
+            <text x="32" y="38" class="title-text">iqoqo v1.1.1 — FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions</text>
             <text x="32" y="60" class="subtitle-text">Blueprint 2 of 12  •  WEMI Core Backbone, Complex Works (F15/F16/F18), Events &amp; Linked Open Data</text>
             <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
             <text x="1280" y="39" text-anchor="middle" class="header-pill-text">Domain Class / Conceptual ER</text>
