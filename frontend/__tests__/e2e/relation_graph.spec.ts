@@ -45,17 +45,49 @@ test.describe("FRBR Relation Graph Explorer E2E (C133)", () => {
     });
     expect(itemRes.ok()).toBeTruthy();
     const itemJson = (await itemRes.json()) as {
-      data: { work?: { id: number }; expression?: { id: number } };
+      data: { work?: { id: number }; expression?: { id: number }; manifestation_id?: number };
     };
     const workId = itemJson.data.work?.id;
     const exprId = itemJson.data.expression?.id;
+    const manifestationId = itemJson.data.manifestation_id;
     expect(workId).toBeTruthy();
     expect(exprId).toBeTruthy();
+    expect(manifestationId).toBeTruthy();
 
     const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
     expect(exchangeRes.ok()).toBeTruthy();
 
-    // 1. Visit Work page and click Explore Graph
+    // 1. Verify top utility bar Explore Graph visibility & <= 4 buttons on mobile and desktop across Work, Expression, Manifestation
+    const tiers: Array<{ type: "work" | "expression" | "manifestation"; id: number }> = [
+      { type: "work", id: workId! },
+      { type: "expression", id: exprId! },
+      { type: "manifestation", id: manifestationId! },
+    ];
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1280, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      for (const tier of tiers) {
+        await page.goto(`/${tier.type}/${tier.id}`);
+        await page.waitForLoadState("networkidle");
+        const exploreBtn = page.getByTestId("explore-graph-link");
+        await expect(exploreBtn).toBeVisible();
+        await expect(exploreBtn).toHaveAttribute("href", `/graph?type=${tier.type}&id=${tier.id}`);
+        const box = await exploreBtn.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.y).toBeLessThan(viewport.height);
+        const barButtonsCount = await exploreBtn
+          .locator(
+            "xpath=ancestor::div[contains(@class,'border-b')][1]//a | ancestor::div[contains(@class,'border-b')][1]//button"
+          )
+          .count();
+        expect(barButtonsCount).toBeLessThanOrEqual(4);
+      }
+    }
+
+    // 2. Visit Work page and click Explore Graph
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/work/${workId}`);
     await page.waitForLoadState("networkidle");
 

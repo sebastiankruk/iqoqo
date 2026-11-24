@@ -17,7 +17,17 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { BookmarkCheck, BookOpen, Disc, GitBranch, HeartOff, ImagePlus, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BookmarkCheck,
+  BookOpen,
+  Disc,
+  GitBranch,
+  HeartOff,
+  ImagePlus,
+  Layers,
+  Loader2,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
@@ -79,6 +89,7 @@ function normalizeAuthors(authors: unknown): string[] {
 export function ManifestationDetailClient({ manifestationId, initialManifestation }: ManifestationDetailClientProps) {
   const t = useTranslations("Manifestation");
   const tWishlist = useTranslations("Wishlist");
+  const tGraph = useTranslations("graph");
   const router = useRouter();
   const queryClient = useQueryClient();
   const deleteWishlistMutation = useDeleteWishlistItem();
@@ -231,7 +242,36 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
       itemType={schemaUrl}
     >
       <Navbar />
-      <div className="flex-1 mx-auto w-full max-w-5xl px-6 py-12">
+      {/* Top bar navigation */}
+      <div className="border-b border-border/60 bg-muted/20" data-testid="manifestation-top-bar">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline" data-testid="explore-graph-link" className="gap-1.5">
+              <Link href={`/graph?type=manifestation&id=${manifestation.id}`}>
+                <GitBranch className="h-3.5 w-3.5" />
+                <span>{tGraph("exploreGraph")}</span>
+              </Link>
+            </Button>
+            <Badge
+              variant="outline"
+              className="hidden sm:inline-flex gap-1.5 px-3 py-1 font-mono text-xs uppercase tracking-wider"
+            >
+              <Layers className="h-3 w-3 text-primary" />
+              FRBR Manifestation #{manifestation.id}
+            </Badge>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 mx-auto w-full max-w-5xl px-6 py-8 sm:py-10">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Cover Art */}
           <div className="w-full md:w-1/3 max-w-sm mx-auto">
@@ -325,18 +365,6 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                   status={manifestation.work_reading_status}
                   viaOtherEdition={Boolean(manifestation.completed_via_other_edition)}
                 />
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  data-testid="explore-graph-link"
-                  className="gap-1.5 ml-auto"
-                >
-                  <Link href={`/graph?type=manifestation&id=${manifestation.id}`}>
-                    <GitBranch className="h-4 w-4" />
-                    <span>Explore Graph</span>
-                  </Link>
-                </Button>
               </div>
               <h1
                 className="font-serif text-3xl md:text-4xl font-bold text-foreground"
