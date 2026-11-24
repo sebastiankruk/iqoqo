@@ -282,7 +282,7 @@ def _resolve_ollama_config() -> tuple[str, str]:
         safe_url = validate_ollama_url(raw_url)
     except ValueError as exc:
         raise WorkLinkPrerequisiteError(str(exc)) from exc
-    model = os.environ.get("OLLAMA_MODEL", "llama3.1").strip() or "llama3.1"
+    model = os.environ.get("OLLAMA_DEDUPE_MODEL", "llama3.1").strip() or "llama3.1"
     return safe_url, model
 
 

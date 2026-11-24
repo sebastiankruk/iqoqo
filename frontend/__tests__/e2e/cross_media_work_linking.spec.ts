@@ -20,6 +20,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "E2EBootstrapPassword123!";
 
 test.describe("Cross-Media FRBR Work Linking (C144)", () => {
   test("custodian can visit /admin/work-links and toggle derivatives on /graph", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
     await page.goto("/login");
     await page.fill('input[type="email"], input[name="email"]', ADMIN_EMAIL);
     await page.fill('input[type="password"], input[name="password"]', ADMIN_PASSWORD);
@@ -30,7 +34,27 @@ test.describe("Cross-Media FRBR Work Linking (C144)", () => {
     await expect(page.getByRole("heading", { name: /cross-media work links/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /scan for cross-media links/i })).toBeVisible();
 
-    await page.goto("/graph");
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = (await loginRes.json()) as { token: string };
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    const createRes = await page.request.post(`${flaskApiUrl}/items/manual`, {
+      headers: authHeaders,
+      data: { Title: "Dune Cross-Media Test", Authors: ["Frank Herbert"], Format: "book" },
+    });
+    expect(createRes.ok()).toBeTruthy();
+    const created = (await createRes.json()) as { data: { item_id: number } };
+    const itemRes = await page.request.get(`${flaskApiUrl}/items/${created.data.item_id}`, { headers: authHeaders });
+    const itemJson = (await itemRes.json()) as { data: { work?: { id: number } } };
+    const workId = itemJson.data.work?.id;
+    expect(workId).toBeTruthy();
+
+    await page.goto(`/graph?type=work&id=${workId}`);
+    await page.getByRole("button", { name: /filters/i }).click();
     await expect(page.getByRole("button", { name: /derivatives & adaptations/i })).toBeVisible();
   });
 });
