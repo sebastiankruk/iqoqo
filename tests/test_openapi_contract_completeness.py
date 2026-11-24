@@ -322,5 +322,19 @@ def test_v110_endpoints_present_in_openapi_spec(app):
     paths = spec.get("paths", {})
     assert "patch" in paths.get("/api/items/bulk-visibility", {})
     assert "get" in paths.get("/api/catalog/graph", {})
+    assert "get" in paths.get("/api/catalog/graph/search", {})
+    graph_params = {p["name"]: p for p in paths["/api/catalog/graph"]["get"]["parameters"]}
+    assert set(graph_params["entity_type"]["schema"]["enum"]) == {
+        "work",
+        "expression",
+        "manifestation",
+        "item",
+        "person",
+        "contributor",
+        "series",
+    }
+    search_params = {p["name"]: p for p in paths["/api/catalog/graph/search"]["get"]["parameters"]}
+    assert search_params["limit"]["schema"]["minimum"] == 1
+    assert search_params["limit"]["schema"]["maximum"] == 25
     assert "get" in paths.get("/api/works/shelf", {})
     assert "post" in paths.get("/api/sharing", {}) or "post" in paths.get("/api/sharing/", {})

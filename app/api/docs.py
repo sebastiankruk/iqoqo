@@ -825,6 +825,40 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path in ("/api/catalog/graph/search", "/api/v1/catalog/graph/search") and method == "get":
+                    search_query_params = [
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Diacritic-insensitive search query matching entity titles, names, ISBNs, or ISSNs.",
+                        },
+                        {
+                            "name": "types",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Comma-separated entity types (person,contributor,series,work,expression,manifestation,item).",
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 10, "minimum": 1, "maximum": 25},
+                            "description": "Maximum number of candidate results returned (clamped to 1..25).",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for s_param in search_query_params:
+                        if s_param["name"] not in op_param_names:
+                            op_params.append(s_param)
+                            op_param_names.add(s_param["name"])
+                    operation["tags"] = ["Catalog"]
+                    operation.setdefault("responses", {})
+                    operation["responses"].setdefault("400", {"description": "Invalid search parameters (e.g., invalid types)"})
+                    operation["responses"].setdefault("429", {"description": "Rate limit exceeded"})
                 elif openapi_path in ("/api/catalog/graph", "/api/v1/catalog/graph") and method == "get":
                     graph_query_params = [
                         {
@@ -838,8 +872,11 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             "name": "entity_type",
                             "in": "query",
                             "required": False,
-                            "schema": {"type": "string", "enum": ["work", "expression", "manifestation", "item"]},
-                            "description": "Root FRBR entity type for neighborhood traversal (required when mode=neighborhood).",
+                            "schema": {
+                                "type": "string",
+                                "enum": ["work", "expression", "manifestation", "item", "person", "contributor", "series"],
+                            },
+                            "description": "Root FRBR or contributor entity type for neighborhood traversal (required when mode=neighborhood).",
                         },
                         {
                             "name": "entity_id",

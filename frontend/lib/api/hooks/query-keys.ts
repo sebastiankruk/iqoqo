@@ -202,4 +202,6 @@ export const queryKeys = {
     ["catalog-graph", entityType, entityId, depth] as const,
   catalogLibraryGraph: (entityTypes?: string, edgeTypes?: string) =>
     ["catalog-library-graph", entityTypes || "all", edgeTypes || "all"] as const,
+  catalogGraphSearch: (q: string, types?: string, limit = 10) =>
+    ["catalog-graph-search", q, types || "default", limit] as const,
 };

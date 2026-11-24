@@ -31,6 +31,7 @@ import type {
   ExpressionDetail,
   CatalogGraphData,
   GraphAnchorEntityType,
+  GraphRootSearchResult,
 } from "@/types/frbr";
 
 import { queryKeys } from "./query-keys";
@@ -1089,6 +1090,26 @@ export function useCatalogLibraryGraph(entityTypes?: string, edgeTypes?: string,
     },
     enabled,
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Custom hook to search visibility-safe FRBR and contributor root candidates for the graph picker.
+ */
+export function useCatalogGraphSearch(q: string, types?: string, limit = 10, enabled = true) {
+  const trimmed = q.trim();
+  return useQuery({
+    queryKey: queryKeys.catalogGraphSearch(trimmed, types, limit),
+    queryFn: async () => {
+      const params: Record<string, string | number> = { q: trimmed, limit };
+      if (types && types !== "all") params.types = types;
+      const res = await apiClient.get<ApiResponse<GraphRootSearchResult[]>>("/catalog/graph/search", {
+        params,
+      });
+      return res.data.data ?? [];
+    },
+    enabled: Boolean(enabled && trimmed.length >= 2),
+    staleTime: 15_000,
   });
 }
 

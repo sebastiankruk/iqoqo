@@ -52,7 +52,15 @@ interface Point {
 
 const ALL_EDGE_CATEGORIES: GraphEdgeCategory[] = ["frbr", "series", "parts_expansions", "contributors", "maps", "lod"];
 
-const RECENTERABLE_TYPES = new Set<GraphNodeEntityType>(["work", "expression", "manifestation", "item"]);
+const RECENTERABLE_TYPES = new Set<GraphNodeEntityType>([
+  "work",
+  "expression",
+  "manifestation",
+  "item",
+  "contributor",
+  "person",
+  "series",
+]);
 
 const NODE_STYLE_MAP: Record<
   GraphNodeEntityType,
@@ -89,6 +97,12 @@ const NODE_STYLE_MAP: Record<
     Icon: Sparkles,
   },
   contributor: {
+    fill: "#ffe4e6",
+    stroke: "#e11d48",
+    badgeClass: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    Icon: User,
+  },
+  person: {
     fill: "#ffe4e6",
     stroke: "#e11d48",
     badgeClass: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",

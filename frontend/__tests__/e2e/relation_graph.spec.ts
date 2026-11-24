@@ -114,5 +114,46 @@ test.describe("FRBR Relation Graph Explorer E2E (C133)", () => {
 
     await page.waitForURL(`**/graph?type=expression&id=${exprId}**`);
     await expect(page.getByTestId(`graph-node-expression:${exprId}`)).toBeVisible();
+
+    // 4. Use Switch Root dialog to search and pick the Author (Person) root
+    await page.getByTestId("graph-switch-root-button").click();
+    const pickerInput = page.getByTestId("graph-picker-input");
+    await expect(pickerInput).toBeVisible();
+    await pickerInput.fill("Graph Test Author");
+    const personOption = page.locator('[data-testid^="graph-picker-option-person:"]').first();
+    await expect(personOption).toBeVisible();
+    await personOption.click();
+
+    await page.waitForURL("**/graph?type=person&id=*");
+    await expect(page.getByTestId("frbr-relation-graph-svg")).toBeVisible();
+  });
+
+  test("unauthenticated visitor cannot see private items in graph root picker search (C143)", async ({ page }) => {
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = (await loginRes.json()) as { token: string };
+
+    const uniqueTitle = `PrivateGraphPickerItem_${Date.now()}`;
+    const createRes = await page.request.post(`${flaskApiUrl}/items/manual`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        Title: uniqueTitle,
+        Authors: ["Private Author"],
+        Format: "text",
+        visibility: "private",
+      },
+    });
+    expect(createRes.ok()).toBeTruthy();
+
+    // Unauthenticated API search for items must omit the private item
+    const searchRes = await page.request.get(
+      `${flaskApiUrl}/catalog/graph/search?q=${encodeURIComponent(uniqueTitle)}&types=item`
+    );
+    expect(searchRes.ok()).toBeTruthy();
+    const searchJson = (await searchRes.json()) as { data: Array<{ label: string }> };
+    expect(searchJson.data).toEqual([]);
   });
 });

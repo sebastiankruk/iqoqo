@@ -702,9 +702,24 @@ export interface SemanticLinksData {
 // Catalog Visual Relation Graph Types (C133)
 // ---------------------------------------------------------------------------
 
-export type GraphAnchorEntityType = "work" | "expression" | "manifestation" | "item";
+export type GraphAnchorEntityType =
+  "work" | "expression" | "manifestation" | "item" | "person" | "contributor" | "series";
 
-export type GraphNodeEntityType = GraphAnchorEntityType | "series" | "contributor" | "map" | "lod";
+export type GraphNodeEntityType = GraphAnchorEntityType | "map" | "lod";
+
+export type GraphSearchEntityType =
+  "person" | "contributor" | "series" | "work" | "expression" | "manifestation" | "item";
+
+export interface GraphRootSearchResult {
+  entity_type: GraphSearchEntityType;
+  entity_id: number;
+  label: string;
+  subtitle?: string | null;
+  contributor_type?: string | null;
+  work_kind?: string | null;
+  issn?: string | null;
+  url?: string | null;
+}
 
 export type GraphEdgeCategory = "frbr" | "series" | "parts_expansions" | "contributors" | "maps" | "lod";
 
@@ -712,6 +727,7 @@ export interface GraphNode {
   id: string;
   entity_type: GraphNodeEntityType;
   entity_id: number | string;
+  contributor_type?: string | null;
   label: string;
   subtitle?: string | null;
   work_kind?: string | null;

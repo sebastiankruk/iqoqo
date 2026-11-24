@@ -1284,7 +1284,17 @@
     "anchorBadge": "Anchor",
     "selectPrompt": "Click any node to inspect details, recenter, or open its page.",
     "missingParamsTitle": "Select an Entity to Explore",
-    "missingParamsDescription": "Open this view via Explore Graph on any Work, Expression, Manifestation, or Item page.",
+    "missingParamsDescription": "Search for a Person, Series, Work, Expression, Manifestation, or Item to explore its FRBR neighborhood.",
+    "switchRoot": "Switch Root",
+    "pickerDialogTitle": "Select Graph Root Entity",
+    "pickerDialogDescription": "Search for any Person, Series, Work, Expression, Manifestation, or Item to center the FRBR graph.",
+    "pickerInputPlaceholder": "Search by title, person name, ISBN, or ISSN...",
+    "pickerTypeLabel": "Entity type",
+    "pickerTypeAll": "All types",
+    "pickerMinChars": "Type at least 2 characters to search.",
+    "pickerLoading": "Searching catalog...",
+    "pickerNoResults": "No matching entities found.",
+    "pickerError": "Could not search graph roots. Please try again.",
     "backToCollection": "Back to Collection",
     "loadError": "Could not load relation graph for this entity.",
     "categories": {
@@ -1302,6 +1312,7 @@
       "manifestation": "Manifestation",
       "item": "Item",
       "contributor": "Contributor",
+      "person": "Person",
       "map": "Map",
       "lod": "LOD Authority"
     }

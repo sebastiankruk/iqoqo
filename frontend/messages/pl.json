@@ -1284,7 +1284,17 @@
     "anchorBadge": "Źródło",
     "selectPrompt": "Kliknij dowolny węzeł, aby zobaczyć szczegóły, wyśrodkować lub otworzyć stronę.",
     "missingParamsTitle": "Wybierz encję do eksploracji",
-    "missingParamsDescription": "Otwórz ten widok przyciskiem Eksploruj graf ze strony Dzieła, Ekspresji, Manifestacji lub Egzemplarza.",
+    "missingParamsDescription": "Wyszukaj osobę, serię, dzieło, manifestację lub egzemplarz, aby zbadać powiązania FRBR.",
+    "switchRoot": "Zmień źródło",
+    "pickerDialogTitle": "Wybierz encję początkową grafu",
+    "pickerDialogDescription": "Wyszukaj osobę, serię, dzieło, ekspresję, manifestację lub egzemplarz, aby wyśrodkować graf FRBR.",
+    "pickerInputPlaceholder": "Szukaj po tytule, osobie, ISBN lub ISSN...",
+    "pickerTypeLabel": "Typ encji",
+    "pickerTypeAll": "Wszystkie typy",
+    "pickerMinChars": "Wpisz co najmniej 2 znaki, aby wyszukać.",
+    "pickerLoading": "Przeszukiwanie katalogu...",
+    "pickerNoResults": "Nie znaleziono pasujących encji.",
+    "pickerError": "Nie udało się wyszukać encji. Spróbuj ponownie.",
     "backToCollection": "Wróć do kolekcji",
     "loadError": "Nie udało się wczytać grafu relacji dla tej encji.",
     "categories": {
@@ -1302,6 +1312,7 @@
       "manifestation": "Manifestacja",
       "item": "Egzemplarz",
       "contributor": "Twórca",
+      "person": "Osoba",
       "map": "Mapa",
       "lod": "Źródło LOD"
     }
