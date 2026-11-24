@@ -55,7 +55,7 @@ test.describe("FRBR Relation Graph Explorer E2E (C133)", () => {
     expect(manifestationId).toBeTruthy();
 
     // Seed structured Contributor + WorkContribution for Person root picker & recentering
-    const contribRes = await page.request.put(`${flaskApiUrl}/admin/frbr/work/${workId}`, {
+    const contribRes = await page.request.put(`${flaskApiUrl}/v1/admin/frbr/work/${workId}`, {
       headers: authHeaders,
       data: {
         meta: { authors: ["Graph Test Author"] },
