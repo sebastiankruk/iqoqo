@@ -638,7 +638,7 @@ test.describe("Mixed Concert Types & Expression Kind Faceting (C150)", () => {
     await page.goto("/collection?expression_kind=live_performance");
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByText("C150 Audio Live")).toBeVisible();
-    await expect(page.getByText("C150 Video Live")).toBeVisible();
+    await expect(page.getByText("C150 Audio Live").first()).toBeVisible();
+    await expect(page.getByText("C150 Video Live").first()).toBeVisible();
   });
 });
