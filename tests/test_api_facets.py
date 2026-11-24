@@ -679,3 +679,77 @@ def test_a_status_that_matches_nothing_yields_an_empty_result(client, normal_use
     """
     assert shelf_titles(client, normal_user_headers, "tags=no_such_tag_9f3a") == []
     assert shelf_titles(client, normal_user_headers, "statuses=no_such_status_9f3a") == []
+
+
+def test_expression_kind_and_mixed_media_facets_filtering(client, normal_user_headers, app):
+    """Verify expression_kind filtering, cd_dvd_combo dual-category crediting, and fail-closed invalid kind."""
+    from app.core.cache import cache
+    from app.db.models import Expression, Item, Manifestation, User, Work, db
+
+    with app.app_context():
+        cache.clear()
+        user = User.query.first()
+        w_audio_live = Work(title="Live Audio Concert")
+        w_video_live = Work(title="Live Video Concert")
+        w_combo = Work(title="Deluxe Concert Combo")
+        w_studio = Work(title="Studio Album")
+        db.session.add_all([w_audio_live, w_video_live, w_combo, w_studio])
+        db.session.flush()
+
+        e_audio_live = Expression(work_id=w_audio_live.id, content_type="music", kind="live_performance")
+        e_video_live = Expression(work_id=w_video_live.id, content_type="movie", kind="live_performance")
+        e_combo = Expression(work_id=w_combo.id, content_type="music", kind="live_performance")
+        e_studio = Expression(work_id=w_studio.id, content_type="music", kind=None)
+        db.session.add_all([e_audio_live, e_video_live, e_combo, e_studio])
+        db.session.flush()
+
+        m_audio_live = Manifestation(expression_id=e_audio_live.id, format="cd", meta={"format": "cd", "title": "Live Audio Concert"})
+        m_video_live = Manifestation(
+            expression_id=e_video_live.id, format="bluray", meta={"format": "bluray", "title": "Live Video Concert"}
+        )
+        m_combo = Manifestation(
+            expression_id=e_combo.id, format="cd_dvd_combo", meta={"format": "cd_dvd_combo", "title": "Deluxe Concert Combo"}
+        )
+        m_studio = Manifestation(expression_id=e_studio.id, format="cd", meta={"format": "cd", "title": "Studio Album"})
+        db.session.add_all([m_audio_live, m_video_live, m_combo, m_studio])
+        db.session.flush()
+
+        for m in (m_audio_live, m_video_live, m_combo, m_studio):
+            db.session.add(Item(owner_id=user.id, manifestation_id=m.id, status="read", collection_status="available"))
+        db.session.commit()
+
+    # 1. expression_kind=live_performance returns both audio and video concerts, excluding studio
+    live_res = client.get("/api/items?expression_kind=live_performance", headers=normal_user_headers)
+    assert live_res.status_code == 200
+    live_titles = {i["title"] for i in live_res.get_json()["data"]}
+    assert {"Live Audio Concert", "Live Video Concert", "Deluxe Concert Combo"} <= live_titles
+    assert "Studio Album" not in live_titles
+
+    # 2. expression_kind=studio returns studio items
+    studio_res = client.get("/api/items?expression_kind=studio", headers=normal_user_headers)
+    assert studio_res.status_code == 200
+    studio_titles = {i["title"] for i in studio_res.get_json()["data"]}
+    assert "Studio Album" in studio_titles
+    assert "Live Audio Concert" not in studio_titles
+
+    # 3. Invalid expression_kind fails closed
+    bad_res = client.get("/api/items?expression_kind=invalid_kind_xyz", headers=normal_user_headers)
+    assert bad_res.status_code == 200
+    assert bad_res.get_json()["data"] == []
+
+    # 4. category=movie includes cd_dvd_combo
+    movie_res = client.get("/api/items?category=movie", headers=normal_user_headers)
+    assert movie_res.status_code == 200
+    movie_titles = {i["title"] for i in movie_res.get_json()["data"]}
+    assert "Deluxe Concert Combo" in movie_titles
+    assert "Live Video Concert" in movie_titles
+    assert "Live Audio Concert" not in movie_titles
+
+    # 5. /api/stats/facets emits expression_kind_counts and credits cd_dvd_combo in both music and movie
+    facets_res = client.get("/api/stats/facets?scope=user", headers=normal_user_headers)
+    assert facets_res.status_code == 200
+    facets = facets_res.get_json()["data"]
+    assert facets["expression_kind_counts"]["live_performance"] >= 3
+    assert facets["expression_kind_counts"]["studio"] >= 1
+    assert facets["category_counts"]["music"] >= 3
+    assert facets["category_counts"]["movie"] >= 2

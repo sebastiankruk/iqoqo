@@ -262,8 +262,10 @@ def get_items():
     limit_param = request.args.get("limit", "20")
     statuses_filter = request.args.get("statuses", None)
     category_filter = request.args.get("category", None)
+    expression_kind_filter = request.args.get("expression_kind", None)
     format_filter = request.args.get("format", None)
     category_list = parse_csv_param(category_filter)
+    expression_kind_list = parse_csv_param(expression_kind_filter)
     format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
 
@@ -317,6 +319,7 @@ def get_items():
             offset,
             statuses=statuses_list,
             category=category_list,
+            expression_kind=expression_kind_list,
             format_filter=format_list,
             borrowed_only=borrowed_only,
             owner_only=owner_only,
@@ -422,7 +425,9 @@ def get_items():
             else:
                 stmt = stmt.where(Item.visibility.in_(visibility_list))
 
-        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
+        needs_mfn_join = bool(
+            category_list or expression_kind_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status
+        )
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
@@ -441,6 +446,7 @@ def get_items():
 
         stmt = builder.apply(
             category=category_list,
+            expression_kind=expression_kind_list,
             fmt=format_list,
             tags=tags_list,
             collections=collections_list,

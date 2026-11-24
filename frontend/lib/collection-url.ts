@@ -53,6 +53,7 @@ const MULTI_VALUE_PARAMS: ReadonlyArray<readonly [FilterType, string]> = [
   ["publisher", "publishers"],
   ["ownership", "ownership"],
   ["category", "category"],
+  ["expression_kind", "expression_kind"],
   ["format", "format"],
 ];
 

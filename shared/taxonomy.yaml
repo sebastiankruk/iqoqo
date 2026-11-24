@@ -172,6 +172,10 @@ media_categories:
       - id: unknown_lego
         label: "Unknown LEGO Format"
 
+# Multi-carrier formats that belong to more than one MediaCategory simultaneously.
+mixed_media_categories:
+  cd_dvd_combo: [music, movie]
+
 # Non-canonical strings that external APIs, legacy data, or user input may
 # send.  Each alias resolves to its canonical media category.  The generator
 # merges these into FORMAT_TO_CATEGORY / FORMAT_ALIAS_TO_CATEGORY so that

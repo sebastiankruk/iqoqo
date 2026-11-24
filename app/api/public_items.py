@@ -337,15 +337,17 @@ def _parse_share_filter_list(raw: Any) -> tuple[bool, list[str]]:
 
 
 def _resolve_share_filter_specs(filters: dict[str, Any] | Any) -> dict[str, Any]:
-    """Extract canonical statuses, categories, and formats from SharedCollection.filters."""
+    """Extract canonical statuses, categories, expression_kind, and formats from SharedCollection.filters."""
     from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
-    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY
+    from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY, get_format_categories
+    from app.db.core import EXPRESSION_KINDS
 
     if not isinstance(filters, dict):
         return {
             "fail_closed": False,
             "statuses": None,
             "categories": None,
+            "expression_kind": None,
             "formats": None,
             "include_null_fmt": False,
             "excluded_formats": (),
@@ -376,6 +378,17 @@ def _resolve_share_filter_specs(filters: dict[str, Any] | Any) -> dict[str, Any]
         else:
             categories = list(dict.fromkeys(FORMAT_ALIAS_TO_CATEGORY.get(v, v) for v in raw_cat_vals))
 
+    expression_kind: list[str] | None = None
+    if "expression_kind" in filters and filters.get("expression_kind") is not None:
+        _, raw_kind_vals = _parse_share_filter_list(filters.get("expression_kind"))
+        valid_kinds = set(EXPRESSION_KINDS) | {"studio"}
+        cleaned_kinds = [k for k in raw_kind_vals if k in valid_kinds]
+        if not cleaned_kinds:
+            fail_closed = True
+            expression_kind = []
+        else:
+            expression_kind = list(dict.fromkeys(cleaned_kinds))
+
     formats: list[str] | None = None
     include_null_fmt = False
     has_fmt = "format" in filters and filters.get("format") is not None
@@ -398,12 +411,13 @@ def _resolve_share_filter_specs(filters: dict[str, Any] | Any) -> dict[str, Any]
     excluded_formats: tuple[str, ...] = ()
     if categories:
         allowed_cats = set(categories)
-        excluded_formats = tuple(fmt for fmt, cat in FORMAT_TO_CATEGORY.items() if cat not in allowed_cats)
+        excluded_formats = tuple(fmt for fmt in FORMAT_TO_CATEGORY if not any(cat in allowed_cats for cat in get_format_categories(fmt)))
 
     return {
         "fail_closed": fail_closed,
         "statuses": statuses,
         "categories": categories,
+        "expression_kind": expression_kind,
         "formats": formats,
         "include_null_fmt": include_null_fmt,
         "excluded_formats": excluded_formats,
@@ -420,7 +434,9 @@ def _apply_share_item_filters(
     limit: int,
     offset: int,
 ) -> tuple[Any, bool, bool, dict[str, Any]]:
-    """Apply unified status, category, format, FORMAT_TO_CATEGORY guard, and query filters."""
+    """Apply unified status, category, expression_kind, format, FORMAT_TO_CATEGORY guard, and query filters."""
+    from app.api.filters import CatalogFilterBuilder
+
     specs = _resolve_share_filter_specs(filters)
     if specs["fail_closed"]:
         return query.where(sa.false()), False, True, specs
@@ -430,16 +446,20 @@ def _apply_share_item_filters(
         query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
     categories = specs["categories"]
+    expression_kind = specs["expression_kind"]
     formats = specs["formats"]
     excluded_formats = specs["excluded_formats"]
-    needs_frbr_join = bool(categories or formats or excluded_formats)
+    needs_frbr_join = bool(categories or expression_kind or formats or excluded_formats)
 
     if needs_frbr_join:
         query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
         query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
 
     if categories:
-        query = query.where(Expression.content_type.in_(categories))
+        query = query.where(CatalogFilterBuilder.build_category_clause(categories))
+
+    if expression_kind:
+        query = query.where(CatalogFilterBuilder.build_expression_kind_clause(expression_kind))
 
     resolved_fmt_expr = func.lower(func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string()))
     if excluded_formats:
@@ -472,6 +492,7 @@ def _apply_share_item_filters(
                 offset=max(0, offset),
                 statuses=statuses,
                 category=categories,
+                expression_kind=expression_kind,
                 format_filter=formats,
                 excluded_formats=excluded_formats,
                 owner_only=True,
@@ -979,6 +1000,18 @@ def get_shared_collection(token: str):
                         Expression.work_id == UserWorkIntent.work_id,
                         or_(UserWorkIntent.expression_id.is_(None), Expression.id == UserWorkIntent.expression_id),
                         Expression.content_type.in_(cat_list),
+                    )
+                )
+            )
+        if filter_specs["expression_kind"]:
+            from app.api.filters import CatalogFilterBuilder
+
+            intent_stmt = intent_stmt.where(
+                sa.exists(
+                    select(Expression.id).where(
+                        Expression.work_id == UserWorkIntent.work_id,
+                        or_(UserWorkIntent.expression_id.is_(None), Expression.id == UserWorkIntent.expression_id),
+                        CatalogFilterBuilder.build_expression_kind_clause(filter_specs["expression_kind"]),
                     )
                 )
             )

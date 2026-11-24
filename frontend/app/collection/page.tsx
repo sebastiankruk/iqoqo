@@ -247,6 +247,11 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  const expressionKindFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "expression_kind").map(f => f.value),
+    [activeFilters]
+  );
+
   const formatFilters = useMemo(
     () => activeFilters.filter(f => f.type === "format").map(f => f.value),
     [activeFilters]
@@ -321,7 +326,8 @@ function CollectionContent() {
     lodStatusFilter,
     currentScope,
     hasMapActive,
-    visibilityFilters.length > 0 ? visibilityFilters : undefined
+    visibilityFilters.length > 0 ? visibilityFilters : undefined,
+    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined
   );
 
   const {
@@ -346,7 +352,8 @@ function CollectionContent() {
     ownershipFilters,
     lodAuthorityFilter,
     lodStatusFilter,
-    hasMapActive
+    hasMapActive,
+    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined
   );
 
   const {
@@ -391,6 +398,7 @@ function CollectionContent() {
   const filtersForFacets = useMemo(() => {
     const f: Record<string, string> = {};
     if (categoryFilters.length > 0) f.category = categoryFilters.join(",");
+    if (expressionKindFilters.length > 0) f.expression_kind = expressionKindFilters.join(",");
     if (formatFilters.length > 0) f.format = formatFilters.join(",");
     if (tagFilters.length > 0) f.tags = tagFilters.join(",");
     if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
@@ -416,6 +424,7 @@ function CollectionContent() {
     return f;
   }, [
     categoryFilters,
+    expressionKindFilters,
     formatFilters,
     tagFilters,
     collectionFilters,
@@ -781,6 +790,7 @@ function CollectionContent() {
     appliedQuery,
     searchQuery,
     categoryFilters,
+    expressionKindFilters,
     formatFilters,
     statusFilters,
     isBorrowedFilterActive,
@@ -1041,6 +1051,7 @@ function CollectionContent() {
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
                 categoryCounts={categoryCounts}
+                expressionKindCounts={facetStatsData?.expression_kind_counts}
                 viewMode={viewMode}
                 isLoggedIn={showClientContent}
                 isCurator={showCuratorContent}
@@ -1413,6 +1424,7 @@ function CollectionContent() {
         statusCounts={statusCounts}
         formatCounts={formatCounts}
         categoryCounts={categoryCounts}
+        expressionKindCounts={facetStatsData?.expression_kind_counts}
         viewMode={viewMode}
         isLoggedIn={showClientContent}
         isCurator={showCuratorContent}

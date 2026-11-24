@@ -1081,3 +1081,106 @@ def test_wishlist_share_category_filter_preserves_unmanifested_work(app, client)
     titles = {item["title"] for item in res.get_json()["data"]["items"]}
     assert "Conceptual Unmanifested Album" in titles
     assert "Conceptual Unmanifested Movie" not in titles
+
+
+def test_shared_collection_expression_kind_and_mixed_concert_carriers(app, client):
+    """Verify expression_kind shares include both audio+video concerts while music shares keep cd_dvd_combo and exclude dvd."""
+    from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
+
+    with app.app_context():
+        owner = User(email="concert_share@iqoqo.local", public_username="concert_share", visibility="public")
+        db.session.add(owner)
+        db.session.flush()
+
+        w_cd = Work(title="Live CD Concert")
+        w_dvd = Work(title="Live DVD Concert")
+        w_combo = Work(title="Live CD+DVD Combo")
+        w_studio = Work(title="Studio CD")
+        w_wl_live = Work(title="Wishlist Live Concert")
+        db.session.add_all([w_cd, w_dvd, w_combo, w_studio, w_wl_live])
+        db.session.flush()
+
+        e_cd = Expression(work_id=w_cd.id, content_type="music", kind="live_performance")
+        e_dvd = Expression(work_id=w_dvd.id, content_type="movie", kind="live_performance")
+        e_combo = Expression(work_id=w_combo.id, content_type="music", kind="live_performance")
+        e_studio = Expression(work_id=w_studio.id, content_type="music", kind=None)
+        e_wl_live = Expression(work_id=w_wl_live.id, content_type="movie", kind="live_performance")
+        db.session.add_all([e_cd, e_dvd, e_combo, e_studio, e_wl_live])
+        db.session.flush()
+
+        m_cd = Manifestation(expression_id=e_cd.id, format="cd", meta={"format": "cd"})
+        m_dvd = Manifestation(expression_id=e_dvd.id, format="dvd", meta={"format": "dvd"})
+        m_combo = Manifestation(expression_id=e_combo.id, format="cd_dvd_combo", meta={"format": "cd_dvd_combo"})
+        m_studio = Manifestation(expression_id=e_studio.id, format="cd", meta={"format": "cd"})
+        db.session.add_all([m_cd, m_dvd, m_combo, m_studio])
+        db.session.flush()
+
+        for m in (m_cd, m_dvd, m_combo, m_studio):
+            db.session.add(Item(owner_id=owner.id, manifestation_id=m.id, status="read", visibility="public", is_hidden=False))
+
+        db.session.add(
+            UserWorkIntent(user_id=owner.id, work_id=w_wl_live.id, expression_id=e_wl_live.id, status="want_to_watch", is_hidden=False)
+        )
+
+        sc_live = SharedCollection(
+            user_id=owner.id,
+            name="All Live Concerts",
+            share_token="c150-live-share",
+            filters={"expression_kind": ["live_performance"]},
+        )
+        sc_music = SharedCollection(
+            user_id=owner.id,
+            name="Music Only Share",
+            share_token="c150-music-share",
+            filters={"category": ["music"]},
+        )
+        sc_movie = SharedCollection(
+            user_id=owner.id,
+            name="Movie Share",
+            share_token="c150-movie-share",
+            filters={"category": ["movie"]},
+        )
+        sc_invalid = SharedCollection(
+            user_id=owner.id,
+            name="Invalid Kind Share",
+            share_token="c150-invalid-kind-share",
+            filters={"expression_kind": ["bogus_kind"]},
+        )
+        sc_wl_live = SharedCollection(
+            user_id=owner.id,
+            name="Live Wishlist",
+            share_token="c150-wl-live",
+            filters={"status": ["want_to_watch"], "expression_kind": ["live_performance"]},
+        )
+        db.session.add_all([sc_live, sc_music, sc_movie, sc_invalid, sc_wl_live])
+        db.session.commit()
+
+    # 1. expression_kind=live_performance returns audio + video + combo across JSON, RDF, RSS
+    res_live = client.get("/api/public/share/c150-live-share")
+    assert res_live.status_code == 200
+    live_titles = {i["title"] for i in res_live.get_json()["data"]["items"]}
+    assert live_titles == {"Live CD Concert", "Live DVD Concert", "Live CD+DVD Combo"}
+
+    rdf_res = client.get("/api/public/rdf/share/c150-live-share?format=turtle")
+    assert rdf_res.status_code == 200
+    assert "Live DVD Concert" in rdf_res.data.decode("utf-8")
+
+    rss_res = client.get("/api/public/share/c150-live-share/feed.xml")
+    assert rss_res.status_code == 200
+    assert "Live CD Concert" in rss_res.data.decode("utf-8")
+
+    # 2. Music share keeps cd_dvd_combo and excludes pure dvd (C141 invariant)
+    music_titles = {i["title"] for i in client.get("/api/public/share/c150-music-share").get_json()["data"]["items"]}
+    assert {"Live CD Concert", "Live CD+DVD Combo", "Studio CD"} == music_titles
+    assert "Live DVD Concert" not in music_titles
+
+    # 3. Movie share retains cd_dvd_combo + dvd
+    movie_titles = {i["title"] for i in client.get("/api/public/share/c150-movie-share").get_json()["data"]["items"]}
+    assert {"Live DVD Concert", "Live CD+DVD Combo"} == movie_titles
+
+    # 4. Fail-closed on invalid expression_kind
+    assert client.get("/api/public/share/c150-invalid-kind-share").get_json()["data"]["items"] == []
+
+    # 5. Wishlist share honors expression_kind
+    wl_titles = {i["title"] for i in client.get("/api/public/share/c150-wl-live").get_json()["data"]["items"]}
+    assert wl_titles == {"Wishlist Live Concert"}

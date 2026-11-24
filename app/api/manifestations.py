@@ -125,10 +125,12 @@ def get_manifestations() -> tuple[Response, int]:
     limit_param = request.args.get("limit", "20")
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
+    expression_kind_filter = request.args.get("expression_kind")
     format_filter = request.args.get("format")
     lod_authority = (request.args.get("lod_authority") or "").strip().lower()
     lod_status = (request.args.get("lod_status") or "").strip().lower()
     category_list = parse_csv_param(category_filter)
+    expression_kind_list = parse_csv_param(expression_kind_filter)
     format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
 
@@ -196,6 +198,7 @@ def get_manifestations() -> tuple[Response, int]:
             limit,
             offset,
             category=category_list,
+            expression_kind=expression_kind_list,
             format_filter=format_list,
             missing_cover=missing_cover,
             missing_id=missing_id,
@@ -236,6 +239,7 @@ def get_manifestations() -> tuple[Response, int]:
 
         query = CatalogFilterBuilder(query, user_id=user_id).apply(
             category=category_list,
+            expression_kind=expression_kind_list,
             fmt=format_list,
             tags=tags_list,
             collections=collections_list,

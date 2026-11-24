@@ -688,9 +688,32 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         "schema": {"type": "string"},
                         "description": "Comma-separated visibility filter (public, friends_only, private, hidden).",
                     }
+                    expr_kind_param = {
+                        "name": "expression_kind",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Comma-separated FRBR expression kind filter (live_performance, studio).",
+                    }
                     op_params = operation.setdefault("parameters", [])
                     if not any(isinstance(p, dict) and p.get("name") == "visibility" for p in op_params):
                         op_params.append(vis_param)
+                    if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
+                        op_params.append(expr_kind_param)
+                elif (
+                    openapi_path in ("/api/manifestations", "/api/v1/manifestations", "/api/stats/facets", "/api/v1/stats/facets")
+                    and method == "get"
+                ):
+                    expr_kind_param = {
+                        "name": "expression_kind",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Comma-separated FRBR expression kind filter (live_performance, studio).",
+                    }
+                    op_params = operation.setdefault("parameters", [])
+                    if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
+                        op_params.append(expr_kind_param)
                 elif openapi_path in ("/api/items/bulk-visibility", "/api/v1/items/bulk-visibility") and method == "patch":
                     if not operation.get("requestBody"):
                         operation["requestBody"] = {

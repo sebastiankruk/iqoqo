@@ -960,6 +960,7 @@ class DataManager:
         has_map: bool = False,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
+        expression_kind: list[str] | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -1059,7 +1060,13 @@ class DataManager:
             base_query = base_query.where(Item.lent_to_user_id == owner_id)
 
         if category:
-            base_query = base_query.where(Expression.content_type.in_(category))
+            from app.api.filters import CatalogFilterBuilder
+
+            base_query = base_query.where(CatalogFilterBuilder.build_category_clause(category))
+        if expression_kind:
+            from app.api.filters import CatalogFilterBuilder
+
+            base_query = base_query.where(CatalogFilterBuilder.build_expression_kind_clause(expression_kind))
         if fmt:
             from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
 
@@ -1224,6 +1231,7 @@ class DataManager:
     def get_faceted_stats(
         owner_id: uuid.UUID | None = None,
         category: list[str] | None = None,
+        expression_kind: list[str] | None = None,
         fmt: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
@@ -1278,6 +1286,8 @@ class DataManager:
             "tags": tags,
             "view": view,
         }
+        if expression_kind:
+            cache_params["expression_kind"] = expression_kind
         if has_map:
             cache_params["has_map"] = True
         if scope != "own":
@@ -1301,6 +1311,7 @@ class DataManager:
         stats = DataManager._compute_faceted_stats(
             owner_id=owner_id,
             category=category,
+            expression_kind=expression_kind,
             fmt=fmt,
             tags=tags,
             collections=collections,
@@ -1326,6 +1337,7 @@ class DataManager:
     def _compute_faceted_stats(  # noqa: PLR0913
         owner_id: uuid.UUID | None = None,
         category: list[str] | None = None,
+        expression_kind: list[str] | None = None,
         fmt: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
@@ -1403,6 +1415,7 @@ class DataManager:
 
         def _subq(
             exclude_category: bool = False,
+            exclude_expression_kind: bool = False,
             exclude_fmt: bool = False,
             exclude_tags: bool = False,
             exclude_collections: bool = False,
@@ -1419,6 +1432,7 @@ class DataManager:
             return DataManager._build_item_ids_subq(
                 owner_id=owner_id,
                 category=None if exclude_category else category,
+                expression_kind=None if exclude_expression_kind else expression_kind,
                 fmt=None if exclude_fmt else fmt,
                 tags=_tags,
                 collections=_collections,
@@ -1438,6 +1452,7 @@ class DataManager:
             )
 
         cat_subq = _subq(exclude_category=True)
+        kind_subq = _subq(exclude_expression_kind=True)
         fmt_subq = _subq(exclude_fmt=True)
         tag_subq = _subq(exclude_tags=True)
         coll_subq = _subq(exclude_collections=True)
@@ -1563,6 +1578,53 @@ class DataManager:
         for ct, cnt in cat_rows:
             if ct:
                 category_counts[ct] = cnt
+
+        # Credit multi-carrier formats (e.g., cd_dvd_combo -> music + movie) in secondary categories
+        from app.core.taxonomy import MIXED_MEDIA_FORMAT_CATEGORIES
+
+        if MIXED_MEDIA_FORMAT_CATEGORIES:
+            mixed_fmt_expr = func.lower(
+                func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
+            )
+            mixed_q = (
+                select(sa_distinct(cfg["target_clause"]), Expression.content_type, mixed_fmt_expr)
+                .select_from(cfg["from_clause"])
+                .where(
+                    subq_filter_col.in_(select(cat_subq.c.id)),
+                    mixed_fmt_expr.in_(list(MIXED_MEDIA_FORMAT_CATEGORIES.keys())),
+                )
+            )
+            if target_entity == "works":
+                mixed_q = mixed_q.join(Expression, Expression.work_id == Work.id).join(
+                    Manifestation, Manifestation.expression_id == Expression.id
+                )
+            elif target_entity == "expressions":
+                mixed_q = mixed_q.join(Manifestation, Manifestation.expression_id == Expression.id)
+            elif target_entity == "manifestations":
+                mixed_q = mixed_q.join(Expression, Manifestation.expression_id == Expression.id)
+            else:
+                mixed_q = mixed_q.join(Manifestation, Item.manifestation_id == Manifestation.id).join(
+                    Expression, Manifestation.expression_id == Expression.id
+                )
+            seen_secondary: dict[str, set[Any]] = {}
+            for entity_id_val, ct_val, m_fmt in db.session.execute(mixed_q).all():
+                for sec_cat in MIXED_MEDIA_FORMAT_CATEGORIES.get(m_fmt, ()):
+                    if sec_cat != ct_val:
+                        seen_secondary.setdefault(sec_cat, set()).add(entity_id_val)
+            for sec_cat, sec_ids in seen_secondary.items():
+                category_counts[sec_cat] = category_counts.get(sec_cat, 0) + len(sec_ids)
+
+        # ── Expression kind counts (live_performance vs studio) ───────────
+        kind_expr = func.coalesce(Expression.kind, "studio")
+        kind_query = (
+            select(kind_expr.label("kind"), func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+            .select_from(cfg["from_clause"])
+            .where(subq_filter_col.in_(select(kind_subq.c.id)))
+            .group_by(kind_expr)
+        )
+        kind_query = _join_to_expression(kind_query)
+        kind_rows = db.session.execute(kind_query).all()
+        expression_kind_counts: dict[str, int] = {str(k): cnt for k, cnt in kind_rows if k}
 
         # ── Format counts (grouped by Manifestation.meta->'format') ───────
         fmt_query = _build_format_facet_query(cfg["target_clause"], cfg["from_clause"], subq_filter_col, fmt_subq.c.id)
@@ -1942,6 +2004,7 @@ class DataManager:
 
         return {
             "category_counts": category_counts,
+            "expression_kind_counts": expression_kind_counts,
             "format_counts": format_counts,
             "status_counts": db_statuses,
             "collection_counts": collection_counts,

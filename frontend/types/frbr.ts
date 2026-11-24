@@ -529,6 +529,7 @@ export type TaxonomiesResponse = {
 
 export type FacetStatsResponse = {
   category_counts: Record<string, number>;
+  expression_kind_counts?: Record<string, number>;
   format_counts: Record<string, number>;
   status_counts: Record<string, number>;
   collection_counts: Record<string, number>;

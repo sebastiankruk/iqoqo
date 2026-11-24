@@ -293,12 +293,17 @@
     "defaultNameAll": "Moja udostępniona kolekcja",
     "defaultNameStatus": "Moje pozycje ({status})",
     "defaultNameCategory": "Moja kolekcja: {category}",
+    "defaultNameLivePerformances": "Koncerty na żywo",
+    "defaultNameKind": "Moja kolekcja ({kind})",
     "defaultNameFormat": "Moja kolekcja: {format}",
     "defaultNameSearch": "Wyniki wyszukiwania dla „{query}”"
   },
   "CollectionFilters": {
     "title": "Filtry",
     "secMediaCategory": "Kategoria mediów",
+    "secExpressionKind": "Wykonanie / rodzaj",
+    "kind_live_performance": "Koncert na żywo",
+    "kind_studio": "Nagranie studyjne / standardowe",
     "secMyCollections": "Moje kolekcje",
     "secTags": "Tagi",
     "secGenres": "Gatunki",

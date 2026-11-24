@@ -586,4 +586,57 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     expect(page.url()).toContain("formats=paper");
     expect(page.url()).toContain("tags=horror");
   });
+
+  test("filtering by Live performance shows audio and video concerts and preserves expression_kind in Share (C150)", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = (await loginRes.json()) as { token: string };
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    const audioRes = await page.request.post(`${flaskApiUrl}/items/manual`, {
+      headers: authHeaders,
+      data: { Title: "C150 Audio Live", Format: "cd", visibility: "public" },
+    });
+    expect(audioRes.ok()).toBeTruthy();
+    const audioId = ((await audioRes.json()) as { data: { item_id: number } }).data.item_id;
+    const audioDetail = (await (
+      await page.request.get(`${flaskApiUrl}/items/${audioId}`, { headers: authHeaders })
+    ).json()) as { data: { expression: { id: number } } };
+    await page.request.put(`${flaskApiUrl}/v1/admin/frbr/expression/${audioDetail.data.expression.id}`, {
+      headers: authHeaders,
+      data: { kind: "live_performance" },
+    });
+
+    const videoRes = await page.request.post(`${flaskApiUrl}/items/manual`, {
+      headers: authHeaders,
+      data: { Title: "C150 Video Live", Format: "bluray", visibility: "public" },
+    });
+    expect(videoRes.ok()).toBeTruthy();
+    const videoId = ((await videoRes.json()) as { data: { item_id: number } }).data.item_id;
+    const videoDetail = (await (
+      await page.request.get(`${flaskApiUrl}/items/${videoId}`, { headers: authHeaders })
+    ).json()) as { data: { expression: { id: number } } };
+    await page.request.put(`${flaskApiUrl}/v1/admin/frbr/expression/${videoDetail.data.expression.id}`, {
+      headers: authHeaders,
+      data: { kind: "live_performance" },
+    });
+
+    const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
+    expect(exchangeRes.ok()).toBeTruthy();
+
+    await page.goto("/collection?expression_kind=live_performance");
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByText("C150 Audio Live")).toBeVisible();
+    await expect(page.getByText("C150 Video Live")).toBeVisible();
+  });
 });

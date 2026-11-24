@@ -40,6 +40,7 @@ interface SidebarFiltersProps {
   statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
   categoryCounts?: Record<string, number>;
+  expressionKindCounts?: Record<string, number>;
   /** Current view mode, used to contextually hide irrelevant filters */
   viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
   isLoggedIn?: boolean;
@@ -258,6 +259,7 @@ export function SidebarFilters({
   statusCounts,
   formatCounts,
   categoryCounts,
+  expressionKindCounts,
   isLoggedIn = false,
   isCurator = false,
   viewMode,
@@ -332,6 +334,46 @@ export function SidebarFilters({
           })}
         </div>
       </AccordionSection>
+
+      {(expressionKindCounts === undefined ||
+        ["live_performance", "studio"].some(
+          k => (expressionKindCounts[k] ?? 0) > 0 || isActive(activeFilters, "expression_kind", k)
+        )) && (
+        <AccordionSection title={t("secExpressionKind")}>
+          <div className="flex flex-col gap-1">
+            {(["live_performance", "studio"] as const).map(kindId => {
+              const active = isActive(activeFilters, "expression_kind", kindId);
+              const count = expressionKindCounts?.[kindId];
+              const disabled = count === 0 && !active;
+              return (
+                <label
+                  key={kindId}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    active
+                      ? "bg-primary/10 text-foreground ring-1 ring-primary/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                  } ${disabled ? "opacity-50" : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    name="expression_kind"
+                    data-testid={`filter-expression-kind-${kindId}`}
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "expression_kind", value: kindId })}
+                    disabled={disabled}
+                    className="sr-only"
+                  />
+                  <span className="flex-1 font-medium">{t(`kind_${kindId}`)}</span>
+                  {count !== undefined && (
+                    <span className="text-xs tabular-nums text-muted-foreground mr-1">{count}</span>
+                  )}
+                  {active && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
 
       {isLoggedIn && viewMode !== "items" && (
         <AccordionSection title="Ownership">

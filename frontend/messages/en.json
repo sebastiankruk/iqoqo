@@ -293,12 +293,17 @@
     "defaultNameAll": "My Shared Collection",
     "defaultNameStatus": "My {status} Items",
     "defaultNameCategory": "My {category} Collection",
+    "defaultNameLivePerformances": "Live Performances",
+    "defaultNameKind": "My {kind} Collection",
     "defaultNameFormat": "My {format} Collection",
     "defaultNameSearch": "Search results for \"{query}\""
   },
   "CollectionFilters": {
     "title": "Filters",
     "secMediaCategory": "Media Category",
+    "secExpressionKind": "Performance / Kind",
+    "kind_live_performance": "Live performance (Concert)",
+    "kind_studio": "Studio / Standard",
     "secMyCollections": "My Collections",
     "secTags": "Tags",
     "secGenres": "Genres",

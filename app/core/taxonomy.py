@@ -201,6 +201,20 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "unknown_lego": "lego",
 }
 
+MIXED_MEDIA_FORMAT_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "cd_dvd_combo": ("music", "movie"),
+}
+
+
+def get_format_categories(fmt: str) -> tuple[str, ...]:
+    """Return all MediaCategories associated with a format (including mixed-media carriers)."""
+    norm = (fmt or "").strip().lower()
+    if norm in MIXED_MEDIA_FORMAT_CATEGORIES:
+        return MIXED_MEDIA_FORMAT_CATEGORIES[norm]
+    cat = FORMAT_TO_CATEGORY.get(norm) or FORMAT_ALIAS_TO_CATEGORY.get(norm)
+    return (cat,) if cat else ()
+
+
 FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "book": "text",
     "graphic_novel": "text",

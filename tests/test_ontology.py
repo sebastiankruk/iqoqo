@@ -464,3 +464,13 @@ def test_array_parser_raises_when_the_identifier_is_absent() -> None:
     """
     with pytest.raises(ValueError, match="Could not locate"):
         _parse_ts_const_array('export const OTHER = ["x"] as const;', "MISSING")
+
+
+def test_mixed_media_format_categories_mapping() -> None:
+    """Multi-carrier cd_dvd_combo maps to (music, movie) while single-carrier formats keep 1 category."""
+    from app.core.taxonomy import MIXED_MEDIA_FORMAT_CATEGORIES, get_format_categories
+
+    assert MIXED_MEDIA_FORMAT_CATEGORIES["cd_dvd_combo"] == ("music", "movie")
+    assert get_format_categories("cd_dvd_combo") == ("music", "movie")
+    assert get_format_categories("dvd") == ("movie",)
+    assert get_format_categories("cd") == ("music",)
