@@ -27,7 +27,6 @@ import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
 import { FRBRFeedback } from "../social/frbr-feedback";
-import { SemanticLinks } from "../manifestation/semantic-links";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -195,13 +194,6 @@ function DetailsTab({ item }: { item: Item }) {
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Linked Open Data */}
-      {Boolean(item.manifestation_id) && (
-        <div className="border-t pt-2">
-          <SemanticLinks manifestationId={item.manifestation_id!} canEdit={canEdit} />
         </div>
       )}
     </div>

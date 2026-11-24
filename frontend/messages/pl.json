@@ -1171,6 +1171,8 @@
       "namedCollections": "Kolekcje własne",
       "additionalScans": "Dodatkowe skany",
       "taxonomy": "Tagi i gatunki",
+      "linkedOpenData": "Połączone otwarte dane",
+      "adminActions": "Akcje administratora",
       "requestLoan": "Poproś o wypożyczenie",
       "requestingLoan": "Wysyłanie...",
       "onLoan": "Wypożyczono",

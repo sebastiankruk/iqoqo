@@ -1171,6 +1171,8 @@
       "namedCollections": "Named Collections",
       "additionalScans": "Additional Scans",
       "taxonomy": "Tags & Genres",
+      "linkedOpenData": "Linked Open Data",
+      "adminActions": "Admin Actions",
       "requestLoan": "Request Loan",
       "requestingLoan": "Requesting...",
       "onLoan": "On Loan",

@@ -87,4 +87,29 @@ describe("SidebarActions Unit Test (Plain Props)", () => {
     expect(reassignLink).toBeInTheDocument();
     expect(reassignLink).toHaveAttribute("href", "/admin/ownership?sourceUserId=user-owner-1&itemId=10");
   });
+
+  it("renders Linked Open Data and Admin Actions collapsed by default and expands on click", async () => {
+    const user = userEvent.setup();
+    render(
+      <SidebarActions
+        item={mockItem}
+        canModifyItem={true}
+        isOwner={true}
+        profile={{ id: "user-admin", roles: ["admin"], permissions: ["write:metadata"] }}
+        collectionStatusInfo={{ label: "On Shelf", class: "bg-emerald-50" }}
+        progressStatusInfo={{ label: "Reading...", class: "bg-accent/10" }}
+        linkedOpenDataNode={<div data-testid="slot-lod">LOD Content</div>}
+        adminActionsNode={<div data-testid="slot-admin">Admin Content</div>}
+      />
+    );
+
+    expect(screen.queryByTestId("slot-lod")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("slot-admin")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("lod-accordion-toggle"));
+    expect(screen.getByTestId("slot-lod")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("admin-actions-accordion-toggle"));
+    expect(screen.getByTestId("slot-admin")).toBeInTheDocument();
+  });
 });

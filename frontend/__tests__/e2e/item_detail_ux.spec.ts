@@ -128,10 +128,20 @@ test.describe("Item Detail UX Declutter & Replace Cover (C142)", () => {
     });
   }
 
-  test("opens Admin Actions dropdown and Replace Cover upload flow", async ({ page }) => {
+  test("opens Admin Actions dropdown inside accordion, expands LOD, and Replace Cover upload flow", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/item/101", { waitUntil: "domcontentloaded" });
 
+    // Linked Open Data and Admin Actions start collapsed in the sidebar accordion
+    await expect(page.getByTestId("semantic-links-compact")).toHaveCount(0);
+    await expect(page.getByTestId("admin-actions-menu-trigger")).toHaveCount(0);
+
+    await page.getByTestId("lod-accordion-toggle").click();
+    await expect(page.getByTestId("semantic-links-compact")).toBeVisible();
+
+    await page.getByTestId("admin-actions-accordion-toggle").click();
     // Open labeled Admin Actions DropdownMenu
     const adminTrigger = page.getByTestId("admin-actions-menu-trigger");
     await expect(adminTrigger).toBeVisible();

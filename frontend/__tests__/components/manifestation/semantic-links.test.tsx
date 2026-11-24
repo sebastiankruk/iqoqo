@@ -166,4 +166,16 @@ describe("SemanticLinks Component", () => {
     fireEvent.click(deleteButtons[0]);
     expect(mockDeleteMutate).toHaveBeenCalledWith(101, expect.any(Object));
   });
+
+  it("renders compact borderless layout when compact=true", () => {
+    vi.mocked(hooks.useSemanticLinks).mockReturnValue({
+      data: { links: [], total: 0, grouped: {}, manifestation_id: 3 },
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useSemanticLinks>);
+
+    render(<SemanticLinks manifestationId={3} compact={true} />);
+    expect(screen.getByTestId("semantic-links-compact")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scan External LOD/i })).toBeInTheDocument();
+    expect(screen.getByText("No external Linked Open Data authorities linked yet.")).toBeInTheDocument();
+  });
 });

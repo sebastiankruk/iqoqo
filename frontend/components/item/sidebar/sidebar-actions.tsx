@@ -84,6 +84,8 @@ export interface SidebarActionsProps {
   userCollections?: Array<{ id: number; name: string }> | null;
   addToCollection?: { isPending: boolean };
   handleAddToCollection?: (id: number) => void;
+  linkedOpenDataNode?: React.ReactNode;
+  adminActionsNode?: React.ReactNode;
 }
 
 /**
@@ -127,6 +129,8 @@ export function SidebarActions({
   userCollections,
   addToCollection = { isPending: false },
   handleAddToCollection = () => {},
+  linkedOpenDataNode,
+  adminActionsNode,
 }: SidebarActionsProps) {
   const t = useTranslations("ItemDetail");
   const tSidebar = useTranslations("ItemDetail.sidebar");
@@ -134,6 +138,8 @@ export function SidebarActions({
   const [showCollectionsEditor, setShowCollectionsEditor] = React.useState(false);
   const [showScansEditor, setShowScansEditor] = React.useState(false);
   const [showTaxonomyEditor, setShowTaxonomyEditor] = React.useState(false);
+  const [showLinkedOpenData, setShowLinkedOpenData] = React.useState(false);
+  const [showAdminActions, setShowAdminActions] = React.useState(false);
 
   const hasCover = Boolean(item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]);
   const canReplaceCover = canModifyItem && hasUploadPermission && Boolean(item.manifestation_id);
@@ -603,6 +609,36 @@ export function SidebarActions({
                 <TaxonomyEditor item={item} />
               </div>
             )}
+          </div>
+        )}
+
+        {linkedOpenDataNode && (
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              data-testid="lod-accordion-toggle"
+              onClick={() => setShowLinkedOpenData(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>{tSidebar("linkedOpenData")}</span>
+              {showLinkedOpenData ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showLinkedOpenData && <div className="mt-2">{linkedOpenDataNode}</div>}
+          </div>
+        )}
+
+        {adminActionsNode && (
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              data-testid="admin-actions-accordion-toggle"
+              onClick={() => setShowAdminActions(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>{tSidebar("adminActions")}</span>
+              {showAdminActions ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showAdminActions && <div className="mt-2">{adminActionsNode}</div>}
           </div>
         )}
       </div>

@@ -21,7 +21,6 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { HeroBanner } from "@/components/item/hero-banner";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";
-import { ItemActions } from "@/components/item/item-actions";
 import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
@@ -76,9 +75,6 @@ function ItemDetail(props: ItemDetailProps) {
               <ItemHeader item={item} />
 
               <ItemTabs item={item} />
-
-              {/* Danger zone */}
-              <ItemActions item={item} />
             </div>
           </div>
         </div>

@@ -113,7 +113,7 @@ Cross-media adaptations and derivative creations (such as a novel and its film, 
 
 #### Scenario: Distinct creative mediums remain separate Works after cross-media linking
 
-- **GIVEN** a novel `Work` (*Harry Potter and the Philosopher's Stone*, child `Expression.content_type = "text"`) and a film `Work` (*Harry Potter and the Philosopher's Stone*, child `Expression.content_type = "movie"`)
+- **GIVEN** a novel `Work` (_Harry Potter and the Philosopher's Stone_, child `Expression.content_type = "text"`) and a film `Work` (_Harry Potter and the Philosopher's Stone_, child `Expression.content_type = "movie"`)
 - **WHEN** a custodian confirms a cross-media `is_adaptation_of` link from the film `Work` to the novel `Work`
 - **THEN** both `Work` records remain distinct rows with their respective `Expression` and `Manifestation` subtrees intact, no `frbr_merge` operation occurs, and neither `Work` stores physical carrier or format attributes.
 

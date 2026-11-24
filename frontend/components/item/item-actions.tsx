@@ -65,9 +65,10 @@ import { useQueryClient } from "@tanstack/react-query";
  *
  * @param root0 - The props object
  * @param root0.item - The item
+ * @param root0.compact - Whether to omit outer card chrome when embedded in sidebar accordion
  * @returns {JSX.Element | null} The component or null if no profile
  */
-export function ItemActions({ item }: { item: Item }) {
+export function ItemActions({ item, compact = false }: { item: Item; compact?: boolean }) {
   const router = useRouter();
   const tAdmin = useTranslations("ItemDetail.adminActions");
   const regenerateCover = useRegenerateCover();
@@ -194,7 +195,13 @@ export function ItemActions({ item }: { item: Item }) {
   }
 
   return (
-    <div className="mt-6 flex flex-col gap-4 rounded-2xl border bg-card/50 p-4 sm:p-5 shadow-sm border-border/40">
+    <div
+      className={
+        compact
+          ? "flex flex-col gap-2.5"
+          : "mt-6 flex flex-col gap-4 rounded-2xl border bg-card/50 p-4 sm:p-5 shadow-sm border-border/40"
+      }
+    >
       {/* Pending status card above controls */}
       {showRequestsSection && pendingEscalation && (
         <div

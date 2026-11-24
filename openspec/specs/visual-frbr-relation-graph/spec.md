@@ -188,7 +188,7 @@ The backend SHALL expose a dedicated `GET /api/catalog/graph/search` endpoint de
 - **GIVEN** `FEDERATION_HEAD_MODE=true` or `false`
 - **WHEN** a caller requests `GET /api/catalog/graph/search?q=Lem&limit=500`
 - **THEN** the endpoint MUST clamp `limit` to `25` and return HTTP `200` (without returning `403` in `FEDERATION_HEAD_MODE`).
-- **WHEN** a caller requests `GET /api/catalog/graph/search?q=   ` (blank query)
+- **WHEN** a caller requests `GET /api/catalog/graph/search?q=%20%20%20` (blank query)
 - **THEN** the endpoint MUST return HTTP `200` with an empty result list.
 - **WHEN** a caller requests `GET /api/catalog/graph/search?q=Lem&types=invalid_type`
 - **THEN** the endpoint MUST return HTTP `400` with a JSON error payload.
