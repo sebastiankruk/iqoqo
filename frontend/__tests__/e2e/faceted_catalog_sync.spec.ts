@@ -586,7 +586,9 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
     expect(page.url()).toContain("formats=paper");
     expect(page.url()).toContain("tags=horror");
   });
+});
 
+test.describe("Mixed Concert Types & Expression Kind Faceting (C150)", () => {
   test("filtering by Live performance shows audio and video concerts and preserves expression_kind in Share (C150)", async ({
     page,
   }) => {
