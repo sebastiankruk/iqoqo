@@ -16,8 +16,8 @@
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
 <svg id="arch-diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="svg-title svg-desc">
-          <title id="svg-title">iqoqo v1.1.1 — System &amp; Container Topology (Blueprint 1)</title>
-          <desc id="svg-desc">C4 Container and infrastructure topology for iqoqo v1.1.1 showing 7 trust zones (Z1–Z7), 10 services (N1–N10), Docker network iqoqo_default, security boundaries, and OpenTelemetry pipelines.</desc>
+          <title id="svg-title">iqoqo v1.1.2 — System &amp; Container Topology (Blueprint 1)</title>
+          <desc id="svg-desc">C4 Container and infrastructure topology for iqoqo v1.1.2 showing 7 trust zones (Z1–Z7), 10 services (N1–N10), Docker network iqoqo_default, security boundaries, and OpenTelemetry pipelines.</desc>
 
           <!-- Dynamic self-contained style block updated by JS presets -->
           <style id="svg-theme-style">
@@ -135,7 +135,7 @@
 
           <!-- ==================== LAYER 1: HEADER ==================== -->
           <g id="layer-header">
-            <text x="32" y="38" class="title-text">iqoqo v1.1.1 — System &amp; Container Topology</text>
+            <text x="32" y="38" class="title-text">iqoqo v1.1.2 — System &amp; Container Topology</text>
             <text x="32" y="60" class="subtitle-text">Blueprint 1 of 12  •  Docker Network (iqoqo_default) &amp; Trust Boundaries</text>
 
             <!-- Top-right architecture metadata pill -->

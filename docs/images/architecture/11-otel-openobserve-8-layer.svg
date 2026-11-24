@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp11" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="1440" height="960" role="img" aria-labelledby="bp11-title bp11-desc">
             <title id="bp11-title">11 · Zero-Blind-Spot 8-Layer OpenTelemetry &amp; OpenObserve Pipeline</title>
-            <desc id="bp11-desc">Modern Athenaeum telemetry fan-in diagram for iqoqo v1.1.1 showing all 8 instrumented layers (L1-L8), OTel Collector gRPC :4317 and HTTP :4318 ingress, direct Browser RUM /rum/ bypass, OpenObserve v0.91.5 Parquet SQL backend, and make status verification.</desc>
+            <desc id="bp11-desc">Modern Athenaeum telemetry fan-in diagram for iqoqo v1.1.2 showing all 8 instrumented layers (L1-L8), OTel Collector gRPC :4317 and HTTP :4318 ingress, direct Browser RUM /rum/ bypass, OpenObserve v0.91.5 Parquet SQL backend, and make status verification.</desc>
             <style>
               .bg { fill: #FDFBF7; }
               .title { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -101,7 +101,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title">11 · Zero-Blind-Spot 8-Layer OpenTelemetry &amp; OpenObserve Pipeline</text>
-            <text x="32" y="57" class="sub">iqoqo v1.1.1  •  OTLP gRPC (:4317) &amp; http/protobuf (:4318) Fan-In, Direct Browser RUM &amp; AI-First SQL Diagnostics</text>
+            <text x="32" y="57" class="sub">iqoqo v1.1.2  •  OTLP gRPC (:4317) &amp; http/protobuf (:4318) Fan-In, Direct Browser RUM &amp; AI-First SQL Diagnostics</text>
             <rect x="1174" y="16" width="234" height="32" rx="8" class="hdr-pill"/>
             <text x="1291" y="36" text-anchor="middle" class="hdr-pill-txt">Telemetry Fan-In Topology</text>
 

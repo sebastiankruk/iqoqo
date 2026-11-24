@@ -16,7 +16,7 @@
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
 <svg id="svg-bp4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp4-title bp4-desc">
-            <title id="bp4-title">iqoqo v1.1.1 — Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion Pipeline (Blueprint 4)</title>
+            <title id="bp4-title">iqoqo v1.1.2 — Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion Pipeline (Blueprint 4)</title>
             <desc id="bp4-desc">Swimlane process diagram showing /scan UI controls, local barcode resolution, GS1 prefix routing, 6 multi-provider waterfalls, SerialDisambiguationModal for bare 977 scans, WEMI persistence, and async post-hooks.</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
@@ -95,7 +95,7 @@
             <rect x="0" y="0" width="1440" height="980" fill="url(#b4-grid)"/>
 
             <!-- Header -->
-            <text x="32" y="38" class="title-text">iqoqo v1.1.1 — Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion</text>
+            <text x="32" y="38" class="title-text">iqoqo v1.1.2 — Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion</text>
             <text x="32" y="60" class="subtitle-text">Blueprint 4 of 12  •  /scan UX Controls, Local Fast-Path, Prefix Router, Strategy Waterfalls &amp; Disambiguation</text>
             <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
             <text x="1280" y="39" text-anchor="middle" class="header-pill-text">Swimlane Ingestion Pipeline</text>
