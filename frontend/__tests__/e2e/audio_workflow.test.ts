@@ -151,8 +151,9 @@ test.describe("Audio Media Workflow", () => {
 
     // 8. Verify Multi-Image Uploader UI
     // The section might take a moment to appear as profile loads
-    const uploaderSection = page.getByText("Additional Scans");
+    const uploaderSection = page.getByRole("button", { name: "Additional Scans" });
     await expect(uploaderSection).toBeVisible({ timeout: 10000 });
+    await uploaderSection.click();
 
     const labelSelect = page.locator("select").filter({ hasText: "Disc" });
     await expect(labelSelect).toBeVisible();

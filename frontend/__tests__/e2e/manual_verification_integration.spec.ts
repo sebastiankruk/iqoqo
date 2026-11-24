@@ -202,11 +202,13 @@ test.describe("Manual Verification Integration E2E", () => {
     await expect(visibilityBtn).toBeVisible();
     const btnText = (await visibilityBtn.innerText()).trim();
     await visibilityBtn.click();
+    await expect(visibilityBtn).not.toBeVisible();
     if (/make public/i.test(btnText)) {
       await expect(page.getByText(/item is now public/i)).toBeVisible();
       // Click again to hide
       await page.getByTestId("sidebar-manage-menu").click();
       const hideBtn = page.getByRole("menuitem", { name: /hide from public/i });
+      await expect(hideBtn).toBeVisible();
       await hideBtn.click();
       await expect(page.getByText(/item is now hidden/i)).toBeVisible();
     } else {

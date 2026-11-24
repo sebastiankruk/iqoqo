@@ -27,8 +27,8 @@ const MOCK_ITEM = {
   cover_status: "ready",
   work: { id: 11, title: "Kind of Blue", authors: ["Miles Davis"], meta: {} },
   expression: { id: 12, content_type: "music", language: "en" },
-  manifestation_meta: { format: "vinyl", cover_url: "/file.svg", cover_status: "ready" },
-  meta: { format: "vinyl", cover_status: "ready" },
+  manifestation_meta: { format: "vinyl", cover_url: "/file.svg", cover_status: "ready" } as Record<string, unknown>,
+  meta: { format: "vinyl", cover_status: "ready" } as Record<string, unknown>,
   added_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -55,12 +55,49 @@ test.describe("Item Detail UX Declutter & Replace Cover (C142)", () => {
       })
     );
 
+    let currentItem = { ...MOCK_ITEM };
+
     await page.route("**/api/items/101**", route =>
       route.fulfill({
         status: 200,
-        json: { success: true, data: MOCK_ITEM },
+        json: { success: true, data: currentItem },
       })
     );
+
+    await page.route("**/api/manifestations/202/cover", route => {
+      currentItem = {
+        ...currentItem,
+        cover_url: "/static/covers/202_user.jpg",
+        cover_status: "ready",
+        manifestation_meta: {
+          ...currentItem.manifestation_meta,
+          cover_url: "/static/covers/202_user.jpg",
+          cover_source: "user_photo",
+          cover_status: "ready",
+          cover_status_updated_at: "2026-11-24T11:00:00Z",
+        },
+        meta: {
+          ...currentItem.meta,
+          cover_url: "/static/covers/202_user.jpg",
+          cover_source: "user_photo",
+          cover_status: "ready",
+          cover_status_updated_at: "2026-11-24T11:00:00Z",
+        },
+      };
+      return route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          data: {
+            task_id: null,
+            cover_url: "/static/covers/202_user.jpg",
+            cover_source: "user_photo",
+            cover_status: "ready",
+            cover_status_updated_at: "2026-11-24T11:00:00Z",
+          },
+        },
+      });
+    });
 
     await page.route("**/api/work-parts/**", route =>
       route.fulfill({ status: 200, json: { success: true, data: [] } })
@@ -92,22 +129,6 @@ test.describe("Item Detail UX Declutter & Replace Cover (C142)", () => {
   }
 
   test("opens Admin Actions dropdown and Replace Cover upload flow", async ({ page }) => {
-    await page.route("**/api/manifestations/202/cover", route =>
-      route.fulfill({
-        status: 200,
-        json: {
-          success: true,
-          data: {
-            task_id: null,
-            cover_url: "/static/covers/202_user.jpg",
-            cover_source: "user_photo",
-            cover_status: "ready",
-            cover_status_updated_at: "2026-11-24T11:00:00Z",
-          },
-        },
-      })
-    );
-
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/item/101", { waitUntil: "domcontentloaded" });
 
