@@ -31,6 +31,18 @@ The backend SHALL expose `GET /api/catalog/graph` accepting `entity_type` (`work
 - **WHEN** a user requests `GET /api/catalog/graph?entity_type=work&entity_id=<A>&depth=2`
 - **THEN** the BFS traversal MUST enqueue `contributor:<C>` at hop 1 and expand `contributor:<C>` at hop 2 so `Work B` appears in the neighborhood within the `150`-node cap.
 
+#### Scenario: Traversing depth 3 and 4 neighborhoods without visibility or LOD leaks
+
+- **GIVEN** a multi-hop graph spanning `Work -> WorkPart -> Expression -> Manifestation -> Item` (up to 4 hops) that includes `friends_only` `Item`s, `private` `Item`s, and `SemanticLink` rows with `status="pending"` or `"rejected"`
+- **WHEN** an authenticated accepted friend requests `GET /api/catalog/graph?entity_type=work&entity_id=<W>&depth=4`
+- **THEN** the response MUST return `meta.depth == 4`, traverse up to 4 hops without a single high-degree hop-1 hub starving deeper hops ahead of deterministic per-node/per-hop limits, include the accepted friend's `friends_only` `Item`, and strictly omit `private` `Item`s and non-accepted `SemanticLink`s.
+
+#### Scenario: Enforcing FederationConsent exclusion and read-only FEDERATION_HEAD_MODE access
+
+- **GIVEN** User D has `FederationConsent.federated_collection == False` and owns both a `public` `Item` and a `friends_only` `Item` attached to `Work` `W`
+- **WHEN** an unauthenticated visitor or non-friend requests `GET /api/catalog/graph?entity_type=work&entity_id=<W>&depth=3` (including when `FEDERATION_HEAD_MODE=true`)
+- **THEN** the endpoint MUST return HTTP `200` (not blocked by write guards) and MUST omit User D's non-consented items while preserving User D's own access when User D is the authenticated caller and preserving both User D's `public` and `friends_only` items when the authenticated caller is an accepted friend of User D.
+
 ### Requirement: Dedicated Full-Screen `/graph` Explorer Page and Entity Entry Buttons
 The frontend SHALL provide a dedicated full-screen `/graph` page (reading `?type=<entity_type>&id=<entity_id>&depth=<1|2>` where `<entity_type>` accepts `work`, `expression`, `manifestation`, `item`, `person`, `contributor`, and `series` for full `CAPACITOR_BUILD=true` static export compatibility) with interactive pan/zoom/drag, edge-type filtering, node inspection drawer (allowing recentering on `work`, `expression`, `manifestation`, `item`, `contributor`, `person`, and `series` nodes), an anchor entity link derived from the anchor node's canonical `url` (preventing broken `/person/<id>`, `/contributor/<id>`, or `/series/<id>` 404 routes), and `"Explore Graph"` navigation buttons on `/work/[id]`, `/expression/[id]`, `/manifestation/[id]`, and `/item/[id]`.
 
@@ -45,6 +57,25 @@ The frontend SHALL provide a dedicated full-screen `/graph` page (reading `?type
 - **GIVEN** a user visiting `/graph?type=person&id=<C>&depth=2` or `/graph?type=series&id=<S>&depth=2` (including in a `CAPACITOR_BUILD=true` static export)
 - **WHEN** the graph loads and the user inspects the header `"Open Entity Page"` link or clicks a connected `contributor` node inside an active graph
 - **THEN** the header `"Open Entity Page"` link MUST resolve from the anchor node's canonical `url` (e.g., `/collection?q=...` for `person`/`contributor`, `/work/<S>` for `series`) rather than `/${rawType}/${rawId}`, and clicking a non-anchor `contributor` node MUST display `"Recenter Graph"` and navigate via `router.push` to `/graph?type=...&id=<C>&depth=<depth>`.
+
+#### Scenario: Physical item detail page surfaces Explore Graph above the fold on mobile and desktop
+
+- **GIVEN** a user viewing a physical item (`/item/<id>` with `id > 0`) on either a mobile (`390x844`) or desktop (`1280x800`) viewport
+- **WHEN** the page renders
+- **THEN** the localized `"Explore Graph"` link (`graph.exploreGraph`, pointing to `/graph?type=item&id=<id>`) is visible above the fold without scrolling past sidebar forms or `ItemTabs`
+- **AND** when viewing a virtual wishlist item (`id <= 0`), the `"Explore Graph"` link is NOT rendered
+
+#### Scenario: Exploring depth 3 and 4 neighborhoods in the radial SVG layout
+
+- **GIVEN** a user viewing `/graph?type=work&id=42&depth=2`
+- **WHEN** the user selects depth `3` or `4`
+- **THEN** the URL updates to `depth=3` or `depth=4`, the graph fetches with the corresponding depth parameter, `hop === 3` and `hop === 4` nodes render on distinct outer radial bands without overlapping `{ x: 0, y: 0 }`, and any node/edge cap truncation surfaces both `max_nodes` and `max_edges` context in `graph-truncated-banner`.
+
+#### Scenario: Preserving static export and mobile toolbar density on `/graph`
+
+- **GIVEN** the `/graph` page rendered at a mobile viewport (`390x844`) or desktop viewport in `mode=library` or built with `CAPACITOR_BUILD=true`
+- **WHEN** the explorer renders depth controls, mode switcher, and category/entity filters
+- **THEN** no dynamic route segments break static export and at most 4 primary FRBR entity-type buttons (`work`, `expression`, `manifestation`, `item`) render inline while the 4 secondary entity types (`series`, `contributor`, `map`, `lod`) are accessible via a compact disclosure toggle.
 
 ## ADDED Requirements
 

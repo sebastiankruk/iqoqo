@@ -17,3 +17,15 @@ On `/item/[id]`, for physical items with a positive ID (`item.id > 0`), the `"Ex
 - **WHEN** the page renders
 - **THEN** the localized `"Explore Graph"` link (`graph.exploreGraph`, pointing to `/graph?type=item&id=<id>`) is visible above the fold without scrolling past sidebar forms or `ItemTabs`
 - **AND** when viewing a virtual wishlist item (`id <= 0`), the `"Explore Graph"` link is NOT rendered
+
+#### Scenario: Exploring depth 3 and 4 neighborhoods in the radial SVG layout
+
+- **GIVEN** a user viewing `/graph?type=work&id=42&depth=2`
+- **WHEN** the user selects depth `3` or `4`
+- **THEN** the URL updates to `depth=3` or `depth=4`, the graph fetches with the corresponding depth parameter, `hop === 3` and `hop === 4` nodes render on distinct outer radial bands without overlapping `{ x: 0, y: 0 }`, and any node/edge cap truncation surfaces both `max_nodes` and `max_edges` context in `graph-truncated-banner`.
+
+#### Scenario: Preserving static export and mobile toolbar density on `/graph`
+
+- **GIVEN** the `/graph` page rendered at a mobile viewport (`390x844`) or desktop viewport in `mode=library` or built with `CAPACITOR_BUILD=true`
+- **WHEN** the explorer renders depth controls, mode switcher, and category/entity filters
+- **THEN** no dynamic route segments break static export and at most 4 primary FRBR entity-type buttons (`work`, `expression`, `manifestation`, `item`) render inline while the 4 secondary entity types (`series`, `contributor`, `map`, `lod`) are accessible via a compact disclosure toggle.
