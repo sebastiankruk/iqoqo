@@ -722,7 +722,8 @@ export interface GraphRootSearchResult {
   url?: string | null;
 }
 
-export type GraphEdgeCategory = "frbr" | "series" | "parts_expansions" | "contributors" | "maps" | "lod";
+export type GraphEdgeCategory =
+  "frbr" | "series" | "parts_expansions" | "derivatives" | "contributors" | "maps" | "lod";
 
 export interface GraphNode {
   id: string;

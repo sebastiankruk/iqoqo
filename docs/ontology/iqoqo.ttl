@@ -300,6 +300,81 @@ iqoqo:link_type a owl:DatatypeProperty ;
     rdfs:domain iqoqo:WorkExpansionLink ;
     rdfs:range xsd:string .
 
+iqoqo:WorkRelation a owl:Class ;
+    rdfs:label "Work Relation" ;
+    rdfs:comment "Confirmed directional cross-media relation (catalog.work_relations) linking a derivative Work to its source Work, aligned with frbroo:R2_is_derivative_of and schema:isBasedOn." .
+
+iqoqo:sourceWork a owl:ObjectProperty ;
+    rdfs:subPropertyOf frbroo:R2_is_derivative_of ;
+    rdfs:label "source work" ;
+    rdfs:comment "The derivative/adapted Work in a WorkRelation." ;
+    rdfs:domain iqoqo:WorkRelation ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:targetWork a owl:ObjectProperty ;
+    rdfs:label "target work" ;
+    rdfs:comment "The original/source Work in a WorkRelation." ;
+    rdfs:domain iqoqo:WorkRelation ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:relationType a owl:DatatypeProperty ;
+    rdfs:label "relation type" ;
+    rdfs:comment "Controlled cross-media relation type (is_adaptation_of, is_derivative_of, inspired_by, sequel_to, spin_off_of, companion_to)." ;
+    rdfs:domain iqoqo:WorkRelation ;
+    rdfs:range xsd:string .
+
+iqoqo:linkNotes a owl:DatatypeProperty ;
+    rdfs:label "link notes" ;
+    rdfs:comment "Optional custodian notes explaining a WorkRelation." ;
+    rdfs:domain iqoqo:WorkRelation ;
+    rdfs:range xsd:string .
+
+iqoqo:WorkLinkCandidate a owl:Class ;
+    rdfs:label "Work Link Candidate" ;
+    rdfs:comment "Inventory review queue candidate (inventory.work_link_candidates) for cross-media Work linking." .
+
+iqoqo:candidateSourceWork a owl:ObjectProperty ;
+    rdfs:label "candidate source work" ;
+    rdfs:comment "Proposed derivative Work in a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:candidateTargetWork a owl:ObjectProperty ;
+    rdfs:label "candidate target work" ;
+    rdfs:comment "Proposed source Work in a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range iqoqo:Work .
+
+iqoqo:proposedRelationType a owl:DatatypeProperty ;
+    rdfs:label "proposed relation type" ;
+    rdfs:comment "Proposed relation type for a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range xsd:string .
+
+iqoqo:linkCandidateConfidence a owl:DatatypeProperty ;
+    rdfs:label "link candidate confidence" ;
+    rdfs:comment "Confidence score [0.0, 1.0] for a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range xsd:float .
+
+iqoqo:linkCandidateStatus a owl:DatatypeProperty ;
+    rdfs:label "link candidate status" ;
+    rdfs:comment "Triage status ('pending', 'accepted', 'dismissed') for a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range xsd:string .
+
+iqoqo:linkResolutionSource a owl:DatatypeProperty ;
+    rdfs:label "link resolution source" ;
+    rdfs:comment "Pipeline stage ('heuristic', 'llm') that scored a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range xsd:string .
+
+iqoqo:linkLlmReasoning a owl:DatatypeProperty ;
+    rdfs:label "link llm reasoning" ;
+    rdfs:comment "Heuristic or LLM rationale for a WorkLinkCandidate." ;
+    rdfs:domain iqoqo:WorkLinkCandidate ;
+    rdfs:range xsd:string .
+
 iqoqo:containerWork a owl:ObjectProperty ;
     rdfs:label "container work" ;
     rdfs:comment "The F16 Container Work that aggregates a Work or Item." ;

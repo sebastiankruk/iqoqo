@@ -73,7 +73,7 @@ def _get_route_tag(path: str) -> str:
         return "Federation & Public LOD"
     if path.startswith("/api/federation"):
         return "Federation"
-    if path.startswith("/api/admin") or path.startswith("/admin"):
+    if path.startswith("/api/admin") or path.startswith("/api/v1/admin") or path.startswith("/admin"):
         return "Admin"
     return "System"
 
@@ -941,7 +941,7 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             "in": "query",
                             "required": False,
                             "schema": {"type": "string"},
-                            "description": "Comma-separated edge categories (frbr,series,parts_expansions,contributors,maps,lod).",
+                            "description": "Comma-separated edge categories (frbr,series,parts_expansions,derivatives,contributors,maps,lod).",
                         },
                     ]
                     op_params = operation.setdefault("parameters", [])
@@ -950,6 +950,92 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path == "/api/v1/admin/work-links/candidates" and method == "get":
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in (
+                        {"name": "status", "in": "query", "required": False, "schema": {"type": "string", "default": "pending"}},
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 50, "minimum": 1, "maximum": 200},
+                        },
+                        {"name": "offset", "in": "query", "required": False, "schema": {"type": "integer", "default": 0, "minimum": 0}},
+                    ):
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                elif openapi_path == "/api/v1/admin/work-links" and method == "get":
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in (
+                        {"name": "work_id", "in": "query", "required": False, "schema": {"type": "integer", "minimum": 1}},
+                        {"name": "relation_type", "in": "query", "required": False, "schema": {"type": "string"}},
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 50, "minimum": 1, "maximum": 200},
+                        },
+                        {"name": "offset", "in": "query", "required": False, "schema": {"type": "integer", "default": 0, "minimum": 0}},
+                    ):
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                elif openapi_path == "/api/v1/admin/work-links/scan" and method == "post":
+                    operation["requestBody"] = {
+                        "required": False,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "engine": {"type": "string", "enum": ["heuristic", "llama"], "default": "heuristic"},
+                                        "threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.7},
+                                        "limit": {"type": "integer", "minimum": 1, "maximum": 5000},
+                                        "dry_run": {"type": "boolean", "default": False},
+                                    },
+                                }
+                            }
+                        },
+                    }
+                elif openapi_path == "/api/v1/admin/work-links/candidates/{candidate_id}/accept" and method == "post":
+                    operation["requestBody"] = {
+                        "required": False,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "relation_type": {"type": "string"},
+                                        "source_work_id": {"type": "integer", "minimum": 1},
+                                        "target_work_id": {"type": "integer", "minimum": 1},
+                                        "notes": {"type": "string", "maxLength": 2000},
+                                    },
+                                }
+                            }
+                        },
+                    }
+                elif openapi_path == "/api/v1/admin/work-links" and method == "post":
+                    operation["requestBody"] = {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["source_work_id", "target_work_id"],
+                                    "properties": {
+                                        "source_work_id": {"type": "integer", "minimum": 1},
+                                        "target_work_id": {"type": "integer", "minimum": 1},
+                                        "relation_type": {"type": "string", "default": "is_adaptation_of"},
+                                        "notes": {"type": "string", "maxLength": 2000},
+                                    },
+                                }
+                            }
+                        },
+                    }
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

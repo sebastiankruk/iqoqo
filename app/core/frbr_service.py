@@ -2602,6 +2602,15 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
             if seq is not None:
                 g.add((w_uri, SCHEMA.position, Literal(seq, datatype=XSD.integer)))
 
+    for rel in item.get("work_relations", []):
+        rel_src = rel.get("source_work_id") if isinstance(rel, dict) else getattr(rel, "source_work_id", None)
+        rel_tgt = rel.get("target_work_id") if isinstance(rel, dict) else getattr(rel, "target_work_id", None)
+        if rel_src and rel_tgt:
+            src_uri = URIRef(str(rel_src)) if str(rel_src).startswith("http") else _frbr_uri("work", rel_src, base_url)
+            tgt_uri = URIRef(str(rel_tgt)) if str(rel_tgt).startswith("http") else _frbr_uri("work", rel_tgt, base_url)
+            g.add((src_uri, FRBROO.R2_is_derivative_of, tgt_uri))
+            g.add((src_uri, SCHEMA.isBasedOn, tgt_uri))
+
 
 def _enrich_graph_from_db(
     g: Graph,
@@ -2693,7 +2702,7 @@ def _enrich_graph_from_db(
     try:
         from sqlalchemy import or_
 
-        from app.db.core import WorkExpansionLink
+        from app.db.core import WorkExpansionLink, WorkRelation
         from app.db.games import ContainerAggregation
 
         # WorkContributions
@@ -2938,6 +2947,22 @@ def _enrich_graph_from_db(
                 base_uri = _frbr_uri("work", el.base_work_id, base_url)
                 g.add((exp_uri, SCHEMA.isPartOf, base_uri))
                 g.add((base_uri, SCHEMA.hasPart, exp_uri))
+
+            # Confirmed cross-media WorkRelation (derived_work -> source_work)
+            work_relations = (
+                db.session.execute(
+                    select(WorkRelation).where(
+                        (WorkRelation.source_work_id.in_(seen_works)) | (WorkRelation.target_work_id.in_(seen_works))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for wr in work_relations:
+                src_uri = _frbr_uri("work", wr.source_work_id, base_url)
+                tgt_uri = _frbr_uri("work", wr.target_work_id, base_url)
+                g.add((src_uri, FRBROO.R2_is_derivative_of, tgt_uri))
+                g.add((src_uri, SCHEMA.isBasedOn, tgt_uri))
 
             # ContainerAggregation (container_work -> aggregated_work / aggregated_item)
             aggs = (

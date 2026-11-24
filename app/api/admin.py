@@ -35,10 +35,19 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
 from app.api.decorators import admin_or_custodian_required, admin_required, require_auth, require_permission
+from app.api.federation_guard import FEDERATION_HEAD_READONLY_MESSAGE
 from app.api.filters import escape_ilike_term
-from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
-from app.core import duplicate_service, frbr_service
+from app.api.schemas import (
+    FrbrMergeSchema,
+    FrbrReassignSchema,
+    FrbrSplitSchema,
+    WorkLinkAcceptRequest,
+    WorkLinkCreateRequest,
+    WorkLinkScanRequest,
+)
+from app.core import duplicate_service, frbr_service, work_linking_service
 from app.core.celery_app import celery
+from app.core.config_service import is_federation_head_mode
 from app.core.limiter import limiter
 from app.core.permissions import PROTECTED_ROLE_NAMES, PermissionName
 from app.core.search_service import build_ilike_search_clause
@@ -2360,3 +2369,218 @@ def provision_federation_instance_key() -> tuple[Response, int] | Response:
     db.session.commit()
 
     return jsonify({"success": True, "data": {"fingerprint": fingerprint, "provisioned": True}}), 200
+
+
+# --- CROSS-MEDIA WORK LINKING ROUTES ---
+
+
+def _reject_if_federation_head_work_link() -> tuple[Response, int] | None:
+    """Block cross-media Work link mutations when running as a read-only Federation Hub."""
+    if is_federation_head_mode():
+        return jsonify({"success": False, "error": FEDERATION_HEAD_READONLY_MESSAGE, "code": 403}), 403
+    return None
+
+
+@admin_bp.route("/work-links/candidates", methods=["GET"])
+@require_auth
+@require_permission(_DUPLICATE_READ_PERMISSION)
+def list_work_link_candidates_endpoint() -> tuple[Response, int] | Response:
+    """List cross-media Work link candidates with SQL pagination."""
+    status_arg = (request.args.get("status", "pending") or "").strip().lower()
+    status = None if status_arg == "all" else (status_arg or None)
+    limit = max(1, min(request.args.get("limit", 50, type=int) or 50, 200))
+    offset = max(0, request.args.get("offset", 0, type=int) or 0)
+
+    candidates, total = work_linking_service.list_work_link_candidates(status=status, limit=limit, offset=offset)
+    return jsonify(
+        {
+            "success": True,
+            "data": [work_linking_service.serialize_candidate(c) for c in candidates],
+            "meta": {"total": total, "limit": limit, "offset": offset},
+        }
+    )
+
+
+@admin_bp.route("/work-links", methods=["GET"])
+@require_auth
+@require_permission(_DUPLICATE_READ_PERMISSION)
+def list_work_links_endpoint() -> tuple[Response, int] | Response:
+    """List confirmed cross-media WorkRelation links with SQL pagination."""
+    work_id = request.args.get("work_id", type=int)
+    relation_type = (request.args.get("relation_type") or "").strip() or None
+    limit = max(1, min(request.args.get("limit", 50, type=int) or 50, 200))
+    offset = max(0, request.args.get("offset", 0, type=int) or 0)
+
+    relations, total = work_linking_service.list_work_relations(
+        work_id=work_id,
+        relation_type=relation_type,
+        limit=limit,
+        offset=offset,
+    )
+    return jsonify(
+        {
+            "success": True,
+            "data": [work_linking_service.serialize_relation(r) for r in relations],
+            "meta": {"total": total, "limit": limit, "offset": offset},
+        }
+    )
+
+
+@admin_bp.route("/work-links/scan", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+@limiter.limit("5 per minute")
+def scan_work_links_endpoint() -> tuple[Response, int] | Response:
+    """Trigger a cross-media Work link reconciliation scan."""
+    guard = _reject_if_federation_head_work_link()
+    if guard is not None:
+        return guard
+
+    try:
+        payload = WorkLinkScanRequest.model_validate(request.get_json(silent=True) or {})
+    except ValidationError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
+    try:
+        report = work_linking_service.scan_cross_media_links(
+            engine=payload.engine,
+            threshold=payload.threshold,
+            limit=payload.limit,
+            dry_run=payload.dry_run,
+        )
+    except work_linking_service.WorkLinkPrerequisiteError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 409}), 409
+    except work_linking_service.WorkLinkingError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
+    return jsonify(
+        {
+            "success": True,
+            "data": {
+                "works_scanned": report.works_scanned,
+                "candidate_pairs": report.candidate_pairs,
+                "llm_evaluations": report.llm_evaluations,
+                "llm_failures": report.llm_failures,
+                "below_threshold": report.below_threshold,
+                "already_known": report.already_known,
+                "created": report.created,
+                "would_create": report.would_create,
+                "dry_run": report.dry_run,
+                "engine": report.engine,
+            },
+        }
+    )
+
+
+@admin_bp.route("/work-links/candidates/<int:candidate_id>/accept", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+def accept_work_link_candidate_endpoint(candidate_id: int) -> tuple[Response, int] | Response:
+    """Confirm a pending cross-media candidate into a WorkRelation (never merges)."""
+    guard = _reject_if_federation_head_work_link()
+    if guard is not None:
+        return guard
+
+    try:
+        payload = WorkLinkAcceptRequest.model_validate(request.get_json(silent=True) or {})
+    except ValidationError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
+    user = _get_current_user()
+    try:
+        candidate, relation = work_linking_service.accept_candidate(
+            candidate_id,
+            resolved_by_id=user.id if user else None,
+            relation_type=payload.relation_type,
+            source_work_id=payload.source_work_id,
+            target_work_id=payload.target_work_id,
+            notes=payload.notes,
+        )
+    except work_linking_service.WorkLinkNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 404}), 404
+    except work_linking_service.WorkLinkCycleError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc), "code": 409}), 409
+    except work_linking_service.WorkLinkingError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
+    return jsonify(
+        {
+            "success": True,
+            "data": {
+                "candidate": work_linking_service.serialize_candidate(candidate),
+                "relation": work_linking_service.serialize_relation(relation),
+            },
+        }
+    )
+
+
+@admin_bp.route("/work-links/candidates/<int:candidate_id>/dismiss", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+def dismiss_work_link_candidate_endpoint(candidate_id: int) -> tuple[Response, int] | Response:
+    """Dismiss a cross-media Work link candidate so subsequent scans skip it."""
+    guard = _reject_if_federation_head_work_link()
+    if guard is not None:
+        return guard
+
+    user = _get_current_user()
+    try:
+        candidate = work_linking_service.dismiss_candidate(candidate_id, resolved_by_id=user.id if user else None)
+    except work_linking_service.WorkLinkNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 404}), 404
+
+    return jsonify({"success": True, "data": work_linking_service.serialize_candidate(candidate)})
+
+
+@admin_bp.route("/work-links", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+def create_work_link_endpoint() -> tuple[Response, int] | Response:
+    """Manually link two Works with a controlled cross-media WorkRelation."""
+    guard = _reject_if_federation_head_work_link()
+    if guard is not None:
+        return guard
+
+    try:
+        payload = WorkLinkCreateRequest.model_validate(request.get_json(silent=True) or {})
+    except ValidationError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
+    user = _get_current_user()
+    try:
+        relation = work_linking_service.create_work_relation(
+            source_work_id=payload.source_work_id,
+            target_work_id=payload.target_work_id,
+            relation_type=payload.relation_type,
+            created_by_id=user.id if user else None,
+            notes=payload.notes,
+        )
+    except work_linking_service.WorkLinkNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 404}), 404
+    except work_linking_service.WorkLinkCycleError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc), "code": 409}), 409
+    except work_linking_service.WorkLinkingError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
+    return jsonify({"success": True, "data": work_linking_service.serialize_relation(relation)}), 201
+
+
+@admin_bp.route("/work-links/<int:relation_id>", methods=["DELETE"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+def delete_work_link_endpoint(relation_id: int) -> tuple[Response, int] | Response:
+    """Delete a confirmed cross-media WorkRelation."""
+    guard = _reject_if_federation_head_work_link()
+    if guard is not None:
+        return guard
+
+    try:
+        work_linking_service.delete_work_relation(relation_id)
+    except work_linking_service.WorkLinkNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc), "code": 404}), 404
+
+    return jsonify({"success": True})

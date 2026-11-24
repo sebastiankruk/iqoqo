@@ -1088,3 +1088,191 @@ export async function mergeCustodianProviderMetadata(
   }
   return res.data.data;
 }
+
+export type WorkRelationType =
+  "is_adaptation_of" | "is_derivative_of" | "inspired_by" | "sequel_to" | "spin_off_of" | "companion_to";
+
+export interface WorkLinkCandidate {
+  id: number;
+  source_work_id: number;
+  target_work_id: number;
+  source_work_title: string | null;
+  target_work_title: string | null;
+  source_categories: string[];
+  target_categories: string[];
+  proposed_relation_type: WorkRelationType;
+  confidence: number;
+  resolution_source: "heuristic" | "llm";
+  llm_reasoning: string | null;
+  status: "pending" | "accepted" | "dismissed";
+  created_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface WorkRelationItem {
+  id: number;
+  source_work_id: number;
+  target_work_id: number;
+  source_work_title: string | null;
+  target_work_title: string | null;
+  source_categories: string[];
+  target_categories: string[];
+  relation_type: WorkRelationType;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface WorkLinkScanReport {
+  works_scanned: number;
+  candidate_pairs: number;
+  llm_evaluations: number;
+  llm_failures: number;
+  below_threshold: number;
+  already_known: number;
+  created: number;
+  would_create: number;
+  dry_run: boolean;
+  engine: "heuristic" | "llama";
+}
+
+/**
+ * List pending or historical cross-media Work link candidates.
+ *
+ * @param params - Optional status and pagination filters.
+ * @param params.status - Candidate status filter.
+ * @param params.limit - Maximum number of rows to return.
+ * @param params.offset - Pagination offset.
+ * @returns Paginated candidate items and total count.
+ */
+export async function listWorkLinkCandidates(
+  params: { status?: "pending" | "accepted" | "dismissed" | "all"; limit?: number; offset?: number } = {}
+): Promise<{ items: WorkLinkCandidate[]; total: number }> {
+  const res = await apiClient.get<ApiResponse<WorkLinkCandidate[]> & { meta?: { total: number } }>(
+    "/v1/admin/work-links/candidates",
+    { params }
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to load work link candidates");
+  }
+  return { items: res.data.data, total: res.data.meta?.total ?? res.data.data.length };
+}
+
+/**
+ * List confirmed cross-media WorkRelation links.
+ *
+ * @param params - Optional work ID, relation type, and pagination filters.
+ * @param params.work_id - Filter by source or target Work ID.
+ * @param params.relation_type - Filter by controlled relation type.
+ * @param params.limit - Maximum number of rows to return.
+ * @param params.offset - Pagination offset.
+ * @returns Paginated relation items and total count.
+ */
+export async function listWorkRelations(
+  params: { work_id?: number; relation_type?: string; limit?: number; offset?: number } = {}
+): Promise<{ items: WorkRelationItem[]; total: number }> {
+  const res = await apiClient.get<ApiResponse<WorkRelationItem[]> & { meta?: { total: number } }>(
+    "/v1/admin/work-links",
+    { params }
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to load work relations");
+  }
+  return { items: res.data.data, total: res.data.meta?.total ?? res.data.data.length };
+}
+
+/**
+ * Trigger a cross-media Work link reconciliation scan.
+ *
+ * @param payload - Scan engine, threshold, limit, and dry-run options.
+ * @param payload.engine - Reconciliation engine (`heuristic` or `llama`).
+ * @param payload.threshold - Minimum confidence threshold.
+ * @param payload.limit - Maximum number of Works to scan.
+ * @param payload.dry_run - Whether to skip persisting candidates.
+ * @returns Summary counters from the scan run.
+ */
+export async function scanWorkLinks(
+  payload: { engine?: "heuristic" | "llama"; threshold?: number; limit?: number; dry_run?: boolean } = {}
+): Promise<WorkLinkScanReport> {
+  const res = await apiClient.post<ApiResponse<WorkLinkScanReport>>("/v1/admin/work-links/scan", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to scan work links");
+  }
+  return res.data.data;
+}
+
+/**
+ * Confirm a pending cross-media candidate into a WorkRelation.
+ *
+ * @param candidateId - Candidate primary key.
+ * @param payload - Optional relation type, work direction overrides, and notes.
+ * @param payload.relation_type - Override relation type.
+ * @param payload.source_work_id - Override derived source Work ID.
+ * @param payload.target_work_id - Override original target Work ID.
+ * @param payload.notes - Optional custodian notes.
+ * @returns Updated candidate and created WorkRelation.
+ */
+export async function acceptWorkLinkCandidate(
+  candidateId: number,
+  payload: { relation_type?: WorkRelationType; source_work_id?: number; target_work_id?: number; notes?: string } = {}
+): Promise<{ candidate: WorkLinkCandidate; relation: WorkRelationItem }> {
+  const res = await apiClient.post<ApiResponse<{ candidate: WorkLinkCandidate; relation: WorkRelationItem }>>(
+    `/v1/admin/work-links/candidates/${candidateId}/accept`,
+    payload
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to accept work link candidate");
+  }
+  return res.data.data;
+}
+
+/**
+ * Dismiss a cross-media Work link candidate.
+ *
+ * @param candidateId - Candidate primary key.
+ * @returns Updated candidate record.
+ */
+export async function dismissWorkLinkCandidate(candidateId: number): Promise<WorkLinkCandidate> {
+  const res = await apiClient.post<ApiResponse<WorkLinkCandidate>>(
+    `/v1/admin/work-links/candidates/${candidateId}/dismiss`
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to dismiss work link candidate");
+  }
+  return res.data.data;
+}
+
+/**
+ * Manually link two Works with a controlled cross-media WorkRelation.
+ *
+ * @param payload - Source Work ID, target Work ID, relation type, and optional notes.
+ * @param payload.source_work_id - Derived source Work ID.
+ * @param payload.target_work_id - Original target Work ID.
+ * @param payload.relation_type - Controlled relation type.
+ * @param payload.notes - Optional custodian notes.
+ * @returns Created WorkRelation record.
+ */
+export async function createWorkRelation(payload: {
+  source_work_id: number;
+  target_work_id: number;
+  relation_type: WorkRelationType;
+  notes?: string;
+}): Promise<WorkRelationItem> {
+  const res = await apiClient.post<ApiResponse<WorkRelationItem>>("/v1/admin/work-links", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to create work relation");
+  }
+  return res.data.data;
+}
+
+/**
+ * Delete a confirmed cross-media WorkRelation.
+ *
+ * @param relationId - WorkRelation primary key.
+ */
+export async function deleteWorkRelation(relationId: number): Promise<void> {
+  const res = await apiClient.delete<ApiResponse<unknown>>(`/v1/admin/work-links/${relationId}`);
+  if (!res.data.success) {
+    throw new Error(res.data.error ?? "Failed to delete work relation");
+  }
+}

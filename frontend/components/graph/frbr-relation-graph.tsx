@@ -50,7 +50,15 @@ interface Point {
   y: number;
 }
 
-const ALL_EDGE_CATEGORIES: GraphEdgeCategory[] = ["frbr", "series", "parts_expansions", "contributors", "maps", "lod"];
+const ALL_EDGE_CATEGORIES: GraphEdgeCategory[] = [
+  "frbr",
+  "series",
+  "parts_expansions",
+  "derivatives",
+  "contributors",
+  "maps",
+  "lod",
+];
 
 const RECENTERABLE_TYPES = new Set<GraphNodeEntityType>([
   "work",

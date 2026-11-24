@@ -183,6 +183,7 @@ describe("DuplicatesPage", () => {
     expect(linkHrefs).toEqual([
       "/admin/content?tab=metadata",
       "/admin/duplicates",
+      "/admin/work-links",
       "/admin/content?tab=cover-art",
       "/admin/content?tab=escalations",
       "/admin/sparql",

@@ -59,6 +59,7 @@ const ADMIN_PERMISSIONS = [
 const ALL_ITEMS = [
   "Metadata",
   "Duplicate Review",
+  "Work Links",
   "Cover Art",
   "User Requests",
   "SPARQL Explorer",

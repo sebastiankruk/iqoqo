@@ -24,7 +24,7 @@ The reference maps below are exhaustive by construction and are checked against
 the database schema by ``tests/test_frbr_merge_coverage.py``.  Counts as of this
 writing:
 
-* Work: 15 foreign keys across 11 tables, plus ``SemanticLink``
+* Work: 19 foreign keys across 13 tables, plus ``SemanticLink``
 * Expression: 7 foreign keys across 7 tables, plus ``SemanticLink``
 * Manifestation: 9 foreign keys across 9 tables, plus ``SemanticLink``
 
@@ -60,6 +60,8 @@ from app.db.core import (
     SemanticLink,
     UserWorkIntent,
     WorkExpansionLink,
+    WorkLinkCandidate,
+    WorkRelation,
 )
 from app.db.games import ContainerAggregation
 from app.db.roadmap import RoadmapItem
@@ -114,6 +116,10 @@ _WORK_REFPOINTS: tuple[RefPoint, ...] = (
     RefPoint(WorkSeriesMembership, "series_work_id", ("work_id",)),
     RefPoint(WorkExpansionLink, "base_work_id", ("expansion_work_id",)),
     RefPoint(WorkExpansionLink, "expansion_work_id", ("base_work_id",)),
+    RefPoint(WorkRelation, "source_work_id", ("target_work_id", "relation_type")),
+    RefPoint(WorkRelation, "target_work_id", ("source_work_id", "relation_type")),
+    RefPoint(WorkLinkCandidate, "source_work_id", ("target_work_id",)),
+    RefPoint(WorkLinkCandidate, "target_work_id", ("source_work_id",)),
     RefPoint(ContainerAggregation, "container_work_id", ("aggregated_type", "aggregated_work_id", "aggregated_item_id", "component_name")),
     RefPoint(ContainerAggregation, "aggregated_work_id", ("container_work_id", "component_name")),
     # User-authored data.  UserWorkIntent.work_id is ON DELETE CASCADE, so
@@ -307,6 +313,21 @@ def repoint_references(tier: str, source_id: int, target_id: int) -> dict[str, i
         KeyError: If ``tier`` is not an abstract FRBR level.
     """
     refpoints = REFPOINTS_BY_TIER[tier]
+    if tier == TIER_WORK:
+        # Remove direct links between source and target before repointing so
+        # CHECK (source_work_id <> target_work_id) is never violated.
+        db.session.execute(
+            delete(WorkRelation).where(
+                ((WorkRelation.source_work_id == source_id) & (WorkRelation.target_work_id == target_id))
+                | ((WorkRelation.source_work_id == target_id) & (WorkRelation.target_work_id == source_id))
+            )
+        )
+        db.session.execute(
+            delete(WorkLinkCandidate).where(
+                ((WorkLinkCandidate.source_work_id == source_id) & (WorkLinkCandidate.target_work_id == target_id))
+                | ((WorkLinkCandidate.source_work_id == target_id) & (WorkLinkCandidate.target_work_id == source_id))
+            )
+        )
     moved: dict[str, int] = {}
     for refpoint in refpoints:
         label = f"{refpoint.model.__name__}.{refpoint.fk_attribute}"

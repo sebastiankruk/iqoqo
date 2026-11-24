@@ -1306,6 +1306,7 @@
       "frbr": "FRBR Hierarchy",
       "series": "Series",
       "parts_expansions": "Parts & Expansions",
+      "derivatives": "Derivatives & Adaptations",
       "contributors": "Contributors",
       "maps": "Maps",
       "lod": "LOD"
@@ -1321,5 +1322,31 @@
       "map": "Map",
       "lod": "LOD Authority"
     }
+  },
+  "workLinks": {
+    "title": "Cross-media work links",
+    "subtitle": "Connect distinct works across media (for example, books and film adaptations) without merging their FRBR trees.",
+    "scanButton": "Scan for cross-media links",
+    "scanning": "Scanning...",
+    "manualLinkButton": "Link works manually",
+    "engineLabel": "Reconciliation engine",
+    "engineHeuristic": "Heuristic (deterministic)",
+    "engineLlama": "Local Ollama (LLM)",
+    "pendingTab": "Pending candidates",
+    "confirmedTab": "Confirmed links",
+    "provenanceHeuristic": "Heuristic",
+    "provenanceLlama": "LLM",
+    "accept": "Confirm link",
+    "dismiss": "Dismiss",
+    "unlink": "Unlink",
+    "unlinkConfirmTitle": "Remove work link?",
+    "unlinkConfirmBody": "This removes the cross-media relationship without modifying either work.",
+    "emptyPending": "No pending cross-media link candidates.",
+    "emptyConfirmed": "No confirmed cross-media work links yet.",
+    "manualTitle": "Link works manually",
+    "sourceWorkPlaceholder": "Search derived work (e.g. film, game)...",
+    "targetWorkPlaceholder": "Search source work (e.g. book)...",
+    "relationTypeLabel": "Relationship type",
+    "createLink": "Create link"
   }
 }

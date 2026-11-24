@@ -29,7 +29,7 @@ from app.api.filters import escape_ilike_term
 from app.core.friend_service import get_friend_user_ids
 from app.core.search_service import _meta_text, normalize_diacritics
 from app.db.contributions import Contributor, ExpressionContribution, WorkContribution, WorkPart, WorkSeriesMembership
-from app.db.core import Expression, Item, Manifestation, SemanticLink, Work, WorkExpansionLink
+from app.db.core import Expression, Item, Manifestation, SemanticLink, Work, WorkExpansionLink, WorkRelation
 from app.db.federation import FederationConsent
 from app.db.games import ContainerAggregation
 from app.db.models import db
@@ -56,7 +56,7 @@ VALID_LIBRARY_ENTITY_TYPES: tuple[str, ...] = (
     "map",
     "lod",
 )
-VALID_EDGE_CATEGORIES: tuple[str, ...] = ("frbr", "series", "parts_expansions", "contributors", "maps", "lod")
+VALID_EDGE_CATEGORIES: tuple[str, ...] = ("frbr", "series", "parts_expansions", "derivatives", "contributors", "maps", "lod")
 MAX_GRAPH_DEPTH = 4
 MAX_GRAPH_NODES = 150
 MAX_GRAPH_EDGES = 400
@@ -1110,6 +1110,40 @@ class GraphService:
                         ai_key = enqueue_neighbor("item", agg.aggregated_item, next_hop)
                         if ai_key:
                             add_edge(work_key, ai_key, "has_part", "parts_expansions", agg.component_name)
+
+        # 3b. Confirmed cross-media WorkRelation links (derivatives)
+        if "derivatives" in allowed_categories:
+            outgoing_relations = (
+                db.session.execute(
+                    select(WorkRelation)
+                    .options(selectinload(WorkRelation.target_work))
+                    .where(WorkRelation.source_work_id == work.id)
+                    .order_by(WorkRelation.id.asc())
+                )
+                .scalars()
+                .all()
+            )
+            for rel in outgoing_relations:
+                if rel.target_work:
+                    t_key = enqueue_neighbor("work", rel.target_work, next_hop)
+                    if t_key:
+                        add_edge(work_key, t_key, rel.relation_type, "derivatives", rel.relation_type.replace("_", " "))
+
+            incoming_relations = (
+                db.session.execute(
+                    select(WorkRelation)
+                    .options(selectinload(WorkRelation.source_work))
+                    .where(WorkRelation.target_work_id == work.id)
+                    .order_by(WorkRelation.id.asc())
+                )
+                .scalars()
+                .all()
+            )
+            for rel in incoming_relations:
+                if rel.source_work:
+                    s_key = enqueue_neighbor("work", rel.source_work, next_hop)
+                    if s_key:
+                        add_edge(s_key, work_key, rel.relation_type, "derivatives", rel.relation_type.replace("_", " "))
 
         # 4. Contributors
         if "contributors" in allowed_categories:

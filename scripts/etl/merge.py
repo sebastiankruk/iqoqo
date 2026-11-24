@@ -42,6 +42,8 @@ from app.db.core import (
     UserWorkIntent,
     Work,
     WorkExpansionLink,
+    WorkLinkCandidate,
+    WorkRelation,
 )
 from app.db.social import (
     _SOCIAL_PFX,
@@ -169,6 +171,48 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
                 target_id=canonical_work.id,
                 model_class="WorkExpansionLink",
                 record_count=len(dup_expansions),
+            )
+        )
+
+    # Check for WorkRelation reparenting
+    dup_relations = (
+        db.session.execute(
+            select(WorkRelation).where(
+                (WorkRelation.source_work_id == duplicate_work.id) | (WorkRelation.target_work_id == duplicate_work.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if dup_relations:
+        plan.add_operation(
+            MergeOperation(
+                operation_type="reparent",
+                source_id=duplicate_work.id,
+                target_id=canonical_work.id,
+                model_class="WorkRelation",
+                record_count=len(dup_relations),
+            )
+        )
+
+    # Check for WorkLinkCandidate reparenting
+    dup_candidates = (
+        db.session.execute(
+            select(WorkLinkCandidate).where(
+                (WorkLinkCandidate.source_work_id == duplicate_work.id) | (WorkLinkCandidate.target_work_id == duplicate_work.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if dup_candidates:
+        plan.add_operation(
+            MergeOperation(
+                operation_type="reparent",
+                source_id=duplicate_work.id,
+                target_id=canonical_work.id,
+                model_class="WorkLinkCandidate",
+                record_count=len(dup_candidates),
             )
         )
 
@@ -465,6 +509,8 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
         "reparented_contributions": 0,
         "reparented_work_parts": 0,
         "reparented_expansions": 0,
+        "reparented_work_relations": 0,
+        "reparented_work_link_candidates": 0,
         "reparented_intents": 0,
         "reparented_feedback": 0,
         "reparented_notes": 0,
@@ -526,6 +572,42 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_expansions"] += operation.record_count
+            elif operation.model_class == "WorkRelation":
+                db.session.execute(
+                    text(
+                        "DELETE FROM " + _CATALOG_PFX + "work_relations WHERE (source_work_id = :source AND target_work_id = :target)"
+                        " OR (source_work_id = :target AND target_work_id = :source)"
+                    ),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text("UPDATE " + _CATALOG_PFX + "work_relations SET source_work_id = :target WHERE source_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text("UPDATE " + _CATALOG_PFX + "work_relations SET target_work_id = :target WHERE target_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                stats["reparented_work_relations"] += operation.record_count
+            elif operation.model_class == "WorkLinkCandidate":
+                db.session.execute(
+                    text(
+                        "DELETE FROM "
+                        + _INVENTORY_PFX
+                        + "work_link_candidates WHERE (source_work_id = :source AND target_work_id = :target)"
+                        " OR (source_work_id = :target AND target_work_id = :source)"
+                    ),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text("UPDATE " + _INVENTORY_PFX + "work_link_candidates SET source_work_id = :target WHERE source_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text("UPDATE " + _INVENTORY_PFX + "work_link_candidates SET target_work_id = :target WHERE target_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                stats["reparented_work_link_candidates"] += operation.record_count
             elif operation.model_class == "UserWorkIntent":
                 db.session.execute(
                     text("UPDATE " + _INVENTORY_PFX + "user_work_intents SET work_id = :target WHERE work_id = :source"),

@@ -1306,6 +1306,7 @@
       "frbr": "Hierarchia FRBR",
       "series": "Serie",
       "parts_expansions": "Części i rozszerzenia",
+      "derivatives": "Adaptacje i dzieła pochodne",
       "contributors": "Twórcy",
       "maps": "Mapy",
       "lod": "LOD"
@@ -1321,5 +1322,31 @@
       "map": "Mapa",
       "lod": "Źródło LOD"
     }
+  },
+  "workLinks": {
+    "title": "Powiązania dzieł między mediami",
+    "subtitle": "Łącz odrębne dzieła z różnych mediów (np. książkę i adaptację filmową) bez scalania ich drzew FRBR.",
+    "scanButton": "Skanuj powiązania między mediami",
+    "scanning": "Skanowanie...",
+    "manualLinkButton": "Połącz dzieła ręcznie",
+    "engineLabel": "Silnik uzgadniania",
+    "engineHeuristic": "Heurystyka (deterministyczna)",
+    "engineLlama": "Lokalna Ollama (LLM)",
+    "pendingTab": "Oczekujący kandydaci",
+    "confirmedTab": "Potwierdzone powiązania",
+    "provenanceHeuristic": "Heurystyka",
+    "provenanceLlama": "LLM",
+    "accept": "Potwierdź powiązanie",
+    "dismiss": "Odrzuć",
+    "unlink": "Usuń powiązanie",
+    "unlinkConfirmTitle": "Usunąć powiązanie dzieł?",
+    "unlinkConfirmBody": "Usuwa powiązanie między mediami bez modyfikowania żadnego z dzieł.",
+    "emptyPending": "Brak oczekujących kandydatów do powiązania.",
+    "emptyConfirmed": "Brak potwierdzonych powiązań między mediami.",
+    "manualTitle": "Połącz dzieła ręcznie",
+    "sourceWorkPlaceholder": "Wyszukaj dzieło pochodne (np. film, gra)...",
+    "targetWorkPlaceholder": "Wyszukaj dzieło źródłowe (np. książka)...",
+    "relationTypeLabel": "Typ relacji",
+    "createLink": "Utwórz powiązanie"
   }
 }

@@ -33,6 +33,7 @@ import {
   Code2,
   CopyCheck,
   Database,
+  GitBranch,
   Image as ImageIcon,
   Key,
   LifeBuoy,
@@ -181,6 +182,15 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
                 isActive={activeTab === "duplicates"}
                 onClick={noop}
                 href="/admin/duplicates"
+              />
+            )}
+            {canViewMetadata && (
+              <NavItem
+                label="Work Links"
+                icon={GitBranch}
+                isActive={activeTab === "work-links"}
+                onClick={noop}
+                href="/admin/work-links"
               />
             )}
             {canEditCover && (
