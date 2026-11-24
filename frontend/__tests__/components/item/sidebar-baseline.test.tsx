@@ -120,9 +120,9 @@ describe("ItemSidebar Baseline Suite (Task 1.1)", () => {
     render(<ItemSidebar item={comprehensiveItem} onEdit={onEdit} />);
     expect(screen.getByLabelText("Collection status")).toBeInTheDocument();
     expect(screen.getByLabelText("Item status")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /editMetadata/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Edit Metadata/i })).toBeInTheDocument();
     await user.click(screen.getByTestId("sidebar-manage-menu"));
-    expect(screen.getByText(/makePublic/i)).toBeInTheDocument();
+    expect(screen.getByText(/Make Public/i)).toBeInTheDocument();
     expect(screen.getByTestId("qrcode-btn")).toBeInTheDocument();
   });
 

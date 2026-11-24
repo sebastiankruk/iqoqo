@@ -80,7 +80,7 @@ describe("ItemActions Component", () => {
     render(<ItemActions item={nonOwnerItem} />);
 
     expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
-    expect(screen.queryByText(/removeFromLibrary/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove from library/i)).not.toBeInTheDocument();
   });
 
   it("renders only permitted buttons in labeled Admin Actions dropdown for owner", async () => {
@@ -95,9 +95,9 @@ describe("ItemActions Component", () => {
     const trigger = screen.getByTestId("admin-actions-menu-trigger");
     await user.click(trigger);
 
-    expect(screen.queryByText(/refetchMetadata/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/regenerateCover/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/removeFromLibrary/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Refetch Metadata/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Regenerate Cover/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Remove from library/i)).toBeInTheDocument();
   });
 
   describe("Visibility Guards", () => {
@@ -135,7 +135,7 @@ describe("ItemActions Component", () => {
       render(<ItemActions item={mockItem} />);
 
       expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
-      expect(screen.queryByText(/editFrbr/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Edit FRBR/i)).not.toBeInTheDocument();
     });
 
     it("renders Edit FRBR inside Admin Actions dropdown for user with write:metadata permission", async () => {
@@ -151,7 +151,7 @@ describe("ItemActions Component", () => {
       render(<ItemActions item={mockItem} />);
 
       await user.click(screen.getByTestId("admin-actions-menu-trigger"));
-      expect(screen.getByText(/editFrbr/i)).toBeInTheDocument();
+      expect(screen.getByText(/Edit FRBR/i)).toBeInTheDocument();
     });
   });
 });

@@ -223,8 +223,9 @@ test.describe("New Features Coverage", () => {
     await page.goto(`/item/${itemId}`);
     await page.waitForLoadState("networkidle");
 
-    // 2. Test QR Code Dialog
-    await page.getByRole("button", { name: "Print QR Code" }).click();
+    // 2. Test QR Code Dialog (via consolidated Manage menu)
+    await page.getByTestId("sidebar-manage-menu").click();
+    await page.getByTestId("qrcode-btn").click();
     const qrDialog = page.getByRole("dialog");
     await expect(qrDialog).toBeVisible();
     await expect(qrDialog.getByText("Physical Copy Tracking Label")).toBeVisible();

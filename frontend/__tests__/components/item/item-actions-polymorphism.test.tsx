@@ -46,36 +46,36 @@ describe("ItemHeader Polymorphic Primary CTA", () => {
     vi.clearAllMocks();
   });
 
-  it("renders logReading for a Book", () => {
+  it("renders Log Reading Progress for a Book", () => {
     const bookItem = { ...baseItem, meta: { format: "Book" } } as unknown as Item;
     render(<ItemHeader item={bookItem} />);
 
     const cta = screen.getByTestId("primary-consumption-cta");
-    expect(cta).toHaveTextContent(/logReading/i);
+    expect(cta).toHaveTextContent(/Log Reading Progress/i);
   });
 
-  it("renders nowListening for an Audio item", () => {
+  it("renders Now Listening for an Audio item", () => {
     const audioItem = { ...baseItem, manifestation_meta: { format: "CD" } } as unknown as Item;
     render(<ItemHeader item={audioItem} />);
 
     const cta = screen.getByTestId("primary-consumption-cta");
-    expect(cta).toHaveTextContent(/nowListening/i);
+    expect(cta).toHaveTextContent(/Now Listening/i);
   });
 
-  it("renders markAsWatched for a Video item", () => {
+  it("renders Mark as Watched for a Video item", () => {
     const videoItem = { ...baseItem, meta: { format: "DVD" } } as unknown as Item;
     render(<ItemHeader item={videoItem} />);
 
     const cta = screen.getByTestId("primary-consumption-cta");
-    expect(cta).toHaveTextContent(/markAsWatched/i);
+    expect(cta).toHaveTextContent(/Mark as Watched/i);
   });
 
-  it("renders logPlay for a Game", () => {
+  it("renders Log Play for a Game", () => {
     const gameItem = { ...baseItem, meta: { format: "BoardGame" } } as unknown as Item;
     render(<ItemHeader item={gameItem} />);
 
     const cta = screen.getByTestId("primary-consumption-cta");
-    expect(cta).toHaveTextContent(/logPlay/i);
+    expect(cta).toHaveTextContent(/Log Play/i);
   });
 
   it("omits primary consumption CTA for non-owners", () => {

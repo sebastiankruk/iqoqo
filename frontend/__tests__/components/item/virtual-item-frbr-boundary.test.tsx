@@ -115,7 +115,7 @@ describe("ItemSidebar FRBR Virtual Item Boundary", () => {
     // Open Manage menu to access Print QR Code
     await user.click(screen.getByTestId("sidebar-manage-menu"));
     expect(screen.getByTestId("qrcode-btn")).toBeInTheDocument();
-    expect(screen.getByText(/printQrCode/i)).toBeInTheDocument();
+    expect(screen.getByText(/Print QR Code/i)).toBeInTheDocument();
   });
 
   it("hides the QR Code button for items without manifestation_id", async () => {
