@@ -167,7 +167,7 @@ export function TopBar({
                     data-testid="policy-selector-trigger"
                     title={t(activePolicyConfig.hintKey)}
                     aria-label={`${t("topBar.policyLabel")}: ${t(activePolicyConfig.labelKey)}`}
-                    className="inline-flex h-8 items-center gap-1 rounded-full border border-white/25 bg-white text-black px-2.5 text-xs font-bold shadow-sm transition-colors hover:bg-white/90 min-w-0"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-white/20 min-w-0"
                   >
                     <span className="truncate max-w-[84px]">{t(activePolicyConfig.labelKey)}</span>
                     <ChevronDown className="h-3.5 w-3.5 opacity-75 shrink-0" />
