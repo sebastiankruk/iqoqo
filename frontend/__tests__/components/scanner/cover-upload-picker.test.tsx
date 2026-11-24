@@ -313,5 +313,27 @@ describe("CoverUploadPicker Component", () => {
         expect(toast.error).toHaveBeenCalledWith("Network Error");
       });
     });
+
+    it("omits hardcoded boundary-less Content-Type header and honors inline + sr-only inputs", async () => {
+      renderComponent({
+        manifestation_id: 42,
+        inline: true,
+        label: "Replace Cover",
+      });
+
+      const wrapper = screen.getByTestId("cover-upload-picker");
+      expect(wrapper.className).toContain("inline-flex");
+      expect(screen.getByTestId("camera-file-input").className).toContain("sr-only");
+      expect(screen.getByTestId("gallery-file-input").className).toContain("sr-only");
+
+      const file = new File(["test data"], "cover.jpg", { type: "image/jpeg" });
+      fireEvent.change(screen.getByTestId("gallery-file-input"), { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(apiClient.post).toHaveBeenCalledWith("/manifestations/42/cover", expect.any(FormData));
+      });
+      const callArgs = vi.mocked(apiClient.post).mock.calls[0];
+      expect(callArgs[2]).toBeUndefined();
+    });
   });
 });

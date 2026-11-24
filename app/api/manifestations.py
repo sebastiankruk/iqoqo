@@ -963,13 +963,24 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     )
 
     if task_id is None:
-        # Queue unavailable (e.g. Redis down): raw file is saved; mark as pending so
-        # the user or admin can trigger regeneration once the queue recovers.
-        manifestation.update_meta(cover_status="pending")
-        db.session.commit()
-
+        # Queue unavailable (e.g. Redis down): execute Tier 1 user-photo processing
+        # synchronously so the cover is immediately ready rather than stranded in RAW_DIR.
         from app.core.events import publish_transition_event
         from app.core.tasks import enqueue_fts_reindex
+        from app.utils.covers import process_cover_pipeline
+
+        process_cover_pipeline(
+            manifestation.id,
+            identifier,
+            title,
+            author,
+            llm_permissions=llm_permissions,
+            user_id=user_id_str,
+            user_image_path=filepath,
+        )
+        db.session.refresh(manifestation)
+        meta = manifestation.meta or {}
+        cover_status = meta.get("cover_status", "ready")
 
         enqueue_fts_reindex("manifestation", manifestation.id)
         publish_transition_event("manifestation_updated", {"manifestation_id": manifestation.id})
@@ -977,11 +988,18 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
             jsonify(
                 {
                     "success": True,
-                    "data": {"task_id": None, "message": "Cover saved; processing deferred — queue unavailable"},
+                    "data": {
+                        "task_id": None,
+                        "cover_url": manifestation.cover_url,
+                        "cover_source": meta.get("cover_source"),
+                        "cover_status": cover_status,
+                        "cover_status_updated_at": meta.get("cover_status_updated_at"),
+                        "message": "Cover uploaded and processed synchronously",
+                    },
                     "error": None,
                 }
             ),
-            202,
+            200,
         )
 
     return jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover upload processing started"}, "error": None}), 202

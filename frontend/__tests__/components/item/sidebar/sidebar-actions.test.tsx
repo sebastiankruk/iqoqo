@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { SidebarActions } from "@/components/item/sidebar/sidebar-actions";
 import type { Item } from "@/types/frbr";
@@ -30,7 +31,8 @@ describe("SidebarActions Unit Test (Plain Props)", () => {
     collection_status: "available",
   } as unknown as Item;
 
-  it("renders collection and status controls for item modifier", () => {
+  it("renders collection and status controls for item modifier", async () => {
+    const user = userEvent.setup();
     const onEdit = vi.fn();
     render(
       <SidebarActions
@@ -45,8 +47,9 @@ describe("SidebarActions Unit Test (Plain Props)", () => {
 
     expect(screen.getByLabelText("Collection status")).toBeInTheDocument();
     expect(screen.getByLabelText("Item status")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Edit Metadata/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Print QR Code/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /editMetadata/i })).toBeInTheDocument();
+    await user.click(screen.getByTestId("sidebar-manage-menu"));
+    expect(screen.getByTestId("qrcode-btn")).toBeInTheDocument();
   });
 
   it("renders loan request action for public borrower", () => {
@@ -66,7 +69,8 @@ describe("SidebarActions Unit Test (Plain Props)", () => {
     expect(screen.getByRole("button", { name: /Request Loan/i })).toBeInTheDocument();
   });
 
-  it("renders Reassign Owner action for admin or user with transfer:item permission", () => {
+  it("renders Reassign Owner action for admin or user with transfer:item permission", async () => {
+    const user = userEvent.setup();
     render(
       <SidebarActions
         item={{ ...mockItem, owner_id: "user-owner-1" } as unknown as Item}
@@ -78,7 +82,8 @@ describe("SidebarActions Unit Test (Plain Props)", () => {
       />
     );
 
-    const reassignLink = screen.getByRole("link", { name: /Reassign Owner/i });
+    await user.click(screen.getByTestId("sidebar-manage-menu"));
+    const reassignLink = screen.getByText(/Reassign Owner|reassignOwner/i).closest("a");
     expect(reassignLink).toBeInTheDocument();
     expect(reassignLink).toHaveAttribute("href", "/admin/ownership?sourceUserId=user-owner-1&itemId=10");
   });

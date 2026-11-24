@@ -61,6 +61,7 @@ vi.mock("@/lib/api/hooks", async importOriginal => {
     useWork: (_id: number, initial?: WorkDetail) => ({ data: initial, isLoading: false, isError: false }),
     useExpression: (_id: number, initial?: ExpressionDetail) => ({ data: initial, isLoading: false }),
     useWorkParts: () => ({ data: { data: [] } }),
+    useUpdateItem: () => ({ mutate: vi.fn(), isPending: false }),
     useProfile: () => ({ data: null }),
   };
 });

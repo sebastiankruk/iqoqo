@@ -822,7 +822,14 @@ export function useManifestationWithPolling(initialData: Item) {
     queryKey: queryKeys.item(initialData.id),
     queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
     initialData: initialData,
-    refetchInterval: query => (query.state.data?.cover_status === "pending" ? 10000 : false),
+    refetchInterval: query => {
+      const data = query.state.data;
+      const status =
+        data?.cover_status ??
+        (data?.manifestation_meta?.["cover_status"] as string | undefined) ??
+        (data?.meta?.["cover_status"] as string | undefined);
+      return status === "pending" || status === "processing" ? 3000 : false;
+    },
   });
   return { item };
 }

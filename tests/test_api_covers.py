@@ -236,3 +236,51 @@ def test_refetch_cover_falls_back_to_meta_identifier(client, admin_headers):
         mock_start.assert_called_once()
         args, _ = mock_start.call_args
         assert args[1] == "9781444729764"
+
+
+def test_upload_cover_synchronous_fallback_when_queue_unavailable(client, admin_headers, monkeypatch, tmp_path):
+    """Verify POST /api/manifestations/<id>/cover processes Tier 1 synchronously when task_id is None."""
+    import io
+
+    from PIL import Image
+
+    from app.db.models import Expression, Manifestation, Work, db
+
+    covers_dir = tmp_path / "covers"
+    raw_dir = tmp_path / "raw_covers"
+    monkeypatch.setattr("app.utils.covers.COVERS_DIR", str(covers_dir))
+    monkeypatch.setattr("app.api.manifestations.RAW_DIR", str(raw_dir))
+
+    with client.application.app_context():
+        work = Work(title="Sync Cover Upload", meta={"authors": ["Sync Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="5555555555555")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    img_io = io.BytesIO()
+    Image.new("RGB", (80, 120), color="green").save(img_io, "JPEG")
+    img_io.seek(0)
+
+    with patch("app.api.manifestations.start_cover_processing", return_value=None):
+        response = client.post(
+            f"/api/manifestations/{manif_id}/cover",
+            headers=admin_headers,
+            data={"cover": (img_io, "cover.jpg"), "source": "user_upload"},
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["data"]["task_id"] is None
+    assert payload["data"]["cover_status"] == "ready"
+    assert payload["data"]["cover_source"] == "user_photo"
+    assert payload["data"]["cover_url"] == "/static/covers/5555555555555_user.jpg"
+    assert payload["data"]["cover_status_updated_at"]
+    assert (covers_dir / "5555555555555_user.jpg").is_file()

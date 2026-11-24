@@ -37,6 +37,10 @@ vi.mock("@/lib/api/hooks", () => ({
   useWorkParts: () => ({
     data: { data: [] },
   }),
+  useUpdateItem: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 const mockItem: Item = {

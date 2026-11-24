@@ -40,7 +40,7 @@ export function SidebarCover({ item, coverUrl, isAudio, isVideo, isGame }: Sideb
   const MediaIcon = isAudio ? Disc : isVideo ? Film : isGame ? Gamepad2 : BookOpen;
 
   return (
-    <div className="-mt-28 w-full max-w-[220px] flex flex-col items-center">
+    <div className="hidden lg:flex -mt-28 w-full max-w-[220px] flex-col items-center">
       <div
         className={`relative ${aspectClass} w-full overflow-hidden rounded-lg shadow-xl ring-4 ring-card bg-secondary`}
       >

@@ -146,7 +146,7 @@ describe("ItemSidebar Component", () => {
     } as unknown as Item;
 
     render(<ItemSidebar item={anonymizedItem} onEdit={vi.fn()} />);
-    expect(screen.queryByText(/Edit Metadata/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/editMetadata/i)).not.toBeInTheDocument();
   });
 
   it("shows Edit Metadata button when owner is not anonymized", () => {
@@ -156,7 +156,7 @@ describe("ItemSidebar Component", () => {
     } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
     render(<ItemSidebar item={mockItem} onEdit={vi.fn()} />);
-    expect(screen.getByText(/Edit Metadata/i)).toBeInTheDocument();
+    expect(screen.getByText(/editMetadata/i)).toBeInTheDocument();
   });
 
   it("redirects to new positive ID when virtual item is converted to physical item", () => {
@@ -211,7 +211,9 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={mockItem} />);
 
-      expect(screen.getByText("Named Collections")).toBeInTheDocument();
+      const toggleBtn = screen.getByRole("button", { name: /namedCollections/i });
+      expect(toggleBtn).toBeInTheDocument();
+      fireEvent.click(toggleBtn);
       expect(screen.getByText("Favorites")).toBeInTheDocument();
       expect(screen.getByText("Add to named collection")).toBeInTheDocument();
     });
@@ -232,7 +234,8 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={mockItem} />);
 
-      expect(screen.getByText("Named Collections")).toBeInTheDocument();
+      const toggleBtn = screen.getByRole("button", { name: /namedCollections/i });
+      fireEvent.click(toggleBtn);
       expect(screen.getByText(/Not in any named collections yet/i)).toBeInTheDocument();
     });
 
@@ -245,7 +248,7 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={itemWithModifyPermission} />);
 
-      expect(screen.queryByText("Named Collections")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /namedCollections/i })).toBeInTheDocument();
     });
   });
 

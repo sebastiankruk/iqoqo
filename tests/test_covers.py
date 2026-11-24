@@ -1011,3 +1011,46 @@ def test_process_cover_pipeline_accepts_dict_job(app, monkeypatch):
         _, kwargs = fake_manif.update_meta.call_args
         assert kwargs["cover_source"] == "fallback_pil"
         assert kwargs["cover_status"] == "ready"
+
+
+def test_process_cover_pipeline_creates_covers_dir_for_user_image(app, monkeypatch, tmp_path):
+    """Ensure Tier 1 user_image_path processing creates COVERS_DIR if missing."""
+    from PIL import Image
+
+    from app.db.models import Expression, Manifestation, Work, db
+
+    missing_covers_dir = tmp_path / "nested" / "covers"
+    assert not missing_covers_dir.exists()
+    monkeypatch.setattr("app.utils.covers.COVERS_DIR", str(missing_covers_dir))
+
+    raw_img_path = tmp_path / "user_upload.jpg"
+    Image.new("RGB", (64, 64), color="blue").save(raw_img_path, "JPEG")
+
+    with app.app_context():
+        work = Work(title="Missing Dir Cover Work", meta={"authors": ["Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9780000000099")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+        process_cover_pipeline(
+            manifestation_id=manif_id,
+            identifier="9780000000099",
+            title="Missing Dir Cover Work",
+            author="Author",
+            user_image_path=str(raw_img_path),
+        )
+
+        db.session.expire_all()
+        refreshed = db.session.get(Manifestation, manif_id)
+        assert missing_covers_dir.is_dir()
+        assert (missing_covers_dir / "9780000000099_user.jpg").is_file()
+        assert refreshed is not None
+        assert refreshed.cover_url == "/static/covers/9780000000099_user.jpg"
+        assert refreshed.meta["cover_status"] == "ready"
+        assert refreshed.meta["cover_source"] == "user_photo"

@@ -25,6 +25,7 @@
  *   - Physical items are concrete Item records (id > 0) — QR labeling is applicable.
  */
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import type { Item } from "@/types/frbr";
@@ -105,21 +106,25 @@ describe("ItemSidebar FRBR Virtual Item Boundary", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the QR Code button for physical items (id > 0)", () => {
+  it("shows the QR Code button for physical items (id > 0)", async () => {
+    const user = userEvent.setup();
     // Physical item: concrete Item record with a positive ID
     const physicalItem = makeItem({ id: 5, manifestation_id: 10 });
     render(<ItemSidebar item={physicalItem} />);
 
-    // The QR Code button must be present for owned physical items
+    // Open Manage menu to access Print QR Code
+    await user.click(screen.getByTestId("sidebar-manage-menu"));
     expect(screen.getByTestId("qrcode-btn")).toBeInTheDocument();
-    expect(screen.getByText("Print QR Code")).toBeInTheDocument();
+    expect(screen.getByText(/printQrCode/i)).toBeInTheDocument();
   });
 
-  it("hides the QR Code button for items without manifestation_id", () => {
+  it("hides the QR Code button for items without manifestation_id", async () => {
+    const user = userEvent.setup();
     // Items without manifestation_id cannot have QR codes generated
     const itemWithoutManifestation = makeItem({ id: 10, manifestation_id: undefined });
     render(<ItemSidebar item={itemWithoutManifestation} />);
 
+    await user.click(screen.getByTestId("sidebar-manage-menu"));
     expect(screen.queryByTestId("qrcode-btn")).not.toBeInTheDocument();
   });
 });

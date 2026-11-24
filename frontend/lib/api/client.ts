@@ -47,6 +47,13 @@ export const apiClient = axios.create({
 export async function mobileRequestInterceptor(
   config: InternalAxiosRequestConfig
 ): Promise<InternalAxiosRequestConfig> {
+  if (config.data instanceof FormData && config.headers) {
+    if (typeof config.headers.delete === "function") {
+      config.headers.delete("Content-Type");
+    } else {
+      delete (config.headers as Record<string, unknown>)["Content-Type"];
+    }
+  }
   if (isNativeApp()) {
     config.withCredentials = false;
     const instanceUrl = await getInstanceUrl();

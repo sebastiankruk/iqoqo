@@ -214,3 +214,49 @@ class TestPermissionScenarios:
                 # This documents the expected security model
                 # (test passes regardless - for documentation)
                 assert True
+
+    def test_manifestation_cover_upload_rbac_enforcement(self, client, normal_user_headers, app):
+        """POST /api/manifestations/<id>/cover enforces 401 unauthenticated and 403 without UPLOAD_COVER."""
+        from app.db.models import Permission, Role, User
+
+        work = frbr_service.create_work(title="Manifestation Cover RBAC")
+        expr = frbr_service.create_expression(work_id=work.id)
+        manif = frbr_service.create_manifestation(expression_id=expr.id, meta={})
+        db.session.commit()
+
+        img_io = io.BytesIO()
+        Image.new("RGB", (60, 60), color="red").save(img_io, "JPEG")
+
+        unauth_resp = client.post(
+            f"/api/manifestations/{manif.id}/cover",
+            data={"cover": (io.BytesIO(img_io.getvalue()), "cover.jpg")},
+            content_type="multipart/form-data",
+        )
+        assert unauth_resp.status_code == 401
+
+        # Strip upload:cover from user role if present to verify 403 enforcement
+        with app.app_context():
+            user_role = Role.query.filter_by(name="user").first()
+            upload_perm = Permission.query.filter_by(name="upload:cover").first()
+            had_perm = False
+            if user_role and upload_perm and upload_perm in user_role.permissions:
+                user_role.permissions.remove(upload_perm)
+                db.session.commit()
+                had_perm = True
+
+        try:
+            forbidden_resp = client.post(
+                f"/api/manifestations/{manif.id}/cover",
+                headers=normal_user_headers,
+                data={"cover": (io.BytesIO(img_io.getvalue()), "cover.jpg")},
+                content_type="multipart/form-data",
+            )
+            assert forbidden_resp.status_code == 403
+        finally:
+            if had_perm:
+                with app.app_context():
+                    user_role = Role.query.filter_by(name="user").first()
+                    upload_perm = Permission.query.filter_by(name="upload:cover").first()
+                    if user_role and upload_perm and upload_perm not in user_role.permissions:
+                        user_role.permissions.append(upload_perm)
+                        db.session.commit()

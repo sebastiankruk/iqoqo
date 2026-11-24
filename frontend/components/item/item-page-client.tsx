@@ -66,13 +66,13 @@ function ItemDetail(props: ItemDetailProps) {
           prefix="schema: https://schema.org/ frbr: http://iflastandards.info/ns/frbr/frbrer/"
         >
           <div className="flex flex-col lg:flex-row">
-            {/* Sidebar – 30% */}
-            <aside className="w-full border-b border-border bg-card p-6 lg:w-[30%] lg:border-b-0 lg:border-r">
+            {/* Sidebar – 30% (below summary on mobile, left on desktop) */}
+            <aside className="order-2 lg:order-1 w-full border-t border-border bg-card p-6 lg:w-[30%] lg:border-t-0 lg:border-r">
               <ItemSidebar item={item} />
             </aside>
 
-            {/* Main content – 70% */}
-            <div className="flex w-full flex-col gap-6 p-6 lg:w-[70%] lg:p-8">
+            {/* Main content – 70% (above the fold on mobile, right on desktop) */}
+            <div className="order-1 lg:order-2 flex w-full flex-col gap-6 p-6 lg:w-[70%] lg:p-8">
               <ItemHeader item={item} />
 
               <ItemTabs item={item} />

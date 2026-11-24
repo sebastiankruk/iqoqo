@@ -20,7 +20,6 @@ import { useTranslations } from "next-intl";
 import { FileText, History, Images, BookOpen, MessageSquare, Layers, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useWorkParts, useProfile } from "@/lib/api/hooks";
-import { PermissionName } from "@/lib/permissions";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -291,13 +290,11 @@ export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
   const { data: profile } = useProfile();
 
-  const permissions = profile?.permissions ?? [];
   const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
   const isBorrower = !!item.is_borrowed || (!!profile && item.lent_to_user_id === profile.id);
   const isAdmin = !!profile?.roles?.includes("admin");
-  const hasUpdatePermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
-  const canViewHistory = isOwner || isBorrower || isAdmin || hasUpdatePermission;
+  const canViewHistory = isOwner || isBorrower || isAdmin;
 
   const visibleTabs = TABS.filter(tab => {
     if (tab.id === "history") return canViewHistory && item.id > 0;
