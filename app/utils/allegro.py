@@ -110,19 +110,14 @@ def save_allegro_token(tokens: dict[str, Any]) -> None:
 
 
 def load_allegro_token() -> dict[str, Any] | None:
-    """Load Allegro OAuth token dictionary from cache or database."""
+    """Load Allegro OAuth token dictionary from database (authoritative) or cache fallback."""
     from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
     from app.core.cache import cache
     from app.db.models import InstanceSettings
 
-    try:
-        cached = cache.get("allegro_token_data")
-        if cached and isinstance(cached, dict) and cached.get("access_token"):
-            return cast(dict[str, Any], cached)
-    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
-        logger.debug("Failed to read Allegro token from cache: %s", e)
-
+    # Always prefer InstanceSettings over in-process SimpleCache so multi-worker
+    # Gunicorn/Celery setups never serve stale refresh_failed tokens after Device Flow.
     try:
         db_token = InstanceSettings.get_value("ALLEGRO_TOKEN_DATA")
         if db_token and isinstance(db_token, dict) and db_token.get("access_token"):
@@ -133,6 +128,13 @@ def load_allegro_token() -> dict[str, Any] | None:
             return cast(dict[str, Any], db_token)
     except (SQLAlchemyError, DBAPIError, RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
         logger.debug("Failed to read Allegro token from InstanceSettings: %s", e)
+
+    try:
+        cached = cache.get("allegro_token_data")
+        if cached and isinstance(cached, dict) and cached.get("access_token"):
+            return cast(dict[str, Any], cached)
+    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to read Allegro token from cache: %s", e)
 
     return None
 

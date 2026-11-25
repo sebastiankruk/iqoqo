@@ -243,3 +243,25 @@ def test_allegro_403_logs_warning_with_auth_mode_without_secret(caplog):
     assert "403" in caplog.text
     assert "client_credentials" in caplog.text
     assert secret_token not in caplog.text
+
+
+def test_load_allegro_token_prefers_db_over_stale_simplecache(app):
+    """Multi-worker SimpleCache stale refresh_failed never overrides fresh InstanceSettings token."""
+    from app.core.cache import cache
+    from app.db.models import InstanceSettings
+    from app.utils.allegro import load_allegro_token
+
+    with app.app_context():
+        cache.set(
+            "allegro_token_data",
+            {"access_token": "stale_tok", "refresh_failed": True, "refresh_error": "invalid_grant"},
+            timeout=86400,
+        )
+        InstanceSettings.set_value(
+            "ALLEGRO_TOKEN_DATA",
+            {"access_token": "fresh_db_tok", "refresh_token": "fresh_ref", "created_at": time.time()},
+        )
+        loaded = load_allegro_token()
+        assert loaded is not None
+        assert loaded["access_token"] == "fresh_db_tok"
+        assert not loaded.get("refresh_failed")
