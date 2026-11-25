@@ -31,8 +31,13 @@ The `/item/[id]` detail page SHALL NOT render an expanded `<SemanticLinks />` ca
 - **WHEN** the user clicks the collapsed `"Linked Open Data"` accordion toggle at the bottom of the sidebar stack
 - **THEN** the disclosure expands inline without an outer `<Card>` border or tall dashed placeholder, showing either a single-line empty hint + `"Scan External LOD"` button or compact authority link rows with confidence and delete controls (when `canEdit` is true)
 
-#### Scenario: Expanding Admin Actions accordion preserves custodian menu, Requests, and pending escalation visibility
+#### Scenario: Expanding Admin Actions accordion preserves custodian menu, Requests, and pending escalation visibility without double dropdown
 - **GIVEN** a custodian or owner with metadata/cover/delete permissions (or a non-custodian user eligible to submit help requests)
 - **WHEN** viewing the bottom accordion stack on `/item/[id]`
-- **THEN** any active pending Help Request status remains surfaced cleanly without blocking owner shelf controls, and expanding `"Admin Actions"` exposes the `"Admin Actions"` menu (`Refetch Metadata`, `Edit FRBR Hierarchy`, `Refetch Cover`, `Regenerate Cover`, `Edit Cover Art`, `Remove from library`) and `"Requests"` trigger with `<= 4` visible triggers per row
-- **AND** a standard non-owner user lacking custodian permissions still sees NO `"Admin Actions"` row in the accordion
+- **THEN** expanding the `"Admin Actions"` disclosure directly reveals inline action buttons (`Refetch Metadata`, `Edit FRBR`, `Refetch Cover`, `Regenerate Cover`, `Edit Cover Art`, `Remove from library`) without a redundant nested `"Admin Actions"` dropdown button
+- **AND** when only non-custodian help requests apply, the accordion header reads `"Help Requests"` instead of `"Admin Actions"`, while a standard non-owner user lacking both admin and escalation permissions sees NO `"Admin Actions"` row at all
+
+#### Scenario: ItemHeader renders media badge, title/authors first, then single-row Primary CTA + Explore Graph
+- **GIVEN** an authenticated owner viewing `/item/[id]` on mobile (`390x844`)
+- **WHEN** `ItemHeader` renders above the fold
+- **THEN** the media badge appears directly beneath the FRBR breadcrumb, followed by the `<h1>` title and authors, followed by a unified action row leading with the Primary CTA (`Mark as Read` / `Log Reading Progress`) beside `Explore Graph`, above a tightly padded Quick Meta block

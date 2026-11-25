@@ -153,5 +153,22 @@ describe("ItemActions Component", () => {
       await user.click(screen.getByTestId("admin-actions-menu-trigger"));
       expect(screen.getByText(/Edit FRBR/i)).toBeInTheDocument();
     });
+
+    it("renders flat inline actions without a nested Admin Actions dropdown when compact=true", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "test-id",
+          email: "test@example.com",
+          permissions: ["write:metadata", "delete:item"],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      render(<ItemActions item={{ ...mockItem, is_owner: true }} compact={true} />);
+
+      expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
+      expect(screen.getByTestId("admin-actions-inline-list")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Edit FRBR/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Remove from library/i })).toBeInTheDocument();
+    });
   });
 });

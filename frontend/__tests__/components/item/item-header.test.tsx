@@ -87,4 +87,16 @@ describe("ItemHeader Format Label Fallbacks", () => {
     expect(screen.getByText("Movie")).toBeInTheDocument();
     expect(screen.queryByText("Book")).not.toBeInTheDocument();
   });
+
+  it("places heading before action buttons and leads action row with Primary CTA", () => {
+    const ownerItem: Item = { ...mockItem, is_owner: true, status: "reading" };
+    render(<ItemHeader item={ownerItem} />);
+
+    const heading = screen.getByRole("heading", { name: "Test Video Item" });
+    const primaryCta = screen.getByTestId("primary-consumption-cta");
+    const exploreGraph = screen.getByTestId("explore-graph-link");
+
+    expect(heading.compareDocumentPosition(primaryCta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(primaryCta.compareDocumentPosition(exploreGraph) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

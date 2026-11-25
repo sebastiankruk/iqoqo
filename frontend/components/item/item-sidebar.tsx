@@ -16,6 +16,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import type { Item } from "@/types/frbr";
 import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
@@ -60,6 +61,7 @@ interface ItemSidebarProps {
  * @returns {JSX.Element} The component
  */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
+  const tSidebar = useTranslations("ItemDetail.sidebar");
   const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
 
   const coverUrl =
@@ -215,6 +217,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         }
         adminActionsNode={
           showAdminAccordionActions || showRequestsAccordion ? <ItemActions item={item} compact /> : undefined
+        }
+        adminAccordionLabel={
+          !showAdminAccordionActions && showRequestsAccordion ? tSidebar("helpRequests") : tSidebar("adminActions")
         }
       />
 

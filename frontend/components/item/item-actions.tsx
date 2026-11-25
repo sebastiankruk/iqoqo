@@ -228,9 +228,195 @@ export function ItemActions({ item, compact = false }: { item: Item; compact?: b
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {showRequestsSection &&
-          (itemEscalations.length > 0 ? (
+      {showAdminActions && compact ? (
+        <div className="flex flex-col gap-0.5 w-full" data-testid="admin-actions-inline-list">
+          {canRefetchMetadata && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRefetch}
+              disabled={isRefetching}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <CloudDownload className={`h-3.5 w-3.5 shrink-0 ${isRefetching ? "animate-bounce" : ""}`} />
+              <span>{isRefetching ? tAdmin("fetching") : tAdmin("refetchMetadata")}</span>
+            </Button>
+          )}
+          {canEditFrbr && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <Pencil className="h-3.5 w-3.5 shrink-0" />
+              <span>{tAdmin("editFrbr")}</span>
+            </Button>
+          )}
+          {canRefetchCover && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRefetchCover}
+              disabled={isPending || isRefetchingCover}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <ImageDown className="h-3.5 w-3.5 shrink-0" />
+              <span>{tAdmin("refetchCover")}</span>
+            </Button>
+          )}
+          {canRegenerateCover && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRegenerateClick}
+              disabled={isPending || isRequesting}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${isRequesting ? "animate-spin" : ""}`} />
+              <span>{tAdmin("regenerateCover")}</span>
+            </Button>
+          )}
+          {canEditCoverArt && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+              <span>{tAdmin("editCoverArt")}</span>
+            </Button>
+          )}
+          {canDeleteItem && (
+            <>
+              {(canRefetchMetadata || canEditFrbr || canRefetchCover || canRegenerateCover || canEditCoverArt) && (
+                <div className="my-1 border-t border-border/40" />
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteItem.isPending}
+                className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                <span>{tAdmin("removeFromLibrary")}</span>
+              </Button>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {showRequestsSection &&
+            (itemEscalations.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsRequestsOpen(!isRequestsOpen)}
+                className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
+              >
+                {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <span>Requests ({itemEscalations.length})</span>
+              </Button>
+            ) : (
+              <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
+            ))}
+
+          {showAdminActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="admin-actions-menu-trigger"
+                  className="flex items-center gap-2 text-xs font-semibold"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  <span>{tAdmin("trigger")}</span>
+                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {canRefetchMetadata && (
+                  <DropdownMenuItem onSelect={handleRefetch} disabled={isRefetching} className="cursor-pointer gap-2">
+                    <CloudDownload className={`h-4 w-4 ${isRefetching ? "animate-bounce" : ""}`} />
+                    <span>{isRefetching ? tAdmin("fetching") : tAdmin("refetchMetadata")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canEditFrbr && (
+                  <DropdownMenuItem
+                    onSelect={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+                    className="cursor-pointer gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span>{tAdmin("editFrbr")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canRefetchCover && (
+                  <DropdownMenuItem
+                    onSelect={handleRefetchCover}
+                    disabled={isPending || isRefetchingCover}
+                    className="cursor-pointer gap-2"
+                  >
+                    <ImageDown className="h-4 w-4" />
+                    <span>{tAdmin("refetchCover")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canRegenerateCover && (
+                  <DropdownMenuItem
+                    onSelect={handleRegenerateClick}
+                    disabled={isPending || isRequesting}
+                    className="cursor-pointer gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRequesting ? "animate-spin" : ""}`} />
+                    <span>{tAdmin("regenerateCover")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canEditCoverArt && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)
+                    }
+                    className="cursor-pointer gap-2"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    <span>{tAdmin("editCoverArt")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canDeleteItem && (
+                  <>
+                    {(canRefetchMetadata ||
+                      canEditFrbr ||
+                      canRefetchCover ||
+                      canRegenerateCover ||
+                      canEditCoverArt) && <DropdownMenuSeparator />}
+                    <DropdownMenuItem
+                      onSelect={() => setDeleteConfirmOpen(true)}
+                      disabled={deleteItem.isPending}
+                      className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>{tAdmin("removeFromLibrary")}</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+
+      {showAdminActions && compact && showRequestsSection && (
+        <div className="pt-1 border-t border-border/40">
+          {itemEscalations.length > 0 ? (
             <Button
               variant="ghost"
               size="sm"
@@ -242,87 +428,9 @@ export function ItemActions({ item, compact = false }: { item: Item; compact?: b
             </Button>
           ) : (
             <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
-          ))}
-
-        {showAdminActions && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="admin-actions-menu-trigger"
-                className="flex items-center gap-2 text-xs font-semibold"
-              >
-                <Shield className="h-3.5 w-3.5" />
-                <span>{tAdmin("trigger")}</span>
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {canRefetchMetadata && (
-                <DropdownMenuItem onSelect={handleRefetch} disabled={isRefetching} className="cursor-pointer gap-2">
-                  <CloudDownload className={`h-4 w-4 ${isRefetching ? "animate-bounce" : ""}`} />
-                  <span>{isRefetching ? tAdmin("fetching") : tAdmin("refetchMetadata")}</span>
-                </DropdownMenuItem>
-              )}
-              {canEditFrbr && (
-                <DropdownMenuItem
-                  onSelect={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
-                  className="cursor-pointer gap-2"
-                >
-                  <Pencil className="h-4 w-4" />
-                  <span>{tAdmin("editFrbr")}</span>
-                </DropdownMenuItem>
-              )}
-              {canRefetchCover && (
-                <DropdownMenuItem
-                  onSelect={handleRefetchCover}
-                  disabled={isPending || isRefetchingCover}
-                  className="cursor-pointer gap-2"
-                >
-                  <ImageDown className="h-4 w-4" />
-                  <span>{tAdmin("refetchCover")}</span>
-                </DropdownMenuItem>
-              )}
-              {canRegenerateCover && (
-                <DropdownMenuItem
-                  onSelect={handleRegenerateClick}
-                  disabled={isPending || isRequesting}
-                  className="cursor-pointer gap-2"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isRequesting ? "animate-spin" : ""}`} />
-                  <span>{tAdmin("regenerateCover")}</span>
-                </DropdownMenuItem>
-              )}
-              {canEditCoverArt && (
-                <DropdownMenuItem
-                  onSelect={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
-                  className="cursor-pointer gap-2"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                  <span>{tAdmin("editCoverArt")}</span>
-                </DropdownMenuItem>
-              )}
-              {canDeleteItem && (
-                <>
-                  {(canRefetchMetadata || canEditFrbr || canRefetchCover || canRegenerateCover || canEditCoverArt) && (
-                    <DropdownMenuSeparator />
-                  )}
-                  <DropdownMenuItem
-                    onSelect={() => setDeleteConfirmOpen(true)}
-                    disabled={deleteItem.isPending}
-                    className="cursor-pointer gap-2 text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span>{tAdmin("removeFromLibrary")}</span>
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Requests accordion content */}
       {showRequestsSection && isRequestsOpen && (

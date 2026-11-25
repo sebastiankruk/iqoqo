@@ -9,7 +9,8 @@ Per the `/ux-audit` inspection of `/home/sebastiankruk/Downloads/iqoqo/Screensho
 
 - **Goals:**
   - Compress `SemanticLinks` into a compact borderless disclosure panel without outer `<Card>` padding/borders or tall dashed empty box.
-  - Move both `Linked Open Data` and `Admin Actions` / `Requests` into the bottom collapsible accordion list below `Taxonomy` inside the sidebar footer stack (`SidebarActions`).
+  - Move both `Linked Open Data` and `Admin Actions` / `Requests` into the bottom collapsible accordion list below `Taxonomy` inside the sidebar footer stack (`SidebarActions`), rendering direct inline actions inside `ItemActions` (`compact={true}`) to eliminate the redundant nested dropdown.
+  - Reorder `ItemHeader` so media type pill sits first, `<h1>` title & authors follow immediately, and Primary CTA + `Explore Graph` share one clean horizontal row above tight Quick Meta.
   - Collapse both disclosures by default so `<= 4` buttons remain visible per action container and owner shelf controls appear immediately on mobile scroll.
   - Preserve `components/item/sidebar/*` pure-props invariant (no API hooks or React Context imports inside `sidebar-actions.tsx`).
 - **Non-Goals:**

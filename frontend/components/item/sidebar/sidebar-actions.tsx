@@ -86,6 +86,7 @@ export interface SidebarActionsProps {
   handleAddToCollection?: (id: number) => void;
   linkedOpenDataNode?: React.ReactNode;
   adminActionsNode?: React.ReactNode;
+  adminAccordionLabel?: string;
 }
 
 /**
@@ -131,6 +132,7 @@ export function SidebarActions({
   handleAddToCollection = () => {},
   linkedOpenDataNode,
   adminActionsNode,
+  adminAccordionLabel,
 }: SidebarActionsProps) {
   const t = useTranslations("ItemDetail");
   const tSidebar = useTranslations("ItemDetail.sidebar");
@@ -635,7 +637,7 @@ export function SidebarActions({
               onClick={() => setShowAdminActions(prev => !prev)}
               className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
-              <span>{tSidebar("adminActions")}</span>
+              <span>{adminAccordionLabel ?? tSidebar("adminActions")}</span>
               {showAdminActions ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
             {showAdminActions && <div className="mt-2">{adminActionsNode}</div>}

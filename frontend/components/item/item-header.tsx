@@ -172,7 +172,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
   })();
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
+    <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-4 items-start">
       {/* Cover Image shown on mobile/tablet only (< lg); desktop renders SidebarCover */}
       <div
         className={`lg:hidden w-full md:w-1/3 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? "aspect-square" : "aspect-[2/3]"}`}
@@ -239,8 +239,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           </span>
         </nav>
 
-        {/* Media type Badge & Above-the-Fold Primary + Graph Actions */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* Media type Badge */}
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           <Badge
             variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
@@ -248,39 +248,17 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {badge.isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
             {badgeLabel}
           </Badge>
-          {item.id > 0 && (
-            <Button asChild variant="outline" size="sm" data-testid="explore-graph-link" className="gap-1.5 h-8">
-              <Link href={`/graph?type=item&id=${item.id}`}>
-                <GitBranch className="h-3.5 w-3.5 text-primary" />
-                <span>{tGraph("exploreGraph")}</span>
-              </Link>
-            </Button>
-          )}
-          {primaryCtaConfig && (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              data-testid="primary-consumption-cta"
-              disabled={updateItem.isPending}
-              onClick={() => handlePrimaryStatusUpdate(primaryCtaConfig.nextStatus)}
-              className="gap-1.5 h-8 font-semibold shadow-sm"
-            >
-              {primaryCtaConfig.icon}
-              <span>{primaryCtaConfig.label}</span>
-            </Button>
-          )}
         </div>
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="mb-3">
+          <div className="mb-2">
             <TagCloud tags={tags} pivotType="tags" maxInitial={10} />
           </div>
         )}
 
-        {/* Core details */}
-        <div className="space-y-2 mb-6">
+        {/* Core details (Title + Authors before action buttons) */}
+        <div className="space-y-1.5 mb-3">
           <h1
             className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight"
             property="schema:name"
@@ -312,49 +290,79 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           )}
         </div>
 
+        {/* Above-the-Fold Primary & Graph Actions */}
+        {(primaryCtaConfig || item.id > 0) && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {primaryCtaConfig && (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                data-testid="primary-consumption-cta"
+                disabled={updateItem.isPending}
+                onClick={() => handlePrimaryStatusUpdate(primaryCtaConfig.nextStatus)}
+                className="gap-1.5 h-8 font-semibold shadow-sm"
+              >
+                {primaryCtaConfig.icon}
+                <span>{primaryCtaConfig.label}</span>
+              </Button>
+            )}
+            {item.id > 0 && (
+              <Button asChild variant="outline" size="sm" data-testid="explore-graph-link" className="gap-1.5 h-8">
+                <Link href={`/graph?type=item&id=${item.id}`}>
+                  <GitBranch className="h-3.5 w-3.5 text-primary" />
+                  <span>{tGraph("exploreGraph")}</span>
+                </Link>
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Quick Meta block */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-muted/30 p-5 rounded-2xl mb-8 border border-border/50">
-          {identifier && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                Identifier
-              </span>
-              <span className="font-mono text-xs">{identifier}</span>
-            </div>
-          )}
-          {publisher && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                {isAudio ? "Label" : "Publisher"}
-              </span>
-              <DiscoveryPivot type="publishers" value={publisher} variant="link" className="font-semibold" />
-            </div>
-          )}
-          {year && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
-                <Calendar className="h-2.5 w-2.5" />
-                Released
-              </span>
-              <span className="font-semibold">{year}</span>
-            </div>
-          )}
-          {Boolean(hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                {isAudio ? "Tracks" : "Pages"}
-              </span>
-              <span className="font-semibold">
-                {(() => {
-                  const val = readMeta(meta, "tracks") ?? readMeta(meta, "pages");
-                  if (val === null || val === undefined) return "";
-                  if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
-                  return String(val).slice(0, 50);
-                })()}
-              </span>
-            </div>
-          )}
-        </div>
+        {(identifier || publisher || year || hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm bg-muted/30 px-4 py-3 rounded-xl mb-2 border border-border/50">
+            {identifier && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                  Identifier
+                </span>
+                <span className="font-mono text-xs">{identifier}</span>
+              </div>
+            )}
+            {publisher && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                  {isAudio ? "Label" : "Publisher"}
+                </span>
+                <DiscoveryPivot type="publishers" value={publisher} variant="link" className="font-semibold" />
+              </div>
+            )}
+            {year && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                  <Calendar className="h-2.5 w-2.5" />
+                  Released
+                </span>
+                <span className="font-semibold">{year}</span>
+              </div>
+            )}
+            {Boolean(hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                  {isAudio ? "Tracks" : "Pages"}
+                </span>
+                <span className="font-semibold">
+                  {(() => {
+                    const val = readMeta(meta, "tracks") ?? readMeta(meta, "pages");
+                    if (val === null || val === undefined) return "";
+                    if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
+                    return String(val).slice(0, 50);
+                  })()}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

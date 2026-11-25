@@ -128,7 +128,7 @@ test.describe("Item Detail UX Declutter & Replace Cover (C142)", () => {
     });
   }
 
-  test("opens Admin Actions dropdown inside accordion, expands LOD, and Replace Cover upload flow", async ({
+  test("opens Admin Actions inline inside accordion without double dropdown, expands LOD, and Replace Cover upload flow", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -136,18 +136,15 @@ test.describe("Item Detail UX Declutter & Replace Cover (C142)", () => {
 
     // Linked Open Data and Admin Actions start collapsed in the sidebar accordion
     await expect(page.getByTestId("semantic-links-compact")).toHaveCount(0);
-    await expect(page.getByTestId("admin-actions-menu-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("admin-actions-inline-list")).toHaveCount(0);
 
     await page.getByTestId("lod-accordion-toggle").click();
     await expect(page.getByTestId("semantic-links-compact")).toBeVisible();
 
     await page.getByTestId("admin-actions-accordion-toggle").click();
-    // Open labeled Admin Actions DropdownMenu
-    const adminTrigger = page.getByTestId("admin-actions-menu-trigger");
-    await expect(adminTrigger).toBeVisible();
-    await adminTrigger.click();
-    await expect(page.getByRole("menuitem", { name: /Remove from library/i })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("admin-actions-menu-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("admin-actions-inline-list")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Remove from library/i })).toBeVisible();
 
     // Open Manage dropdown -> Replace Cover -> upload via gallery-file-input
     await page.getByTestId("sidebar-manage-menu").click();
