@@ -978,7 +978,7 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
             identifier,
             title,
             author,
-            llm_permissions=llm_permissions,
+            llm_permissions={},
             user_id=user_id_str,
             user_image_path=filepath,
         )

@@ -1671,6 +1671,9 @@ class GraphService:
                         }
                     )
 
+        if seen_series_work_ids and "work" in buckets:
+            buckets["work"] = [row for row in buckets["work"] if row["entity_id"] not in seen_series_work_ids]
+
         results: list[dict[str, Any]] = []
         for ent_type in requested:
             if len(results) >= effective_limit:

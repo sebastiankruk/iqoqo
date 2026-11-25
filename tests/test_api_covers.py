@@ -284,3 +284,45 @@ def test_upload_cover_synchronous_fallback_when_queue_unavailable(client, admin_
     assert payload["data"]["cover_url"] == "/static/covers/5555555555555_user.jpg"
     assert payload["data"]["cover_status_updated_at"]
     assert (covers_dir / "5555555555555_user.jpg").is_file()
+
+
+def test_upload_cover_sync_fallback_passes_empty_llm_permissions(app, client, admin_headers):
+    """Synchronous Valkey-down upload fallback forces llm_permissions={}."""
+    import io
+    from unittest.mock import patch
+
+    from PIL import Image
+
+    from app.db import db
+    from app.db.core import Expression, Manifestation, Work
+
+    with app.app_context():
+        work = Work(title="Sync Fallback Guard Book")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="5555555555556")
+        db.session.add(manif)
+        db.session.commit()
+        manif_id = manif.id
+
+    img_io = io.BytesIO()
+    Image.new("RGB", (80, 120), color="blue").save(img_io, "JPEG")
+    img_io.seek(0)
+
+    with (
+        patch("app.api.manifestations.User.list_llm_permissions", return_value={"gemini": True}),
+        patch("app.api.manifestations.start_cover_processing", return_value=None),
+        patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
+    ):
+        response = client.post(
+            f"/api/manifestations/{manif_id}/cover",
+            headers=admin_headers,
+            data={"cover": (img_io, "cover.jpg"), "source": "user_upload"},
+            content_type="multipart/form-data",
+        )
+
+    assert response.status_code == 200
+    assert mock_pipeline.call_args.kwargs["llm_permissions"] == {}

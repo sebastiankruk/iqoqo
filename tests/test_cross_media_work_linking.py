@@ -421,3 +421,12 @@ def test_c152_library_graph_derivatives_and_balanced_root_search(app, client):
     work_ids = [r["entity_id"] for r in rows if r["entity_type"] == "work"]
     series_ids = [r["entity_id"] for r in rows if r["entity_type"] == "series"]
     assert set(work_ids).isdisjoint(set(series_ids))
+
+    # Order-independent deduplication when work precedes series
+    res_rev = client.get("/api/catalog/graph/search?q=BalancedSearch&types=work,series&limit=6")
+    assert res_rev.status_code == 200
+    rows_rev = res_rev.get_json()["data"]
+    work_ids_rev = [r["entity_id"] for r in rows_rev if r["entity_type"] == "work"]
+    series_ids_rev = [r["entity_id"] for r in rows_rev if r["entity_type"] == "series"]
+    assert series_ids_rev
+    assert set(work_ids_rev).isdisjoint(set(series_ids_rev))
