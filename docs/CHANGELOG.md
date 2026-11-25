@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Allegro OAuth Visibility, Multi-Worker Token Sync, BN Primo VE Fallback & Preview Readiness (`allegro-oauth-refresh-failure-visibility-v112`, C153)**:
+  - Persisted irreversible Allegro `refresh_failed` (`400 invalid_grant` / `401`) state on `ALLEGRO_TOKEN_DATA`, short-circuited dead refresh loops, surfaced `reauth_required` in `/api/system/status`, `make status`, and Admin Instance Settings, and prioritized PostgreSQL `InstanceSettings` over per-process `SimpleCache` in `load_allegro_token()`.
+  - Added live Biblioteka Narodowa Primo VE REST fallback (`katalogi.bn.org.pl`) when `data.bn.org.pl` lags for new Alma ISBNs, disabled LLM fallback during synchronous `upload_cover()` Valkey outages, made `search_root_candidates()` `series`/`work` deduplication order-independent, updated Blueprint 8 SVG to `7` edge categories, and waited for post-reconcile `/api/health` readiness in `scripts/iqopretest.sh`.
 - **Hardening, Merge Collision Integrity & Cross-Media Remediation (C152)**:
   - Fixed manual `Work` search envelope (`data` vs `results`) and added debounced `useCatalogGraphSearch`, direction swap, null confidence guard, and delete cancel in `WorkLinkReviewer`.
   - Fixed unordered `WorkLinkCandidate` reversed-pair `UniqueViolation` in `app/core/frbr_merge.py` and third-party `WorkRelation` + `WorkLinkCandidate` collisions in `scripts/etl/merge.py`.
