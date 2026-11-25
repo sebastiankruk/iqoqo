@@ -464,13 +464,13 @@ def scan_cross_media_links(
 
     ollama_url = ""
     ollama_model = ""
-    llm_active = engine == ENGINE_LLAMA and _is_llm_enabled()
+    llm_active = engine == ENGINE_LLAMA
     if llm_active:
+        if not _is_llm_enabled():
+            raise WorkLinkPrerequisiteError("LLM adjudication is disabled (ALLOW_LLM=false).")
         ollama_url, ollama_model = _resolve_ollama_config(allow_probe=not skip_health_check)
         if not skip_health_check:
             _check_ollama_health(ollama_url, ollama_model)
-    elif engine == ENGINE_LLAMA:
-        logger.info("ALLOW_LLM is disabled; cross-media scan will queue heuristic candidates only.")
 
     llm_deadline = time.monotonic() + max_llm_seconds if (llm_active and max_llm_seconds is not None) else None
 

@@ -114,6 +114,7 @@ def test_llama_engine_adjudication_and_ssrf_guard(app, monkeypatch):
     _seed_lotr_and_hp(app)
 
     with app.app_context():
+        monkeypatch.setattr(work_linking_service, "_is_llm_enabled", lambda: True)
         monkeypatch.setenv("OLLAMA_URL", "http://169.254.169.254/latest")
         with pytest.raises(work_linking_service.WorkLinkPrerequisiteError):
             work_linking_service.scan_cross_media_links(engine="llama", dry_run=False)
@@ -337,7 +338,7 @@ def test_c152_llm_governance_derivation_rank_and_atomic_accept(app, client, admi
         )
         db.session.commit()
 
-        # ALLOW_LLM=false -> zero Ollama requests even with engine="llama"
+        # ALLOW_LLM=false -> raises WorkLinkPrerequisiteError and sends zero Ollama requests
         monkeypatch.setattr(work_linking_service, "_is_llm_enabled", lambda: False)
         called = False
 
@@ -346,8 +347,11 @@ def test_c152_llm_governance_derivation_rank_and_atomic_accept(app, client, admi
             called = True
 
         monkeypatch.setattr(work_linking_service, "_adjudicate_with_ollama", _boom)
-        report = work_linking_service.scan_cross_media_links(engine="llama", dry_run=False)
+        with pytest.raises(work_linking_service.WorkLinkPrerequisiteError, match="ALLOW_LLM"):
+            work_linking_service.scan_cross_media_links(engine="llama", dry_run=False)
         assert not called
+
+        report = work_linking_service.scan_cross_media_links(engine="heuristic", dry_run=False)
         assert report.created >= 1
 
         sil_cand = db.session.execute(
