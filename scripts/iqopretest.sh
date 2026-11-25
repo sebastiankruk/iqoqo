@@ -151,23 +151,25 @@ fi
 
 make preview-up DEPLOY_DIR="$DST_LOC" FEDERATION_PAIR="$FEDERATION_PAIR"
 
+wait_for_preview_backend() {
+    local phase="${1:-startup}"
+    echo "Waiting for preview backend to become healthy (${phase})..."
+    for i in $(seq 1 45); do
+        if curl -s -f --max-time 2 "http://127.0.0.1:5000/api/health" >/dev/null 2>&1 || \
+           curl -s -f --max-time 2 "http://127.0.0.1:5001/api/health" >/dev/null 2>&1 || \
+           curl -s -f --max-time 2 "http://127.0.0.1:8000/api/health" >/dev/null 2>&1 || \
+           curl -s -f --max-time 2 "http://127.0.0.1:5002/api/health" >/dev/null 2>&1; then
+            echo "✅ Preview backend healthy after ${i}s (${phase})"
+            return 0
+        fi
+        sleep 1
+    done
+    echo "💥 ERROR: Preview backend healthcheck timed out after 45s (${phase})" >&2
+    return 1
+}
+
 # 5. Wait for preview backend and observability readiness before running make status
-echo "Waiting for preview backend to become healthy..."
-PREVIEW_READY=0
-for i in $(seq 1 45); do
-    if curl -s -f --max-time 2 "http://127.0.0.1:5001/api/health" >/dev/null 2>&1 || \
-       curl -s -f --max-time 2 "http://127.0.0.1:8000/api/health" >/dev/null 2>&1 || \
-       curl -s -f --max-time 2 "http://127.0.0.1:5002/api/health" >/dev/null 2>&1; then
-        echo "✅ Preview backend healthy after ${i}s"
-        PREVIEW_READY=1
-        break
-    fi
-    sleep 1
-done
-if [ "$PREVIEW_READY" -ne 1 ]; then
-    echo "💥 ERROR: Preview backend healthcheck timed out after 45s" >&2
-    exit 1
-fi
+wait_for_preview_backend "startup" || exit 1
 
 running_obs=$(docker ps --format '{{.Names}}' 2>/dev/null || true)
 has_oo=0
@@ -216,6 +218,8 @@ fi
 
 # 5b. Delegate OpenObserve auth check/reset, InstanceSettings re-encryption, and RUM/container sync to make preview-reconcile
 DEPLOY_DIR="$DST_LOC" SRC_HOST="$SRC_HOST" SRC_LOC="$SRC_LOC" SRC_NAME="$SRC_NAME" SKIP_CLONE="$SKIP_CLONE" make preview-reconcile
+
+wait_for_preview_backend "post-reconcile" || exit 1
 
 DEPLOY_DIR="$DST_LOC" make status preview
 
