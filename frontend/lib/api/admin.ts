@@ -1265,6 +1265,27 @@ export async function createWorkRelation(payload: {
   return res.data.data;
 }
 
+export interface AllegroSystemStatus {
+  configured: boolean;
+  allegro_token_active: boolean;
+  reason?: string;
+  refresh_error?: string | null;
+  refresh_failed_at?: number | null;
+  token_age_hours?: number | null;
+}
+
+export interface SystemStatusResponse {
+  allegro?: AllegroSystemStatus;
+}
+
+/**
+ * Fetch system integration health status (including Allegro OAuth token state).
+ */
+export async function getSystemStatus(): Promise<SystemStatusResponse> {
+  const res = await apiClient.get<SystemStatusResponse>("/system/status");
+  return res.data;
+}
+
 /**
  * Delete a confirmed cross-media WorkRelation.
  *

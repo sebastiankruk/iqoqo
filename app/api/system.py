@@ -166,7 +166,7 @@ def get_system_status():
         if not is_admin:
             probe_remote = False
 
-    allegro_status = get_allegro_token_status()
+    allegro_status = get_allegro_token_status(probe_remote=probe_remote)
     igdb_status = get_igdb_token_status(probe_remote=probe_remote)
 
     configured_keys = set(InstanceSettings.get_configured_keys())
