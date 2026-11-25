@@ -283,25 +283,25 @@ def get_manifestations() -> tuple[Response, int]:
             has_map=has_map,
         )
 
-    if use_cursor:
-        query = query.order_by(Manifestation.id.desc())
-        # CURSOR_START is the sentinel for "no lower bound yet".
-        if cursor_id > CURSOR_START:
-            query = query.filter(Manifestation.id < cursor_id)
-        # Fetch one extra row to detect whether a further page exists
-        # without a COUNT query.
-        rows = query.limit(limit + 1).all()
-        has_more = len(rows) > limit
-        manifestations = rows[:limit]
-        next_cursor = encode_manifestation_cursor(manifestations[-1].id) if has_more and manifestations else None
-        total = None
-    else:
-        sort_by = request.args.get("sort", "updated")
-        query = query.order_by(*_manifestation_order_clauses(sort_by, user_id))
-        total = query.count()
-        manifestations = query.offset(offset).limit(limit).all()
-        next_cursor = None
-        has_more = False
+        if use_cursor:
+            query = query.order_by(Manifestation.id.desc())
+            # CURSOR_START is the sentinel for "no lower bound yet".
+            if cursor_id > CURSOR_START:
+                query = query.filter(Manifestation.id < cursor_id)
+            # Fetch one extra row to detect whether a further page exists
+            # without a COUNT query.
+            rows = query.limit(limit + 1).all()
+            has_more = len(rows) > limit
+            manifestations = rows[:limit]
+            next_cursor = encode_manifestation_cursor(manifestations[-1].id) if has_more and manifestations else None
+            total = None
+        else:
+            sort_by = request.args.get("sort", "updated")
+            query = query.order_by(*_manifestation_order_clauses(sort_by, user_id))
+            total = query.count()
+            manifestations = query.offset(offset).limit(limit).all()
+            next_cursor = None
+            has_more = False
 
     owned_manifestation_map = {}
     if user_id and manifestations:

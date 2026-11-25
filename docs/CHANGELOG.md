@@ -22,12 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reordered `/item/[id]` header (badge -> title/authors -> single-row Primary CTA + `Explore Graph` -> compact Quick Meta), compressed `SemanticLinks` (`compact` mode), and relocated both `Linked Open Data` and inline `Admin Actions` / `Help Requests` into the bottom sidebar accordion without nested dropdowns.
 - **Graph Entry Placement & Scanner Destination Pill Harmony (C148, C149)**:
   - Aligned `"Explore Graph"` placement and `graph.exploreGraph` i18n across `/work/[id]`, `/expression/[id]`, `/manifestation/[id]`, and `/item/[id]`, and harmonized `/scan` `TopBar` destination pill styling.
+- **Manifestation Browse & Recent Arrivals Copy-Date Sort**:
+  - Updated `GET /api/manifestations` (default `updated` / `added` sort) and `GET /api/manifestations/recent` to rank manifestations with the caller's most recently added/updated physical copy first, and wired `sortBy` into `useInfiniteManifestations` and `/collection?view=manifestations`.
 
 ### Fixed
 
 - **Allegro OAuth Visibility, Multi-Worker Token Sync, BN Primo VE Fallback & Preview Readiness (`allegro-oauth-refresh-failure-visibility-v112`, C153)**:
   - Persisted irreversible Allegro `refresh_failed` (`400 invalid_grant` / `401`) state on `ALLEGRO_TOKEN_DATA`, short-circuited dead refresh loops, surfaced `reauth_required` in `/api/system/status`, `make status`, and Admin Instance Settings, and prioritized PostgreSQL `InstanceSettings` over per-process `SimpleCache` in `load_allegro_token()`.
-  - Added live Biblioteka Narodowa Primo VE REST fallback (`katalogi.bn.org.pl`) when `data.bn.org.pl` lags for new Alma ISBNs, disabled LLM fallback during synchronous `upload_cover()` Valkey outages, made `search_root_candidates()` `series`/`work` deduplication order-independent, updated Blueprint 8 SVG to `7` edge categories, and waited for post-reconcile `/api/health` readiness in `scripts/iqopretest.sh`.
+  - Added live Biblioteka Narodowa Primo VE REST fallback (`katalogi.bn.org.pl`) when `data.bn.org.pl` lags for new Alma ISBNs, normalized Open Library `cover` size dicts to string URLs before DB insert, disabled LLM fallback during synchronous `upload_cover()` Valkey outages, made `search_root_candidates()` `series`/`work` deduplication order-independent, updated Blueprint 8 SVG to `7` edge categories, and waited for post-reconcile `/api/health` readiness in `scripts/iqopretest.sh`.
 - **Hardening, Merge Collision Integrity & Cross-Media Remediation (C152)**:
   - Fixed manual `Work` search envelope (`data` vs `results`) and added debounced `useCatalogGraphSearch`, direction swap, null confidence guard, and delete cancel in `WorkLinkReviewer`.
   - Fixed unordered `WorkLinkCandidate` reversed-pair `UniqueViolation` in `app/core/frbr_merge.py` and third-party `WorkRelation` + `WorkLinkCandidate` collisions in `scripts/etl/merge.py`.

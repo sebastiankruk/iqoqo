@@ -104,3 +104,11 @@ def test_get_recent_manifestations_ranks_recently_added_copy_first(client, sort_
     assert res.status_code == 200
     ids = [entry["id"] for entry in res.get_json()["data"]]
     assert ids.index(sort_setup["m_old_id"]) < ids.index(sort_setup["m_new_id"])
+
+
+def test_get_manifestations_search_query_does_not_collide_with_browse_sort(client, sort_setup):
+    """FTS search (?q=...) must not fall through into the browse-only sort/cursor block."""
+    res = client.get("/api/manifestations?page=1&limit=20&q=Alpha", headers=sort_setup["headers"])
+    assert res.status_code == 200
+    ids = [entry["id"] for entry in res.get_json()["data"]]
+    assert sort_setup["m_new_id"] in ids
