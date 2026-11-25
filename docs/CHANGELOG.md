@@ -5,13 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.2] - TBD
+## [1.1.2] - 2026-11-25
 
 ### Added
 
+- **Cross-Media FRBR Work Linking & Reconciliation (C144)**:
+  - Added `WorkRelation` (`catalog.work_relations`) and `WorkLinkCandidate` (`inventory.work_link_candidates`) models, linear Alembic migration `v1_1_2_cross_media_work_links`, `frbr_merge` & ETL coverage, SHACL/ontology sync, heuristic + optional local Ollama reconciliation engine (`work_linking_service.py`, `scripts/reconcile_cross_media.py`), Custodian UI `/admin/work-links`, `/graph` `"derivatives"` edge category, and `frbroo:R2_is_derivative_of` / `schema:isBasedOn` RDF emission.
+- **Graph Multi-Root Person, Contributor & Series Picker (C143)**:
+  - Added `GET /api/catalog/graph/search` diacritic-insensitive picker endpoint, `Person` / `Contributor` / `Series` root support in `GraphService`, and `<GraphRootPicker />` on `/graph`.
+- **Mixed Concert Types (`cd_dvd_combo` & `expression_kind`) (C150)**:
+  - Added `mixed_media_categories` (`cd_dvd_combo` -> `music` + `movie`) in `shared/taxonomy.yaml`, `expression_kind` (`live_performance` / `studio`) faceted navigation, FTS/catalog filtering, and shared collection / wishlist parity.
+
 ### Changed
 
+- **Item Detail UX Declutter, Compressed LOD & Unified Sidebar Accordion (C142, C151)**:
+  - Reordered `/item/[id]` header (badge -> title/authors -> single-row Primary CTA + `Explore Graph` -> compact Quick Meta), compressed `SemanticLinks` (`compact` mode), and relocated both `Linked Open Data` and inline `Admin Actions` / `Help Requests` into the bottom sidebar accordion without nested dropdowns.
+- **Graph Entry Placement & Scanner Destination Pill Harmony (C148, C149)**:
+  - Aligned `"Explore Graph"` placement and `graph.exploreGraph` i18n across `/work/[id]`, `/expression/[id]`, `/manifestation/[id]`, and `/item/[id]`, and harmonized `/scan` `TopBar` destination pill styling.
+
 ### Fixed
+
+- **E2E Help Requests & Graph Filter Selectors (C151)**:
+  - Updated `frbr_type_change_workflow.spec.ts` to expand the `"Help Requests"` sidebar accordion before opening the escalation dialog, and updated `item_detail_ux.spec.ts` for inline `Admin Actions`.
 
 ## [1.1.1] - 2026-11-23
 

@@ -131,7 +131,8 @@ test.describe("FRBR Type Change Workflow E2E", () => {
     await page.goto("/item/100");
     await page.waitForLoadState("networkidle");
 
-    // Open help request dialog
+    // Expand Help Requests accordion in sidebar, then open help request dialog
+    await page.getByTestId("admin-actions-accordion-toggle").click();
     const helpButton = page.getByText("Ask custodians for help");
     await expect(helpButton).toBeVisible();
     await helpButton.click();
