@@ -683,11 +683,29 @@ function CollectionContent() {
         });
       }
 
-      // Filter by category
+      // Filter by category (including mixed-media cd_dvd_combo)
       if (categoryFilters.length > 0) {
         items = items.filter(it => {
           const itemCat = (it as Item).content_type || (it as Item).manifestation_meta?.content_type;
-          return itemCat && categoryFilters.includes(String(itemCat));
+          const itemFmt = String(
+            (it as Item).manifestation_meta?.format ||
+              (it as CatalogEntry).format ||
+              (it as CatalogEntry).format_type ||
+              ""
+          )
+            .trim()
+            .toLowerCase();
+          const isMixedCdDvd =
+            itemFmt === "cd_dvd_combo" && (categoryFilters.includes("music") || categoryFilters.includes("movie"));
+          return isMixedCdDvd || (Boolean(itemCat) && categoryFilters.includes(String(itemCat)));
+        });
+      }
+
+      // Filter by expression kind (live_performance vs studio)
+      if (expressionKindFilters.length > 0) {
+        items = items.filter(it => {
+          const itemKind = (it as Item & { expression_kind?: string | null }).expression_kind || "studio";
+          return expressionKindFilters.includes(itemKind);
         });
       }
 

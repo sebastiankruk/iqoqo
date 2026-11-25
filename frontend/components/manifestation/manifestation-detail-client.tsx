@@ -737,7 +737,10 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             )}
 
             {/* Linked Open Data (LOD) Entities */}
-            <SemanticLinks manifestationId={manifestation.id} canEdit={!!userProfile} />
+            <SemanticLinks
+              manifestationId={manifestation.id}
+              canEdit={Boolean(userProfile?.permissions?.includes(PermissionName.WRITE_METADATA))}
+            />
           </div>
         </div>
 

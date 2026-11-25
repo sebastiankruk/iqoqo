@@ -1061,7 +1061,7 @@ def search_catalog_graph_roots() -> tuple[Response, int]:
     """Search visibility-safe FRBR and contributor root candidates for the graph picker."""
     from app.core.graph_service import VALID_GRAPH_SEARCH_TYPES, GraphService
 
-    query = (request.args.get("q") or "").strip()
+    query = (request.args.get("q") or "").strip()[:200]
     raw_types = request.args.get("types")
     parsed_types: list[str] | None = None
     if raw_types is not None and raw_types.strip():

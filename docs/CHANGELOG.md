@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Hardening, Merge Collision Integrity & Cross-Media Remediation (C152)**:
+  - Fixed manual `Work` search envelope (`data` vs `results`) and added debounced `useCatalogGraphSearch`, direction swap, null confidence guard, and delete cancel in `WorkLinkReviewer`.
+  - Fixed unordered `WorkLinkCandidate` reversed-pair `UniqueViolation` in `app/core/frbr_merge.py` and third-party `WorkRelation` + `WorkLinkCandidate` collisions in `scripts/etl/merge.py`.
+  - Routed cross-media Ollama tie-breaking through `ConfigService` + `ALLOW_LLM` with `allow_redirects=False` and bounded sync HTTP scan budgets, added `"text"`/`"audiobook"` to `_MEDIA_DERIVATION_RANK`, and made `accept_candidate()` single-commit atomic with `409` status & pair-override validation.
+  - Emitted `"derivatives"` edges in `GraphService.build_library_graph()`, balanced `search_root_candidates()` per-type quotas (`series` dedupe + `person` filter), added `cd_dvd_combo` parity to PostgreSQL `_pg_manifestation_fts()` and Capacitor offline `/collection` filtering, deduplicated multi-expression `Work` facet counts, gated `"Scan External LOD"` on `PermissionName.WRITE_METADATA`, and removed `iqoqo:sourceWork` `rdfs:subPropertyOf frbroo:R2_is_derivative_of` OWL domain clash.
+- **Cover Upload & Shutdown Process Safety (C142, pre-OpenSpec)**:
+  - Fixed `"Replace Cover"` end-to-end (`FormData` upload, React Query polling, and synchronous Redis-down fallback) and hardened `run.sh --stop` process termination safety.
 - **E2E Help Requests & Graph Filter Selectors (C151)**:
   - Updated `frbr_type_change_workflow.spec.ts` to expand the `"Help Requests"` sidebar accordion before opening the escalation dialog, and updated `item_detail_ux.spec.ts` for inline `Admin Actions`.
 

@@ -305,7 +305,6 @@ iqoqo:WorkRelation a owl:Class ;
     rdfs:comment "Confirmed directional cross-media relation (catalog.work_relations) linking a derivative Work to its source Work, aligned with frbroo:R2_is_derivative_of and schema:isBasedOn." .
 
 iqoqo:sourceWork a owl:ObjectProperty ;
-    rdfs:subPropertyOf frbroo:R2_is_derivative_of ;
     rdfs:label "source work" ;
     rdfs:comment "The derivative/adapted Work in a WorkRelation." ;
     rdfs:domain iqoqo:WorkRelation ;

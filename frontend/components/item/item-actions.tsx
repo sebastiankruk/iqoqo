@@ -211,7 +211,7 @@ export function ItemActions({ item, compact = false }: { item: Item; compact?: b
           <div className="flex items-center justify-between font-medium">
             <span className="flex items-center gap-1.5 capitalize">
               <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
-              Help Request: {pendingEscalation.status}
+              {tAdmin("helpRequestStatus", { status: pendingEscalation.status })}
             </span>
             <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
               {pendingEscalation.field_name}
@@ -323,7 +323,7 @@ export function ItemActions({ item, compact = false }: { item: Item; compact?: b
                 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
               >
                 {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                <span>Requests ({itemEscalations.length})</span>
+                <span>{tAdmin("requestsCount", { count: itemEscalations.length })}</span>
               </Button>
             ) : (
               <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />

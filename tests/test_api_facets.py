@@ -753,3 +753,37 @@ def test_expression_kind_and_mixed_media_facets_filtering(client, normal_user_he
     assert facets["expression_kind_counts"]["studio"] >= 1
     assert facets["category_counts"]["music"] >= 3
     assert facets["category_counts"]["movie"] >= 2
+
+
+def test_work_scoped_facets_do_not_double_count_multi_expression_work(app, client, normal_user_headers):
+    """A single Work with both a movie Expression and a music cd_dvd_combo Manifestation counts once in movie."""
+    from app.core.data_manager import DataManager
+    from app.db.auth import User
+
+    with app.app_context():
+        user = db.session.execute(db.select(User)).scalars().first()
+        assert user is not None
+        w = Work(title="Multi-Expression Concert Film")
+        db.session.add(w)
+        db.session.flush()
+        e_movie = Expression(work_id=w.id, content_type="movie", kind="live_performance", language="en")
+        e_music = Expression(work_id=w.id, content_type="music", kind="live_performance", language="en")
+        db.session.add_all([e_movie, e_music])
+        db.session.flush()
+        m_bluray = Manifestation(expression_id=e_movie.id, format="bluray", format_type="bluray", meta={"format": "bluray"})
+        m_combo = Manifestation(
+            expression_id=e_music.id, format="cd_dvd_combo", format_type="cd_dvd_combo", meta={"format": "cd_dvd_combo"}
+        )
+        db.session.add_all([m_bluray, m_combo])
+        db.session.flush()
+        db.session.add_all(
+            [
+                Item(manifestation_id=m_bluray.id, owner_id=user.id, visibility="public", is_hidden=False),
+                Item(manifestation_id=m_combo.id, owner_id=user.id, visibility="public", is_hidden=False),
+            ]
+        )
+        db.session.commit()
+
+        facets = DataManager.get_faceted_stats(scope="own", owner_id=user.id, view="works")
+        assert facets["category_counts"]["movie"] == 1
+        assert facets["category_counts"]["music"] == 1

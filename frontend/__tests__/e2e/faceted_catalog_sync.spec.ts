@@ -589,7 +589,7 @@ test.describe("Dynamic Facet Cross-Filtering", () => {
 });
 
 test.describe("Mixed Concert Types & Expression Kind Faceting (C150)", () => {
-  test("filtering by Live performance shows audio and video concerts and preserves expression_kind in Share (C150)", async ({
+  test("filtering by Live performance shows audio and video concerts and preserves expression_kind in Share URL (C150)", async ({
     page,
   }) => {
     await page.addInitScript(() => {

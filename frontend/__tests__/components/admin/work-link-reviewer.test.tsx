@@ -13,94 +13,97 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkLinkReviewer } from "@/components/admin/work-link-reviewer";
 import * as adminApi from "@/lib/api/admin";
+import * as catalogHooks from "@/lib/api/hooks/catalog";
 
-vi.mock("@/lib/api/admin", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/admin")>("@/lib/api/admin");
-  return {
-    ...actual,
-    listWorkLinkCandidates: vi.fn(),
-    listWorkRelations: vi.fn(),
-    acceptWorkLinkCandidate: vi.fn(),
-    dismissWorkLinkCandidate: vi.fn(),
-    scanWorkLinks: vi.fn(),
-  };
-});
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+}));
+
+vi.mock("@/lib/api/hooks/catalog", () => ({
+  useCatalogGraphSearch: vi.fn(),
+}));
 
 describe("WorkLinkReviewer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(adminApi.listWorkLinkCandidates).mockResolvedValue({
+    vi.mocked(catalogHooks.useCatalogGraphSearch).mockReturnValue({
+      data: [{ entity_type: "work", entity_id: 42, label: "The Hobbit", subtitle: "text", url: "/work/42" }],
+      isLoading: false,
+    } as unknown as ReturnType<typeof catalogHooks.useCatalogGraphSearch>);
+  });
+
+  it("renders null confidence safely, supports candidate direction swap, and uses Cancel on unlink", async () => {
+    vi.spyOn(adminApi, "listWorkLinkCandidates").mockResolvedValue({
       items: [
         {
-          id: 11,
-          source_work_id: 2,
-          target_work_id: 1,
-          source_work_title: "The Lord of the Rings: The Fellowship of the Ring",
-          target_work_title: "The Lord of the Rings",
-          source_categories: ["movie"],
-          target_categories: ["book"],
+          id: 99,
+          source_work_id: 1,
+          target_work_id: 2,
+          source_work_title: "Book Work",
+          target_work_title: "Film Work",
+          source_categories: ["text"],
+          target_categories: ["movie"],
           proposed_relation_type: "is_adaptation_of",
-          confidence: 0.92,
+          confidence: null as unknown as number,
           resolution_source: "heuristic",
+          status: "pending",
           llm_reasoning: null,
-          status: "pending",
-          created_at: "2026-11-24T00:00:00Z",
-          resolved_at: null,
-        },
-        {
-          id: 12,
-          source_work_id: 4,
-          target_work_id: 3,
-          source_work_title: "Harry Potter and the Sorcerer's Stone",
-          target_work_title: "Harry Potter and the Philosopher's Stone",
-          source_categories: ["movie"],
-          target_categories: ["book"],
-          proposed_relation_type: "is_adaptation_of",
-          confidence: 0.96,
-          resolution_source: "llm",
-          llm_reasoning: "US film adaptation of UK novel",
-          status: "pending",
-          created_at: "2026-11-24T00:00:00Z",
+          created_at: null,
           resolved_at: null,
         },
       ],
-      total: 2,
+      total: 1,
     });
-    vi.mocked(adminApi.listWorkRelations).mockResolvedValue({ items: [], total: 0 });
-    vi.mocked(adminApi.acceptWorkLinkCandidate).mockResolvedValue({
-      candidate: {} as adminApi.WorkLinkCandidate,
-      relation: {} as adminApi.WorkRelationItem,
+    const acceptSpy = vi.spyOn(adminApi, "acceptWorkLinkCandidate").mockResolvedValue({} as never);
+    vi.spyOn(adminApi, "listWorkRelations").mockResolvedValue({
+      items: [
+        {
+          id: 7,
+          source_work_id: 10,
+          target_work_id: 20,
+          source_work_title: "Dune Film",
+          target_work_title: "Dune Book",
+          source_categories: ["movie"],
+          target_categories: ["text"],
+          relation_type: "is_adaptation_of",
+          notes: null,
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+      total: 1,
     });
-    vi.mocked(adminApi.dismissWorkLinkCandidate).mockResolvedValue({} as adminApi.WorkLinkCandidate);
+
+    render(<WorkLinkReviewer canEdit={true} />);
+    expect(await screen.findByText("—")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "swapDirection" }));
+    fireEvent.click(screen.getByRole("button", { name: "accept" }));
+    expect(acceptSpy).toHaveBeenCalledWith(99, {
+      relation_type: "is_adaptation_of",
+      source_work_id: 2,
+      target_work_id: 1,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /confirmedTab/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "unlink" }));
+    expect(await screen.findByRole("button", { name: "cancel" })).toBeInTheDocument();
   });
 
-  it("renders heuristic and LLM provenance badges and supports accept/dismiss", async () => {
+  it("consumes useCatalogGraphSearch data envelope in manual link dialog", async () => {
+    vi.spyOn(adminApi, "listWorkLinkCandidates").mockResolvedValue({ items: [], total: 0 });
+    vi.spyOn(adminApi, "listWorkRelations").mockResolvedValue({ items: [], total: 0 });
+
     render(<WorkLinkReviewer canEdit={true} />);
-
-    await waitFor(() => {
-      expect(screen.getByText("The Lord of the Rings: The Fellowship of the Ring")).toBeInTheDocument();
-      expect(screen.getByText("US film adaptation of UK novel")).toBeInTheDocument();
-    });
-
-    expect(screen.getByText("Heuristic")).toBeInTheDocument();
-    expect(screen.getByText("LLM")).toBeInTheDocument();
-
-    const acceptButtons = screen.getAllByRole("button", { name: /confirm link/i });
-    fireEvent.click(acceptButtons[0]);
-
-    await waitFor(() => {
-      expect(adminApi.acceptWorkLinkCandidate).toHaveBeenCalledWith(11, { relation_type: "is_adaptation_of" });
-    });
-
-    const dismissButtons = screen.getAllByRole("button", { name: /dismiss/i });
-    fireEvent.click(dismissButtons[1]);
-
-    await waitFor(() => {
-      expect(adminApi.dismissWorkLinkCandidate).toHaveBeenCalledWith(12);
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "manualLinkButton" }));
+    const inputs = screen.getAllByRole("textbox");
+    fireEvent.change(inputs[0], { target: { value: "Hobbit" } });
+    const options = await screen.findAllByText("The Hobbit (#42)");
+    expect(options.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(options[0]);
   });
 });

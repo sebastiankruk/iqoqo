@@ -863,6 +863,29 @@ class GraphService:
                         mc.role,
                     )
 
+        if "derivatives" in allowed_categories and len(present_work_ids) >= 2 and len(edges) < effective_max_edges:
+            work_relations = (
+                db.session.execute(
+                    select(WorkRelation)
+                    .where(
+                        WorkRelation.source_work_id.in_(present_work_ids),
+                        WorkRelation.target_work_id.in_(present_work_ids),
+                    )
+                    .order_by(WorkRelation.id.asc())
+                    .limit(effective_max_edges)
+                )
+                .scalars()
+                .all()
+            )
+            for rel in work_relations:
+                add_edge(
+                    _node_key("work", rel.source_work_id),
+                    _node_key("work", rel.target_work_id),
+                    rel.relation_type,
+                    "derivatives",
+                    rel.relation_type.replace("_", " "),
+                )
+
         node_truncated = node_truncated or quota_truncated
         truncated = node_truncated or edge_truncated
         truncated_reason: str | None = None
@@ -1119,6 +1142,7 @@ class GraphService:
                     .options(selectinload(WorkRelation.target_work))
                     .where(WorkRelation.source_work_id == work.id)
                     .order_by(WorkRelation.id.asc())
+                    .limit(MAX_GRAPH_NODES)
                 )
                 .scalars()
                 .all()
@@ -1135,6 +1159,7 @@ class GraphService:
                     .options(selectinload(WorkRelation.source_work))
                     .where(WorkRelation.target_work_id == work.id)
                     .order_by(WorkRelation.id.asc())
+                    .limit(MAX_GRAPH_NODES)
                 )
                 .scalars()
                 .all()
@@ -1457,27 +1482,25 @@ class GraphService:
         pattern = f"%{escape_ilike_term(folded)}%"
         requested = list(dict.fromkeys(types)) if types else list(DEFAULT_GRAPH_SEARCH_TYPES)
 
-        results: list[dict[str, Any]] = []
+        buckets: dict[str, list[dict[str, Any]]] = {ent_type: [] for ent_type in requested}
         seen_contributors: set[int] = set()
+        seen_series_work_ids: set[int] = set()
+        per_type_quota = max(1, effective_limit // len(requested))
 
         for ent_type in requested:
-            if len(results) >= effective_limit:
-                break
-            remaining = effective_limit - len(results)
+            bucket = buckets[ent_type]
 
             if ent_type in ("person", "contributor"):
-                stmt = (
-                    select(Contributor)
-                    .where(db.func.immutable_unaccent(func.coalesce(Contributor.name, "")).ilike(pattern, escape="\\"))
-                    .order_by(Contributor.id.asc())
-                    .limit(remaining)
-                )
+                conds: list[Any] = [db.func.immutable_unaccent(func.coalesce(Contributor.name, "")).ilike(pattern, escape="\\")]
+                if ent_type == "person" and "contributor" not in requested:
+                    conds.append(or_(Contributor.type == "person", Contributor.type.is_(None)))
+                stmt = select(Contributor).where(*conds).order_by(Contributor.id.asc()).limit(effective_limit)
                 for c in db.session.execute(stmt).scalars().all():
                     if c.id in seen_contributors:
                         continue
                     seen_contributors.add(c.id)
                     c_type = c.type or "person"
-                    results.append(
+                    bucket.append(
                         {
                             "entity_type": ent_type,
                             "entity_id": c.id,
@@ -1504,10 +1527,11 @@ class GraphService:
                         ),
                     )
                     .order_by(Work.id.asc())
-                    .limit(remaining)
+                    .limit(effective_limit)
                 )
                 for w in db.session.execute(stmt).scalars().all():
-                    results.append(
+                    seen_series_work_ids.add(w.id)
+                    bucket.append(
                         {
                             "entity_type": "series",
                             "entity_id": w.id,
@@ -1529,12 +1553,14 @@ class GraphService:
                         )
                     )
                     .order_by(Work.id.asc())
-                    .limit(remaining)
+                    .limit(effective_limit)
                 )
                 for w in db.session.execute(stmt).scalars().all():
+                    if w.id in seen_series_work_ids:
+                        continue
                     authors = w.meta.get("authors", []) if isinstance(w.meta, dict) else []
                     sub = ", ".join(str(a) for a in authors[:2] if a) if isinstance(authors, list) and authors else w.work_kind
-                    results.append(
+                    bucket.append(
                         {
                             "entity_type": "work",
                             "entity_id": w.id,
@@ -1559,12 +1585,12 @@ class GraphService:
                         )
                     )
                     .order_by(Expression.id.asc())
-                    .limit(remaining)
+                    .limit(effective_limit)
                 )
                 for e in db.session.execute(stmt).scalars().all():
                     w_title = e.work.title if e.work else f"Work #{e.work_id}"
                     details = [p for p in (e.content_type, e.language, e.kind) if p]
-                    results.append(
+                    bucket.append(
                         {
                             "entity_type": "expression",
                             "entity_id": e.id,
@@ -1590,11 +1616,11 @@ class GraphService:
                         )
                     )
                     .order_by(Manifestation.id.asc())
-                    .limit(remaining)
+                    .limit(effective_limit)
                 )
                 for m in db.session.execute(stmt).scalars().all():
                     details = [p for p in (m.format, m.publisher, str(m.publication_year) if m.publication_year else None) if p]
-                    results.append(
+                    bucket.append(
                         {
                             "entity_type": "manifestation",
                             "entity_id": m.id,
@@ -1629,13 +1655,13 @@ class GraphService:
                         ),
                     )
                     .order_by(Item.id.asc())
-                    .limit(remaining)
+                    .limit(effective_limit)
                 )
                 for it in db.session.execute(stmt).scalars().all():
                     man_title = it.manifestation.title if it.manifestation and it.manifestation.title else None
                     eff_vis = (it.visibility or ("private" if it.is_hidden else "public")).lower()
                     details = [p for p in (it.collection_status, it.status, eff_vis) if p]
-                    results.append(
+                    bucket.append(
                         {
                             "entity_type": "item",
                             "entity_id": it.id,
@@ -1644,5 +1670,18 @@ class GraphService:
                             "url": f"/item/{it.id}",
                         }
                     )
+
+        results: list[dict[str, Any]] = []
+        for ent_type in requested:
+            if len(results) >= effective_limit:
+                break
+            take = min(per_type_quota, effective_limit - len(results))
+            results.extend(buckets[ent_type][:take])
+        for ent_type in requested:
+            if len(results) >= effective_limit:
+                break
+            overflow = buckets[ent_type][per_type_quota:]
+            if overflow:
+                results.extend(overflow[: effective_limit - len(results)])
 
         return results[:effective_limit]

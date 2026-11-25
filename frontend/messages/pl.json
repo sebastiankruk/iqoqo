@@ -1195,7 +1195,9 @@
       "removing": "Usuwanie…",
       "regenerateTitle": "Wygenerować okładkę ponownie?",
       "regenerateDescription": "Ten egzemplarz ma już okładkę. Ponowne wygenerowanie nadpisze istniejącą okładkę.",
-      "regenerate": "Wygeneruj ponownie"
+      "regenerate": "Wygeneruj ponownie",
+      "helpRequestStatus": "Zgłoszenie pomocy: {status}",
+      "requestsCount": "Zgłoszenia ({count})"
     },
     "reassignOwner": "Zmień właściciela"
   },
@@ -1350,6 +1352,8 @@
     "sourceWorkPlaceholder": "Wyszukaj dzieło pochodne (np. film, gra)...",
     "targetWorkPlaceholder": "Wyszukaj dzieło źródłowe (np. książka)...",
     "relationTypeLabel": "Typ relacji",
-    "createLink": "Utwórz powiązanie"
+    "createLink": "Utwórz powiązanie",
+    "cancel": "Anuluj",
+    "swapDirection": "Zamień kierunek"
   }
 }

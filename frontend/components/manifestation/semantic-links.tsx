@@ -227,7 +227,7 @@ export function SemanticLinks({ manifestationId, canEdit = false, compact = fals
       <div className="space-y-2.5" data-testid="semantic-links-compact">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] leading-snug text-muted-foreground">{t("description")}</p>
-          {scanButton}
+          {canEdit && scanButton}
         </div>
         {bodyContent}
       </div>
@@ -244,7 +244,7 @@ export function SemanticLinks({ manifestationId, canEdit = false, compact = fals
           </CardTitle>
           <CardDescription className="text-xs text-muted-foreground mt-0.5">{t("description")}</CardDescription>
         </div>
-        {scanButton}
+        {canEdit && scanButton}
       </CardHeader>
 
       <CardContent className="pt-2">{bodyContent}</CardContent>

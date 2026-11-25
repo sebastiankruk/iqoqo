@@ -573,38 +573,50 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
                 )
                 stats["reparented_expansions"] += operation.record_count
             elif operation.model_class == "WorkRelation":
+                wr_table = _CATALOG_PFX + "work_relations"
                 db.session.execute(
                     text(
-                        "DELETE FROM " + _CATALOG_PFX + "work_relations WHERE (source_work_id = :source AND target_work_id = :target)"
+                        f"DELETE FROM {wr_table} WHERE (source_work_id = :source AND target_work_id = :target)"
                         " OR (source_work_id = :target AND target_work_id = :source)"
+                        f" OR (source_work_id = :source AND EXISTS (SELECT 1 FROM {wr_table} wr2"
+                        f" WHERE wr2.source_work_id = :target AND wr2.target_work_id = {wr_table}.target_work_id"
+                        f" AND wr2.relation_type = {wr_table}.relation_type))"
+                        f" OR (target_work_id = :source AND EXISTS (SELECT 1 FROM {wr_table} wr2"
+                        f" WHERE wr2.target_work_id = :target AND wr2.source_work_id = {wr_table}.source_work_id"
+                        f" AND wr2.relation_type = {wr_table}.relation_type))"
                     ),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 db.session.execute(
-                    text("UPDATE " + _CATALOG_PFX + "work_relations SET source_work_id = :target WHERE source_work_id = :source"),
+                    text(f"UPDATE {wr_table} SET source_work_id = :target WHERE source_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 db.session.execute(
-                    text("UPDATE " + _CATALOG_PFX + "work_relations SET target_work_id = :target WHERE target_work_id = :source"),
+                    text(f"UPDATE {wr_table} SET target_work_id = :target WHERE target_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_work_relations"] += operation.record_count
             elif operation.model_class == "WorkLinkCandidate":
+                wlc_table = _INVENTORY_PFX + "work_link_candidates"
                 db.session.execute(
                     text(
-                        "DELETE FROM "
-                        + _INVENTORY_PFX
-                        + "work_link_candidates WHERE (source_work_id = :source AND target_work_id = :target)"
+                        f"DELETE FROM {wlc_table} WHERE (source_work_id = :source AND target_work_id = :target)"
                         " OR (source_work_id = :target AND target_work_id = :source)"
+                        f" OR (source_work_id = :source AND EXISTS (SELECT 1 FROM {wlc_table} c2"
+                        f" WHERE (c2.source_work_id = :target AND c2.target_work_id = {wlc_table}.target_work_id)"
+                        f" OR (c2.target_work_id = :target AND c2.source_work_id = {wlc_table}.target_work_id)))"
+                        f" OR (target_work_id = :source AND EXISTS (SELECT 1 FROM {wlc_table} c2"
+                        f" WHERE (c2.source_work_id = :target AND c2.target_work_id = {wlc_table}.source_work_id)"
+                        f" OR (c2.target_work_id = :target AND c2.source_work_id = {wlc_table}.source_work_id)))"
                     ),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 db.session.execute(
-                    text("UPDATE " + _INVENTORY_PFX + "work_link_candidates SET source_work_id = :target WHERE source_work_id = :source"),
+                    text(f"UPDATE {wlc_table} SET source_work_id = :target WHERE source_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 db.session.execute(
-                    text("UPDATE " + _INVENTORY_PFX + "work_link_candidates SET target_work_id = :target WHERE target_work_id = :source"),
+                    text(f"UPDATE {wlc_table} SET target_work_id = :target WHERE target_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_work_link_candidates"] += operation.record_count

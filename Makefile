@@ -1370,8 +1370,12 @@ etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for pr
 		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
 	fi
 
-reconcile-cross-media: ## Screen catalog for cross-media Work link candidates (dry-run by default; pass ARGS="--apply")
-	$(PYTHON_CMD) scripts/reconcile_cross_media.py $(ARGS)
+reconcile-cross-media: ## Screen catalog for cross-media Work link candidates (dry-run by default; pass ARGS="--apply", USE_DOCKER=true for production)
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/reconcile_cross_media.py $(ARGS); \
+	else \
+		$(PYTHON_CMD) scripts/reconcile_cross_media.py $(ARGS); \
+	fi
 
 sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production)
 	@echo "Checking ontology sync with DB models..."

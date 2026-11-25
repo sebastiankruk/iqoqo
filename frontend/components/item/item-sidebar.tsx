@@ -212,7 +212,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         handleAddToCollection={handleAddToCollection}
         linkedOpenDataNode={
           item.manifestation_id ? (
-            <SemanticLinks manifestationId={item.manifestation_id} canEdit={!!profile} compact />
+            <SemanticLinks manifestationId={item.manifestation_id} canEdit={hasEditPermission} compact />
           ) : undefined
         }
         adminActionsNode={

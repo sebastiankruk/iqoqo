@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import re
+import time
 import unicodedata
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from app.core.config_service import ConfigService
 from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY, get_format_categories
 from app.db import db
 from app.db.contributions import WorkSeriesMembership
@@ -53,7 +55,7 @@ from app.db.core import (
     WorkLinkCandidate,
     WorkRelation,
 )
-from app.utils.vision import validate_ollama_url
+from app.utils.vision import _is_llm_enabled, _resolve_ollama_base_url, validate_ollama_url
 
 logger = logging.getLogger(__name__)
 
@@ -85,16 +87,21 @@ _STOPWORDS: frozenset[str] = frozenset({"the", "a", "an", "and", "of", "in", "on
 # Media category precedence for inferring derived -> source direction when
 # publication years are unavailable (higher rank typically adapts lower rank).
 _MEDIA_DERIVATION_RANK: dict[str, int] = {
+    "text": 1,
     "book": 1,
+    "audiobook": 2,
     "comic": 2,
     "manga": 2,
     "magazine": 2,
-    "board_game": 3,
-    "movie": 4,
-    "tv_show": 4,
+    "movie": 3,
+    "tv_show": 3,
+    "music": 4,
+    "audio": 4,
+    "game": 5,
+    "board_game": 5,
     "video_game": 5,
-    "music": 6,
-    "audio": 6,
+    "map": 6,
+    "lego": 7,
 }
 
 
@@ -108,6 +115,14 @@ class WorkLinkPrerequisiteError(WorkLinkingError):
 
 class WorkLinkCycleError(WorkLinkingError):
     """Raised when a WorkRelation would create a self-link or directed cycle."""
+
+
+class WorkLinkConflictError(WorkLinkingError):
+    """Raised when an operation conflicts with the current state (e.g., already resolved)."""
+
+
+class WorkLinkValidationError(WorkLinkingError):
+    """Raised when caller-supplied Work IDs or parameters violate invariants."""
 
 
 class WorkLinkNotFoundError(WorkLinkingError):
@@ -273,23 +288,22 @@ def _infer_direction_and_relation(a: _WorkProfile, b: _WorkProfile) -> tuple[int
     return source_id, target_id, WORK_RELATION_IS_ADAPTATION_OF
 
 
-def _resolve_ollama_config() -> tuple[str, str]:
-    """Resolve and SSRF-validate Ollama URL and model name for ENGINE_LLAMA."""
-    raw_url = os.environ.get("OLLAMA_URL", "http://localhost:11434").strip()
-    if not raw_url:
-        raw_url = "http://localhost:11434"
+def _resolve_ollama_config(*, allow_probe: bool = True) -> tuple[str, str]:
+    """Resolve and SSRF-validate Ollama URL and model name via ConfigService."""
     try:
+        raw_url = _resolve_ollama_base_url(allow_probe=allow_probe)
         safe_url = validate_ollama_url(raw_url)
     except ValueError as exc:
         raise WorkLinkPrerequisiteError(str(exc)) from exc
-    model = os.environ.get("OLLAMA_DEDUPE_MODEL", "llama3.1").strip() or "llama3.1"
+    configured_model = ConfigService.get("OLLAMA_DEDUPE_MODEL") or os.environ.get("OLLAMA_DEDUPE_MODEL", "llama3.1")
+    model = str(configured_model).strip() or "llama3.1"
     return safe_url, model
 
 
 def _check_ollama_health(base_url: str, model: str) -> None:
     """Verify local Ollama daemon reachability before running LLM evaluations."""
     try:
-        resp = requests.get(f"{base_url}/api/tags", timeout=5)
+        resp = requests.get(f"{base_url}/api/tags", timeout=5, allow_redirects=False)
         resp.raise_for_status()
         payload = resp.json() if resp.content else {}
     except (requests.RequestException, ValueError) as exc:
@@ -308,6 +322,8 @@ def _adjudicate_with_ollama(
     source_profile: _WorkProfile,
     target_profile: _WorkProfile,
     heuristic_score: float,
+    *,
+    timeout: float = 20.0,
 ) -> tuple[bool, str, float, str] | None:
     """Ask local Ollama to adjudicate a cross-media Work pair."""
     prompt = (
@@ -322,7 +338,8 @@ def _adjudicate_with_ollama(
         resp = requests.post(
             f"{base_url}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False, "format": "json"},
-            timeout=20,
+            timeout=timeout,
+            allow_redirects=False,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -431,6 +448,8 @@ def scan_cross_media_links(
     limit: int | None = None,
     dry_run: bool = True,
     skip_health_check: bool = False,
+    max_llm_calls: int = MAX_LLM_EVALUATIONS_PER_RUN,
+    max_llm_seconds: float | None = None,
 ) -> CrossMediaScanReport:
     """Scan the catalog for cross-media Work link candidates.
 
@@ -445,10 +464,15 @@ def scan_cross_media_links(
 
     ollama_url = ""
     ollama_model = ""
-    if engine == ENGINE_LLAMA:
-        ollama_url, ollama_model = _resolve_ollama_config()
+    llm_active = engine == ENGINE_LLAMA and _is_llm_enabled()
+    if llm_active:
+        ollama_url, ollama_model = _resolve_ollama_config(allow_probe=not skip_health_check)
         if not skip_health_check:
             _check_ollama_health(ollama_url, ollama_model)
+    elif engine == ENGINE_LLAMA:
+        logger.info("ALLOW_LLM is disabled; cross-media scan will queue heuristic candidates only.")
+
+    llm_deadline = time.monotonic() + max_llm_seconds if (llm_active and max_llm_seconds is not None) else None
 
     profiles = _load_work_profiles(limit=limit)
     report = CrossMediaScanReport(works_scanned=len(profiles), dry_run=dry_run, engine=engine)
@@ -506,20 +530,31 @@ def scan_cross_media_links(
         res_source = ENGINE_HEURISTIC
         reasoning: str | None = None
 
-        if engine == ENGINE_LLAMA and report.llm_evaluations < MAX_LLM_EVALUATIONS_PER_RUN:
-            report.llm_evaluations += 1
-            verdict = _adjudicate_with_ollama(ollama_url, ollama_model, src_prof, tgt_prof, score)
-            if verdict is None:
-                report.llm_failures += 1
-                continue
-            is_related, llm_rel_type, llm_conf, llm_reason = verdict
-            if not is_related or llm_conf < threshold:
-                report.below_threshold += 1
-                continue
-            rel_type = llm_rel_type
-            score = llm_conf
-            reasoning = llm_reason
-            res_source = WORK_LINK_RESOLUTION_LLM
+        if llm_active and report.llm_evaluations < max_llm_calls:
+            remaining_budget = 20.0
+            if llm_deadline is not None:
+                remaining_budget = llm_deadline - time.monotonic()
+            if remaining_budget > 0.5:
+                report.llm_evaluations += 1
+                verdict = _adjudicate_with_ollama(
+                    ollama_url,
+                    ollama_model,
+                    src_prof,
+                    tgt_prof,
+                    score,
+                    timeout=min(20.0, remaining_budget),
+                )
+                if verdict is None:
+                    report.llm_failures += 1
+                    continue
+                is_related, llm_rel_type, llm_conf, llm_reason = verdict
+                if not is_related or llm_conf < threshold:
+                    report.below_threshold += 1
+                    continue
+                rel_type = llm_rel_type
+                score = llm_conf
+                reasoning = llm_reason
+                res_source = WORK_LINK_RESOLUTION_LLM
 
         if dry_run:
             report.would_create += 1
@@ -575,6 +610,7 @@ def create_work_relation(
     relation_type: str,
     created_by_id: UUID | None = None,
     notes: str | None = None,
+    commit: bool = True,
 ) -> WorkRelation:
     """Create a confirmed cross-media WorkRelation with self-link and DAG cycle guards."""
     if relation_type not in WORK_RELATION_TYPES:
@@ -608,7 +644,10 @@ def create_work_relation(
         created_by_id=created_by_id,
     )
     db.session.add(relation)
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return relation
 
 
@@ -621,13 +660,17 @@ def accept_candidate(
     target_work_id: int | None = None,
     notes: str | None = None,
 ) -> tuple[WorkLinkCandidate, WorkRelation]:
-    """Confirm a pending WorkLinkCandidate into a WorkRelation (never merges)."""
+    """Confirm a pending WorkLinkCandidate into a WorkRelation atomically (never merges)."""
     candidate = db.session.get(WorkLinkCandidate, candidate_id)
     if candidate is None:
         raise WorkLinkNotFoundError(f"WorkLinkCandidate {candidate_id} not found.")
+    if candidate.status != WORK_LINK_CANDIDATE_STATUS_PENDING:
+        raise WorkLinkConflictError(f"WorkLinkCandidate {candidate_id} is already '{candidate.status}'.")
 
     src_id = source_work_id if source_work_id is not None else candidate.source_work_id
     tgt_id = target_work_id if target_work_id is not None else candidate.target_work_id
+    if {src_id, tgt_id} != {candidate.source_work_id, candidate.target_work_id}:
+        raise WorkLinkValidationError("Override source_work_id and target_work_id must match the candidate Work pair.")
     rel_type = relation_type or candidate.proposed_relation_type
 
     relation = create_work_relation(
@@ -636,6 +679,7 @@ def accept_candidate(
         relation_type=rel_type,
         created_by_id=resolved_by_id,
         notes=notes,
+        commit=False,
     )
     candidate.status = WORK_LINK_CANDIDATE_STATUS_ACCEPTED
     candidate.resolved_at = datetime.now(UTC)

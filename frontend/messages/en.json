@@ -1195,7 +1195,9 @@
       "removing": "Removing…",
       "regenerateTitle": "Regenerate Cover?",
       "regenerateDescription": "This item already has a cover image. Regenerating it will overwrite the existing cover.",
-      "regenerate": "Regenerate"
+      "regenerate": "Regenerate",
+      "helpRequestStatus": "Help Request: {status}",
+      "requestsCount": "Requests ({count})"
     },
     "reassignOwner": "Reassign Owner"
   },
@@ -1350,6 +1352,8 @@
     "sourceWorkPlaceholder": "Search derived work (e.g. film, game)...",
     "targetWorkPlaceholder": "Search source work (e.g. book)...",
     "relationTypeLabel": "Relationship type",
-    "createLink": "Create link"
+    "createLink": "Create link",
+    "cancel": "Cancel",
+    "swapDirection": "Swap direction"
   }
 }

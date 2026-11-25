@@ -322,12 +322,25 @@ def repoint_references(tier: str, source_id: int, target_id: int) -> dict[str, i
                 | ((WorkRelation.source_work_id == target_id) & (WorkRelation.target_work_id == source_id))
             )
         )
-        db.session.execute(
-            delete(WorkLinkCandidate).where(
-                ((WorkLinkCandidate.source_work_id == source_id) & (WorkLinkCandidate.target_work_id == target_id))
-                | ((WorkLinkCandidate.source_work_id == target_id) & (WorkLinkCandidate.target_work_id == source_id))
+        # Pre-prune unordered WorkLinkCandidate collisions (uq_work_link_candidates_pair
+        # enforces uniqueness on (LEAST(src, tgt), GREATEST(src, tgt)) regardless of edge direction).
+        target_cand_peers: set[int] = set()
+        for src_w, tgt_w in db.session.execute(
+            select(WorkLinkCandidate.source_work_id, WorkLinkCandidate.target_work_id).where(
+                (WorkLinkCandidate.source_work_id == target_id) | (WorkLinkCandidate.target_work_id == target_id)
             )
+        ).all():
+            target_cand_peers.add(tgt_w if src_w == target_id else src_w)
+
+        candidate_collision = ((WorkLinkCandidate.source_work_id == source_id) & (WorkLinkCandidate.target_work_id == target_id)) | (
+            (WorkLinkCandidate.source_work_id == target_id) & (WorkLinkCandidate.target_work_id == source_id)
         )
+        if target_cand_peers:
+            candidate_collision = candidate_collision | (
+                ((WorkLinkCandidate.source_work_id == source_id) & WorkLinkCandidate.target_work_id.in_(target_cand_peers))
+                | ((WorkLinkCandidate.target_work_id == source_id) & WorkLinkCandidate.source_work_id.in_(target_cand_peers))
+            )
+        db.session.execute(delete(WorkLinkCandidate).where(candidate_collision))
     moved: dict[str, int] = {}
     for refpoint in refpoints:
         label = f"{refpoint.model.__name__}.{refpoint.fk_attribute}"

@@ -2447,6 +2447,8 @@ def scan_work_links_endpoint() -> tuple[Response, int] | Response:
             threshold=payload.threshold,
             limit=payload.limit,
             dry_run=payload.dry_run,
+            max_llm_calls=5,
+            max_llm_seconds=12.0,
         )
     except work_linking_service.WorkLinkPrerequisiteError as exc:
         return jsonify({"success": False, "error": str(exc), "code": 409}), 409
@@ -2498,7 +2500,7 @@ def accept_work_link_candidate_endpoint(candidate_id: int) -> tuple[Response, in
         )
     except work_linking_service.WorkLinkNotFoundError as exc:
         return jsonify({"success": False, "error": str(exc), "code": 404}), 404
-    except work_linking_service.WorkLinkCycleError as exc:
+    except (work_linking_service.WorkLinkConflictError, work_linking_service.WorkLinkCycleError) as exc:
         db.session.rollback()
         return jsonify({"success": False, "error": str(exc), "code": 409}), 409
     except work_linking_service.WorkLinkingError as exc:
@@ -2559,7 +2561,7 @@ def create_work_link_endpoint() -> tuple[Response, int] | Response:
         )
     except work_linking_service.WorkLinkNotFoundError as exc:
         return jsonify({"success": False, "error": str(exc), "code": 404}), 404
-    except work_linking_service.WorkLinkCycleError as exc:
+    except (work_linking_service.WorkLinkConflictError, work_linking_service.WorkLinkCycleError) as exc:
         db.session.rollback()
         return jsonify({"success": False, "error": str(exc), "code": 409}), 409
     except work_linking_service.WorkLinkingError as exc:

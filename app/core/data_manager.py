@@ -1606,10 +1606,20 @@ class DataManager:
                 mixed_q = mixed_q.join(Manifestation, Item.manifestation_id == Manifestation.id).join(
                     Expression, Manifestation.expression_id == Expression.id
                 )
+            primary_work_cats: dict[int, set[str]] = {}
+            if target_entity == "works":
+                for w_id, w_ct in db.session.execute(
+                    select(Expression.work_id, func.lower(Expression.content_type)).where(
+                        Expression.work_id.in_(select(cat_subq.c.id)),
+                        Expression.content_type.isnot(None),
+                    )
+                ).all():
+                    if w_ct:
+                        primary_work_cats.setdefault(w_id, set()).add(str(w_ct))
             seen_secondary: dict[str, set[Any]] = {}
             for entity_id_val, ct_val, m_fmt in db.session.execute(mixed_q).all():
                 for sec_cat in MIXED_MEDIA_FORMAT_CATEGORIES.get(m_fmt, ()):
-                    if sec_cat != ct_val:
+                    if sec_cat != ct_val and sec_cat not in primary_work_cats.get(entity_id_val, ()):
                         seen_secondary.setdefault(sec_cat, set()).add(entity_id_val)
             for sec_cat, sec_ids in seen_secondary.items():
                 category_counts[sec_cat] = category_counts.get(sec_cat, 0) + len(sec_ids)

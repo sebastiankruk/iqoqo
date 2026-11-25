@@ -379,8 +379,16 @@ class SearchService:
 
         extra_filters_sql = ""
         if category:
-            params["category"] = tuple(category)
-            extra_filters_sql += " AND e.content_type IN :category"
+            from app.core.taxonomy import MIXED_MEDIA_FORMAT_CATEGORIES
+
+            cat_list = [str(c).strip().lower() for c in category if str(c).strip()]
+            params["category"] = tuple(cat_list)
+            mixed_fmts = tuple(sorted({fmt for fmt, cats in MIXED_MEDIA_FORMAT_CATEGORIES.items() if any(c in cats for c in cat_list)}))
+            if mixed_fmts:
+                params["cat_mixed_formats"] = mixed_fmts
+                extra_filters_sql += " AND (e.content_type IN :category" " OR LOWER(TRIM(COALESCE(m.format, ''))) IN :cat_mixed_formats)"
+            else:
+                extra_filters_sql += " AND e.content_type IN :category"
         if format_filter:
             from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
 

@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRight, Check, GitBranch, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Check, GitBranch, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +54,8 @@ import {
   type WorkRelationItem,
   type WorkRelationType,
 } from "@/lib/api/admin";
-import { apiClient } from "@/lib/api/client";
+import { useCatalogGraphSearch } from "@/lib/api/hooks/catalog";
+import { useDebounce } from "@/lib/hooks/use-debounce";
 
 const RELATION_TYPES: WorkRelationType[] = [
   "is_adaptation_of",
@@ -64,11 +65,6 @@ const RELATION_TYPES: WorkRelationType[] = [
   "spin_off_of",
   "companion_to",
 ];
-
-interface WorkSearchResult {
-  id: number;
-  title: string;
-}
 
 interface WorkLinkReviewerProps {
   canEdit: boolean;
@@ -93,11 +89,27 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
   const [manualOpen, setManualOpen] = useState(false);
   const [sourceQuery, setSourceQuery] = useState("");
   const [targetQuery, setTargetQuery] = useState("");
-  const [sourceResults, setSourceResults] = useState<WorkSearchResult[]>([]);
-  const [targetResults, setTargetResults] = useState<WorkSearchResult[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null);
   const [manualRelationType, setManualRelationType] = useState<WorkRelationType>("is_adaptation_of");
+  const [swappedCandidateIds, setSwappedCandidateIds] = useState<Record<number, boolean>>({});
+
+  const debouncedSourceQuery = useDebounce(sourceQuery, 250);
+  const debouncedTargetQuery = useDebounce(targetQuery, 250);
+  const { data: sourceSearchData = [] } = useCatalogGraphSearch(
+    debouncedSourceQuery,
+    "work",
+    8,
+    manualOpen && selectedSourceId === null
+  );
+  const { data: targetSearchData = [] } = useCatalogGraphSearch(
+    debouncedTargetQuery,
+    "work",
+    8,
+    manualOpen && selectedTargetId === null
+  );
+  const sourceResults = sourceSearchData.map(r => ({ id: r.entity_id, title: r.label }));
+  const targetResults = targetSearchData.map(r => ({ id: r.entity_id, title: r.label }));
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -154,7 +166,11 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
     setErrorMsg(null);
     try {
       const chosenType = relationChoices[candidate.id] ?? candidate.proposed_relation_type;
-      await acceptWorkLinkCandidate(candidate.id, { relation_type: chosenType });
+      const isSwapped = Boolean(swappedCandidateIds[candidate.id]);
+      await acceptWorkLinkCandidate(candidate.id, {
+        relation_type: chosenType,
+        ...(isSwapped ? { source_work_id: candidate.target_work_id, target_work_id: candidate.source_work_id } : {}),
+      });
       await loadData();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to confirm link");
@@ -183,24 +199,11 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
     }
   };
 
-  const searchWorks = async (query: string, setter: (rows: WorkSearchResult[]) => void) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setter([]);
-      return;
-    }
-    try {
-      const res = await apiClient.get<{ results?: Array<{ entity_id?: number; label?: string }> }>(
-        "/v1/catalog/graph/search",
-        { params: { q: trimmed, types: "work", limit: 8 } }
-      );
-      const rows = (res.data?.results ?? [])
-        .filter(r => typeof r.entity_id === "number" && typeof r.label === "string")
-        .map(r => ({ id: r.entity_id as number, title: r.label as string }));
-      setter(rows);
-    } catch {
-      setter([]);
-    }
+  const handleSwapManualDirection = () => {
+    setSelectedSourceId(selectedTargetId);
+    setSelectedTargetId(selectedSourceId);
+    setSourceQuery(targetQuery);
+    setTargetQuery(sourceQuery);
   };
 
   const handleCreateManualLink = async () => {
@@ -288,82 +291,102 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
           <EmptyState icon={GitBranch} title={t("emptyPending")} description={t("subtitle")} />
         ) : (
           <div className="grid gap-4">
-            {candidates.map(cand => (
-              <Card key={cand.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle className="text-base">
-                        {cand.source_work_title ?? `Work #${cand.source_work_id}`}
-                      </CardTitle>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <CardTitle className="text-base">
-                        {cand.target_work_title ?? `Work #${cand.target_work_id}`}
-                      </CardTitle>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{Math.round(cand.confidence * 100)}%</Badge>
-                      <Badge variant={cand.resolution_source === "llm" ? "default" : "secondary"}>
-                        {cand.resolution_source === "llm" ? (
-                          <span className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            {t("provenanceLlama")}
-                          </span>
-                        ) : (
-                          t("provenanceHeuristic")
+            {candidates.map(cand => {
+              const isSwapped = Boolean(swappedCandidateIds[cand.id]);
+              const srcTitle = isSwapped
+                ? (cand.target_work_title ?? `Work #${cand.target_work_id}`)
+                : (cand.source_work_title ?? `Work #${cand.source_work_id}`);
+              const tgtTitle = isSwapped
+                ? (cand.source_work_title ?? `Work #${cand.source_work_id}`)
+                : (cand.target_work_title ?? `Work #${cand.target_work_id}`);
+              const srcCats = isSwapped ? cand.target_categories : cand.source_categories;
+              const tgtCats = isSwapped ? cand.source_categories : cand.target_categories;
+              return (
+                <Card key={cand.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle className="text-base">{srcTitle}</CardTitle>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-base">{tgtTitle}</CardTitle>
+                        {canEdit && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label={t("swapDirection")}
+                            onClick={() => setSwappedCandidateIds(prev => ({ ...prev, [cand.id]: !prev[cand.id] }))}
+                          >
+                            <ArrowLeftRight className="h-3.5 w-3.5" />
+                          </Button>
                         )}
-                      </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {cand.confidence != null ? `${Math.round(cand.confidence * 100)}%` : "—"}
+                        </Badge>
+                        <Badge variant={cand.resolution_source === "llm" ? "default" : "secondary"}>
+                          {cand.resolution_source === "llm" ? (
+                            <span className="flex items-center gap-1">
+                              <Sparkles className="h-3 w-3" />
+                              {t("provenanceLlama")}
+                            </span>
+                          ) : (
+                            t("provenanceHeuristic")
+                          )}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                  <CardDescription className="flex flex-wrap gap-2 pt-1">
-                    {cand.source_categories.map(cat => (
-                      <Badge key={`src-${cand.id}-${cat}`} variant="outline">
-                        {cat}
-                      </Badge>
-                    ))}
-                    <span>→</span>
-                    {cand.target_categories.map(cat => (
-                      <Badge key={`tgt-${cand.id}-${cat}`} variant="outline">
-                        {cat}
-                      </Badge>
-                    ))}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Select
-                      value={relationChoices[cand.id] ?? cand.proposed_relation_type}
-                      onValueChange={v => setRelationChoices(prev => ({ ...prev, [cand.id]: v as WorkRelationType }))}
-                    >
-                      <SelectTrigger className="w-52">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RELATION_TYPES.map(rt => (
-                          <SelectItem key={rt} value={rt}>
-                            {rt.replaceAll("_", " ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {cand.llm_reasoning && <p className="text-xs text-muted-foreground">{cand.llm_reasoning}</p>}
-                  </div>
+                    <CardDescription className="flex flex-wrap gap-2 pt-1">
+                      {srcCats.map(cat => (
+                        <Badge key={`src-${cand.id}-${cat}`} variant="outline">
+                          {cat}
+                        </Badge>
+                      ))}
+                      <span>→</span>
+                      {tgtCats.map(cat => (
+                        <Badge key={`tgt-${cand.id}-${cat}`} variant="outline">
+                          {cat}
+                        </Badge>
+                      ))}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex flex-col gap-2">
+                      <Select
+                        value={relationChoices[cand.id] ?? cand.proposed_relation_type}
+                        onValueChange={v => setRelationChoices(prev => ({ ...prev, [cand.id]: v as WorkRelationType }))}
+                      >
+                        <SelectTrigger className="w-52">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RELATION_TYPES.map(rt => (
+                            <SelectItem key={rt} value={rt}>
+                              {rt.replaceAll("_", " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {cand.llm_reasoning && <p className="text-xs text-muted-foreground">{cand.llm_reasoning}</p>}
+                    </div>
 
-                  {canEdit && (
-                    <div className="flex items-center gap-2">
-                      <Button type="button" size="sm" onClick={() => void handleAccept(cand)}>
-                        <Check className="h-4 w-4 mr-1" />
-                        {t("accept")}
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => void handleDismiss(cand.id)}>
-                        <X className="h-4 w-4 mr-1" />
-                        {t("dismiss")}
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    {canEdit && (
+                      <div className="flex items-center gap-2">
+                        <Button type="button" size="sm" onClick={() => void handleAccept(cand)}>
+                          <Check className="h-4 w-4 mr-1" />
+                          {t("accept")}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => void handleDismiss(cand.id)}>
+                          <X className="h-4 w-4 mr-1" />
+                          {t("dismiss")}
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )
       ) : relations.length === 0 ? (
@@ -402,7 +425,7 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
             <AlertDialogDescription>{t("unlinkConfirmBody")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("dismiss")}</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleConfirmUnlink()}>{t("unlink")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -423,11 +446,11 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
                 value={sourceQuery}
                 onChange={e => {
                   setSourceQuery(e.target.value);
-                  void searchWorks(e.target.value, setSourceResults);
+                  setSelectedSourceId(null);
                 }}
                 placeholder={t("sourceWorkPlaceholder")}
               />
-              {sourceResults.length > 0 && (
+              {sourceResults.length > 0 && selectedSourceId === null && (
                 <div className="mt-1 border rounded-md max-h-32 overflow-y-auto">
                   {sourceResults.map(w => (
                     <button
@@ -437,7 +460,6 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
                       onClick={() => {
                         setSelectedSourceId(w.id);
                         setSourceQuery(w.title);
-                        setSourceResults([]);
                       }}
                     >
                       {w.title} (#{w.id})
@@ -447,20 +469,32 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
               )}
             </div>
 
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("relationTypeLabel")}</label>
-              <Select value={manualRelationType} onValueChange={v => setManualRelationType(v as WorkRelationType)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RELATION_TYPES.map(rt => (
-                    <SelectItem key={`manual-${rt}`} value={rt}>
-                      {rt.replaceAll("_", " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("relationTypeLabel")}</label>
+                <Select value={manualRelationType} onValueChange={v => setManualRelationType(v as WorkRelationType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RELATION_TYPES.map(rt => (
+                      <SelectItem key={`manual-${rt}`} value={rt}>
+                        {rt.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSwapManualDirection}
+                aria-label={t("swapDirection")}
+                title={t("swapDirection")}
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+              </Button>
             </div>
 
             <div>
@@ -470,11 +504,11 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
                 value={targetQuery}
                 onChange={e => {
                   setTargetQuery(e.target.value);
-                  void searchWorks(e.target.value, setTargetResults);
+                  setSelectedTargetId(null);
                 }}
                 placeholder={t("targetWorkPlaceholder")}
               />
-              {targetResults.length > 0 && (
+              {targetResults.length > 0 && selectedTargetId === null && (
                 <div className="mt-1 border rounded-md max-h-32 overflow-y-auto">
                   {targetResults.map(w => (
                     <button
@@ -484,7 +518,6 @@ export function WorkLinkReviewer({ canEdit }: WorkLinkReviewerProps) {
                       onClick={() => {
                         setSelectedTargetId(w.id);
                         setTargetQuery(w.title);
-                        setTargetResults([]);
                       }}
                     >
                       {w.title} (#{w.id})

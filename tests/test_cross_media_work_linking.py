@@ -246,3 +246,174 @@ def test_admin_api_rbac_and_federation_head_guard(app, client, admin_headers, no
     monkeypatch.setattr("app.api.admin.is_federation_head_mode", lambda: False)
     res_del = client.delete(f"/api/v1/admin/work-links/{rel_id}", headers=admin_headers)
     assert res_del.status_code == 200
+
+
+def test_frbr_merge_reversed_candidate_collision_and_etl_merge(app):
+    """ORM repoint_references and ETL apply_work_merge_plan prune reversed/third-party collisions."""
+    from app.core.frbr_merge import delete_source_row, repoint_references
+    from scripts.etl.merge import apply_work_merge_plan, generate_work_merge_plan
+
+    with app.app_context():
+        w_src = Work(title="Source Novel")
+        w_tgt = Work(title="Target Novel")
+        w_peer = Work(title="Film Adaptation")
+        w_etl_src = Work(title="ETL Source")
+        w_etl_tgt = Work(title="ETL Target")
+        db.session.add_all([w_src, w_tgt, w_peer, w_etl_src, w_etl_tgt])
+        db.session.flush()
+
+        # Reversed unordered pair: (src, peer) and (peer, tgt)
+        db.session.add_all(
+            [
+                WorkLinkCandidate(
+                    source_work_id=w_src.id,
+                    target_work_id=w_peer.id,
+                    proposed_relation_type="is_adaptation_of",
+                    confidence=0.85,
+                    resolution_source="heuristic",
+                    status="pending",
+                ),
+                WorkLinkCandidate(
+                    source_work_id=w_peer.id,
+                    target_work_id=w_tgt.id,
+                    proposed_relation_type="is_adaptation_of",
+                    confidence=0.90,
+                    resolution_source="heuristic",
+                    status="pending",
+                ),
+                # ETL third-party WorkRelation + WorkLinkCandidate collision
+                WorkRelation(source_work_id=w_etl_src.id, target_work_id=w_peer.id, relation_type="is_adaptation_of"),
+                WorkRelation(source_work_id=w_etl_tgt.id, target_work_id=w_peer.id, relation_type="is_adaptation_of"),
+                WorkLinkCandidate(
+                    source_work_id=w_etl_src.id,
+                    target_work_id=w_peer.id,
+                    proposed_relation_type="is_adaptation_of",
+                    confidence=0.8,
+                    resolution_source="heuristic",
+                    status="pending",
+                ),
+                WorkLinkCandidate(
+                    source_work_id=w_peer.id,
+                    target_work_id=w_etl_tgt.id,
+                    proposed_relation_type="is_adaptation_of",
+                    confidence=0.85,
+                    resolution_source="heuristic",
+                    status="pending",
+                ),
+            ]
+        )
+        db.session.commit()
+
+        repoint_references("work", w_src.id, w_tgt.id)
+        delete_source_row(w_src)
+        db.session.commit()
+        assert db.session.get(Work, w_src.id) is None
+        assert db.session.get(Work, w_tgt.id) is not None
+
+        etl_src_id = w_etl_src.id
+        plan = generate_work_merge_plan(w_etl_tgt, w_etl_src)
+        stats = apply_work_merge_plan(plan, dry_run=False)
+        db.session.expire_all()
+        assert stats["reparented_work_relations"] >= 1
+        assert db.session.get(Work, etl_src_id) is None
+
+
+def test_c152_llm_governance_derivation_rank_and_atomic_accept(app, client, admin_headers, monkeypatch):
+    """ALLOW_LLM=false skips Ollama, taxonomy 'text' ranks original, and accept enforces 400/409."""
+    from sqlalchemy import select
+
+    ids = _seed_lotr_and_hp(app)
+    with app.app_context():
+        # Taxonomy 'text' book vs 'movie' film -> movie is source, book ('text') is target
+        w_text = Work(title="The Silmarillion")
+        w_film = Work(title="The Silmarillion (Film)")
+        db.session.add_all([w_text, w_film])
+        db.session.flush()
+        db.session.add_all(
+            [
+                Expression(work_id=w_text.id, content_type="text", language="en"),
+                Expression(work_id=w_film.id, content_type="movie", language="en"),
+            ]
+        )
+        db.session.commit()
+
+        # ALLOW_LLM=false -> zero Ollama requests even with engine="llama"
+        monkeypatch.setattr(work_linking_service, "_is_llm_enabled", lambda: False)
+        called = False
+
+        def _boom(*_args, **_kwargs):
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr(work_linking_service, "_adjudicate_with_ollama", _boom)
+        report = work_linking_service.scan_cross_media_links(engine="llama", dry_run=False)
+        assert not called
+        assert report.created >= 1
+
+        sil_cand = db.session.execute(
+            select(WorkLinkCandidate).where(
+                ((WorkLinkCandidate.source_work_id == w_film.id) & (WorkLinkCandidate.target_work_id == w_text.id))
+                | ((WorkLinkCandidate.source_work_id == w_text.id) & (WorkLinkCandidate.target_work_id == w_film.id))
+            )
+        ).scalar_one()
+        assert sil_cand.source_work_id == w_film.id
+        assert sil_cand.target_work_id == w_text.id
+        cand_id = sil_cand.id
+
+    # Invalid override work ID -> 400
+    res_bad = client.post(
+        f"/api/v1/admin/work-links/candidates/{cand_id}/accept",
+        json={"source_work_id": ids["lotr_book"], "target_work_id": ids["hp_book"]},
+        headers=admin_headers,
+    )
+    assert res_bad.status_code == 400
+
+    # Valid swap override -> 200
+    res_ok = client.post(
+        f"/api/v1/admin/work-links/candidates/{cand_id}/accept",
+        json={"source_work_id": w_text.id, "target_work_id": w_film.id},
+        headers=admin_headers,
+    )
+    assert res_ok.status_code == 200
+
+    # Re-accepting non-pending candidate -> 409
+    res_dup = client.post(
+        f"/api/v1/admin/work-links/candidates/{cand_id}/accept",
+        json={},
+        headers=admin_headers,
+    )
+    assert res_dup.status_code == 409
+
+
+def test_c152_library_graph_derivatives_and_balanced_root_search(app, client):
+    """build_library_graph emits derivatives edges and search_root_candidates balances quotas."""
+    from app.core.graph_service import GraphService
+
+    with app.app_context():
+        w_book = Work(title="BalancedSearchBook")
+        w_film = Work(title="BalancedSearchFilm")
+        w_series = Work(title="BalancedSearchSeries", work_kind="series")
+        db.session.add_all([w_book, w_film, w_series])
+        db.session.flush()
+        db.session.add(WorkRelation(source_work_id=w_film.id, target_work_id=w_book.id, relation_type="is_adaptation_of"))
+        # Add 6 person contributors + 1 org contributor matching "BalancedSearch"
+        for i in range(6):
+            db.session.add(Contributor(name=f"BalancedSearch Person {i}", type="person"))
+        db.session.add(Contributor(name="BalancedSearch Org", type="organization"))
+        db.session.commit()
+
+        lib_graph = GraphService.build_library_graph(edge_categories={"derivatives"})
+        assert any(
+            e["category"] == "derivatives" and e["source"] == f"work:{w_film.id}" and e["target"] == f"work:{w_book.id}"
+            for e in lib_graph["edges"]
+        )
+
+    res = client.get("/api/catalog/graph/search?q=BalancedSearch&types=person,series,work&limit=6")
+    assert res.status_code == 200
+    rows = res.get_json()["data"]
+    types_present = {r["entity_type"] for r in rows}
+    assert types_present == {"person", "series", "work"}
+    assert all("Org" not in r["label"] for r in rows if r["entity_type"] == "person")
+    work_ids = [r["entity_id"] for r in rows if r["entity_type"] == "work"]
+    series_ids = [r["entity_id"] for r in rows if r["entity_type"] == "series"]
+    assert set(work_ids).isdisjoint(set(series_ids))
