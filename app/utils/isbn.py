@@ -510,10 +510,7 @@ def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] 
 
     bibs = data.get("bibs") if isinstance(data, dict) else None
     if not bibs or not isinstance(bibs, list):
-        return ISBNProviderOutcome(
-            status=ISBNProviderOutcomeStatus.NO_RESULT,
-            provider="biblioteka_narodowa",
-        )
+        return _lookup_bn_primo_outcome(isbn, session=session, timeout=to)
 
     bib = bibs[0]
     raw_title = bib.get("title", "")
@@ -582,6 +579,80 @@ def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] 
         "isbn13": isbn,
     }
 
+    return ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata=metadata,
+        provider="biblioteka_narodowa",
+    )
+
+
+def _lookup_bn_primo_outcome(
+    isbn: str,
+    *,
+    session: requests.Session | None = None,
+    timeout: tuple[float, float] | float | None = None,
+) -> ISBNProviderOutcome:
+    """Fallback to live Biblioteka Narodowa Primo VE REST API when data.bn.org.pl lags."""
+    primo_url = (
+        f"https://katalogi.bn.org.pl/primaws/rest/pub/pnxs"
+        f"?q=isbn,exact,{isbn}&vid=48OMNIS_NLOP:48OMNIS_NLOP&scope=NLOP_IZ_NZ&tab=LibraryCatalog&limit=1"
+    )
+    try:
+        sess = session or _make_session()
+        to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+        resp = sess.get(primo_url, timeout=to)
+        resp.raise_for_status()
+        payload = resp.json()
+    except (requests.RequestException, ValueError):
+        return ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="biblioteka_narodowa")
+
+    docs = payload.get("docs") if isinstance(payload, dict) else None
+    if not docs or not isinstance(docs, list) or not isinstance(docs[0], dict):
+        return ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="biblioteka_narodowa")
+
+    display = (docs[0].get("pnx") or {}).get("display") or {}
+    raw_titles = display.get("title") or []
+    raw_title = str(raw_titles[0]).strip() if raw_titles else ""
+    title = raw_title.split(" / ", 1)[0].strip() if " / " in raw_title else re.sub(r"\s*[/:]\s*$", "", raw_title).strip()
+    if not title:
+        return ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="biblioteka_narodowa")
+
+    authors: list[str] = []
+    for raw_creator in display.get("creator") or []:
+        cleaned = str(raw_creator).split("$$", 1)[0]
+        cleaned = re.sub(r"\(\d{4}[^)]*\).*$", "", cleaned).strip().rstrip(",")
+        if "," in cleaned:
+            parts = [p.strip() for p in cleaned.split(",", 1)]
+            cleaned = f"{parts[1]} {parts[0]}".strip()
+        if cleaned and cleaned not in authors:
+            authors.append(cleaned)
+
+    raw_pub = (display.get("publisher") or [""])[0]
+    publisher = str(raw_pub).split(" : ", 1)[-1].strip().rstrip(",") if raw_pub else ""
+
+    year_val: int | None = None
+    for raw_yr in (display.get("lds05") or []) + (display.get("creationdate") or []):
+        m = re.search(r"\b(1\d{3}|20\d{2})\b", str(raw_yr))
+        if m:
+            year_val = int(m.group(1))
+            break
+
+    categories = [str(g).strip() for g in (display.get("genre") or []) if str(g).strip()]
+    metadata = {
+        "Title": title,
+        "title": title,
+        "Authors": authors,
+        "authors": authors,
+        "publisher": publisher,
+        "year": year_val,
+        "publication_date": str(year_val) if year_val else None,
+        "Categories": categories,
+        "categories": categories,
+        "Source": "Biblioteka Narodowa",
+        "data_source": "biblioteka_narodowa",
+        "barcode": isbn,
+        "isbn13": isbn,
+    }
     return ISBNProviderOutcome(
         status=ISBNProviderOutcomeStatus.SUCCESS,
         metadata=metadata,

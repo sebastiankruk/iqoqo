@@ -568,3 +568,45 @@ def test_calc_timeout_sub_1_5s_budget():
     conn_to, read_to = captured_timeouts[0]
     assert conn_to <= 0.4
     assert read_to <= 0.4
+
+
+def test_biblioteka_narodowa_primo_fallback_parses_new_alma_record():
+    """Verify BN Primo VE REST fallback resolves new Alma ISBNs missing from data.bn.org.pl."""
+    from app.utils.isbn import ISBNProviderOutcomeStatus, _lookup_biblioteka_narodowa_outcome
+
+    data_bn_resp = MagicMock()
+    data_bn_resp.status_code = 200
+    data_bn_resp.json.return_value = {"nextPage": "", "bibs": []}
+
+    primo_resp = MagicMock()
+    primo_resp.status_code = 200
+    primo_resp.json.return_value = {
+        "docs": [
+            {
+                "pnx": {
+                    "display": {
+                        "title": ["Cięcie / Jo Nesbø ; przełożyła z norweskiego Iwona Zimnicka."],
+                        "creator": ["Nesbø, Jo (1960- ) Autor$$QNesbø, Jo (1960- )"],
+                        "publisher": ["Wrocław : Wydawnictwo Dolnośląskie. Oddział Publicat"],
+                        "lds05": ["2026"],
+                        "genre": ["Kryminał", "Powieść"],
+                    }
+                }
+            }
+        ]
+    }
+
+    mock_session = MagicMock()
+    mock_session.get.side_effect = [data_bn_resp, primo_resp]
+    mock_session.headers = {"User-Agent": "test-agent"}
+
+    with patch("app.utils.isbn._make_session", return_value=mock_session):
+        outcome = _lookup_biblioteka_narodowa_outcome("9788327170255")
+
+    assert outcome.status == ISBNProviderOutcomeStatus.SUCCESS
+    assert outcome.metadata is not None
+    assert outcome.metadata["Title"] == "Cięcie"
+    assert outcome.metadata["Authors"] == ["Jo Nesbø"]
+    assert outcome.metadata["publisher"] == "Wydawnictwo Dolnośląskie. Oddział Publicat"
+    assert outcome.metadata["year"] == 2026
+    assert outcome.metadata["Categories"] == ["Kryminał", "Powieść"]
