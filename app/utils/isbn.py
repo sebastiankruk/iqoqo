@@ -364,6 +364,19 @@ def fetch_google_books_candidates(query: str, max_results: int = 10) -> list[dic
     return results
 
 
+def _extract_cover_url(value: Any) -> str | None:
+    """Normalize a provider cover value (string URL or Open Library size dict) to a string URL."""
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return cleaned or None
+    if isinstance(value, dict):
+        for key in ("large", "medium", "small", "thumbnail", "smallThumbnail", "url"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return None
+
+
 def _lookup_open_library_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the Open Library Books API.
 
@@ -442,6 +455,9 @@ def _lookup_open_library_outcome(isbn: str, timeout: tuple[float, float] | float
             "Source": "Open Library",
         }
     )
+    ol_cover = _extract_cover_url(book.get("cover"))
+    if ol_cover:
+        metadata["cover_url"] = ol_cover
     return ISBNProviderOutcome(
         status=ISBNProviderOutcomeStatus.SUCCESS,
         metadata=metadata,
@@ -691,9 +707,16 @@ def _merge_metadata_gaps(primary: dict[str, Any], secondary: dict[str, Any], pri
             merged[k] = v
             prov[k] = secondary_name
 
-    # Specifically check cover_url / cover / thumbnail
-    if _is_empty(merged.get("cover_url")):
-        sec_cover = secondary.get("cover_url") or secondary.get("cover") or secondary.get("thumbnail")
+    # Specifically check cover_url / cover / thumbnail (always normalize dict covers to str URL)
+    existing_cover = _extract_cover_url(merged.get("cover_url"))
+    if existing_cover:
+        merged["cover_url"] = existing_cover
+    else:
+        sec_cover = (
+            _extract_cover_url(secondary.get("cover_url"))
+            or _extract_cover_url(secondary.get("cover"))
+            or _extract_cover_url(secondary.get("thumbnail"))
+        )
         if sec_cover:
             merged["cover_url"] = sec_cover
             prov["cover_url"] = secondary_name

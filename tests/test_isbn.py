@@ -610,3 +610,21 @@ def test_biblioteka_narodowa_primo_fallback_parses_new_alma_record():
     assert outcome.metadata["publisher"] == "Wydawnictwo Dolnośląskie. Oddział Publicat"
     assert outcome.metadata["year"] == 2026
     assert outcome.metadata["Categories"] == ["Kryminał", "Powieść"]
+
+
+def test_merge_metadata_normalizes_open_library_cover_dict_to_string():
+    """Open Library cover size dicts must normalize to a string URL, never a dict."""
+    from app.utils.isbn import _merge_metadata_gaps
+
+    gb = {"Title": "Ósmy grzech", "Authors": ["Piotr Górski"]}
+    ol = {
+        "Title": "Ósmy grzech",
+        "cover": {
+            "small": "https://covers.openlibrary.org/b/id/15223041-S.jpg",
+            "medium": "https://covers.openlibrary.org/b/id/15223041-M.jpg",
+            "large": "https://covers.openlibrary.org/b/id/15223041-L.jpg",
+        },
+    }
+    merged = _merge_metadata_gaps(gb, ol, "google_books", "open_library")
+    assert isinstance(merged["cover_url"], str)
+    assert merged["cover_url"] == "https://covers.openlibrary.org/b/id/15223041-L.jpg"
