@@ -283,3 +283,29 @@ EOF"
 
   [ "$(stat -c '%a' "$env_file")" = "600" ]
 }
+
+@test "run.sh rejects invalid positional mode typos like previeww" {
+  run bash "$RUN_SH" previeww --stop
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid mode 'previeww'"* ]]
+}
+
+@test "run.sh --stop in preview mode passes --env-file .env.preview when present" {
+  local work="${TEST_TEMP_DIR}/stop-preview"
+  local mock_bin="${TEST_TEMP_DIR}/mock-bin"
+  mkdir -p "$work" "$mock_bin"
+  cp "$RUN_SH" "$work/run.sh"
+  touch "$work/docker-compose.yml" "$work/.env.preview"
+
+  cat << 'EOF' > "${mock_bin}/docker"
+#!/bin/bash
+echo "DOCKER: $*" >> "${TEST_TEMP_DIR}/docker-stop.log"
+exit 0
+EOF
+  chmod +x "${mock_bin}/docker"
+
+  run env PATH="${mock_bin}:${PATH}" bash -c "cd '$work' && ./run.sh preview --stop"
+  [ "$status" -eq 0 ]
+  run cat "${TEST_TEMP_DIR}/docker-stop.log"
+  [[ "$output" == *"compose --env-file .env.preview -f docker-compose.yml down --remove-orphans"* ]]
+}

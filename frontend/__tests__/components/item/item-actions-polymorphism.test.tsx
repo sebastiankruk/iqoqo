@@ -15,28 +15,12 @@
 //
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { ItemActions } from "@/components/item/item-actions";
+import { ItemHeader } from "@/components/item/item-header";
 import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
-  useProfile: vi.fn(() => ({
-    data: { id: "test-user", permissions: ["update:item"] },
-  })),
-  useDeleteItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useRegenerateCover: vi.fn(() => ({ mutateAsync: vi.fn() })),
-  useUpdateItem: vi.fn(() => ({ mutate: vi.fn() })),
-  queryKeys: { item: vi.fn((id: number) => ["item", id]) },
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: vi.fn(() => ({ setQueryData: vi.fn(), invalidateQueries: vi.fn() })),
-  useQuery: vi.fn(() => ({ data: [], isLoading: false })),
-  useMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-
-vi.mock("@/lib/api/escalations", () => ({
-  useCreateEscalation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useMyEscalations: vi.fn(() => ({ data: [], isLoading: false })),
+  useWorkParts: () => ({ data: { data: [] } }),
+  useUpdateItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 vi.mock("sonner", () => ({
@@ -57,42 +41,47 @@ const baseItem = {
   meta: {},
 } as unknown as Item;
 
-describe("ItemActions Polymorphism", () => {
+describe("ItemHeader Polymorphic Primary CTA", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
   it("renders Log Reading Progress for a Book", () => {
     const bookItem = { ...baseItem, meta: { format: "Book" } } as unknown as Item;
-    render(<ItemActions item={bookItem} />);
+    render(<ItemHeader item={bookItem} />);
 
-    expect(screen.getByText(/Log Reading Progress/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Now Listening/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Now Watching/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Log Play/i)).not.toBeInTheDocument();
+    const cta = screen.getByTestId("primary-consumption-cta");
+    expect(cta).toHaveTextContent(/Log Reading Progress/i);
   });
 
   it("renders Now Listening for an Audio item", () => {
     const audioItem = { ...baseItem, manifestation_meta: { format: "CD" } } as unknown as Item;
-    render(<ItemActions item={audioItem} />);
+    render(<ItemHeader item={audioItem} />);
 
-    expect(screen.getByText(/Now Listening/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
+    const cta = screen.getByTestId("primary-consumption-cta");
+    expect(cta).toHaveTextContent(/Now Listening/i);
   });
 
   it("renders Mark as Watched for a Video item", () => {
     const videoItem = { ...baseItem, meta: { format: "DVD" } } as unknown as Item;
-    render(<ItemActions item={videoItem} />);
+    render(<ItemHeader item={videoItem} />);
 
-    expect(screen.getByText(/Mark as Watched/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
+    const cta = screen.getByTestId("primary-consumption-cta");
+    expect(cta).toHaveTextContent(/Mark as Watched/i);
   });
 
   it("renders Log Play for a Game", () => {
     const gameItem = { ...baseItem, meta: { format: "BoardGame" } } as unknown as Item;
-    render(<ItemActions item={gameItem} />);
+    render(<ItemHeader item={gameItem} />);
 
-    expect(screen.getByText(/Log Play/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
+    const cta = screen.getByTestId("primary-consumption-cta");
+    expect(cta).toHaveTextContent(/Log Play/i);
+  });
+
+  it("omits primary consumption CTA for non-owners", () => {
+    const nonOwnerItem = { ...baseItem, is_owner: false, meta: { format: "Book" } } as unknown as Item;
+    render(<ItemHeader item={nonOwnerItem} />);
+
+    expect(screen.queryByTestId("primary-consumption-cta")).not.toBeInTheDocument();
   });
 });

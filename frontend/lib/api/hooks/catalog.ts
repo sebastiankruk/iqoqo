@@ -31,6 +31,7 @@ import type {
   ExpressionDetail,
   CatalogGraphData,
   GraphAnchorEntityType,
+  GraphRootSearchResult,
 } from "@/types/frbr";
 
 import { queryKeys } from "./query-keys";
@@ -172,7 +173,8 @@ export function useInfiniteItems(
   lodStatus?: string,
   scope?: "personal" | "friends" | "global",
   hasMap?: boolean,
-  visibility?: string[]
+  visibility?: string[],
+  expressionKind?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -199,6 +201,7 @@ export function useInfiniteItems(
       scope,
       hasMap,
       visibility,
+      expressionKind,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -207,6 +210,7 @@ export function useInfiniteItems(
       if (query && query.length > 0) params.q = query;
       if (sort) params.sort = sort;
       if (category) params.category = category;
+      if (expressionKind) params.expression_kind = expressionKind;
       if (formatFilter) params.format = formatFilter;
       if (borrowed) params.borrowed = true;
       if (missingCover) params.missing_cover = true;
@@ -321,7 +325,9 @@ export function useInfiniteManifestations(
   ownership?: string[],
   lodAuthority?: string,
   lodStatus?: string,
-  hasMap?: boolean
+  hasMap?: boolean,
+  expressionKind?: string,
+  sort?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -336,7 +342,8 @@ export function useInfiniteManifestations(
         genres,
         publishers,
         statuses,
-        ownership
+        ownership,
+        sort
       ),
       "infinite",
       missingCover,
@@ -345,12 +352,15 @@ export function useInfiniteManifestations(
       lodAuthority,
       lodStatus,
       hasMap,
+      expressionKind,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
       const params: Record<string, string | number | boolean> = { page: pageParam, limit };
       if (query && query.length > 0) params.q = query;
+      if (sort) params.sort = sort;
       if (category) params.category = category;
+      if (expressionKind) params.expression_kind = expressionKind;
       if (formatFilter) params.format = formatFilter;
       if (missingCover) params.missing_cover = true;
       if (missingId) params.missing_id = true;
@@ -822,7 +832,14 @@ export function useManifestationWithPolling(initialData: Item) {
     queryKey: queryKeys.item(initialData.id),
     queryFn: () => apiFetch<Item>(`/items/${initialData.id}`),
     initialData: initialData,
-    refetchInterval: query => (query.state.data?.cover_status === "pending" ? 10000 : false),
+    refetchInterval: query => {
+      const data = query.state.data;
+      const status =
+        data?.cover_status ??
+        (data?.manifestation_meta?.["cover_status"] as string | undefined) ??
+        (data?.meta?.["cover_status"] as string | undefined);
+      return status === "pending" || status === "processing" ? 3000 : false;
+    },
   });
   return { item };
 }
@@ -1082,6 +1099,26 @@ export function useCatalogLibraryGraph(entityTypes?: string, edgeTypes?: string,
     },
     enabled,
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Custom hook to search visibility-safe FRBR and contributor root candidates for the graph picker.
+ */
+export function useCatalogGraphSearch(q: string, types?: string, limit = 10, enabled = true) {
+  const trimmed = q.trim();
+  return useQuery({
+    queryKey: queryKeys.catalogGraphSearch(trimmed, types, limit),
+    queryFn: async () => {
+      const params: Record<string, string | number> = { q: trimmed, limit };
+      if (types && types !== "all") params.types = types;
+      const res = await apiClient.get<ApiResponse<GraphRootSearchResult[]>>("/catalog/graph/search", {
+        params,
+      });
+      return res.data.data ?? [];
+    },
+    enabled: Boolean(enabled && trimmed.length >= 2),
+    staleTime: 15_000,
   });
 }
 

@@ -261,6 +261,7 @@ export default function ScanPage() {
           });
 
           queryClient.invalidateQueries({ queryKey: queryKeys.items() });
+          queryClient.invalidateQueries({ queryKey: ["manifestations"] });
           queryClient.invalidateQueries({ queryKey: ["wishlist"] });
           queryClient.invalidateQueries({ queryKey: queryKeys.stats() });
           queryClient.invalidateQueries({ queryKey: ["works", "shelf"] });

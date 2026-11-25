@@ -42,6 +42,11 @@ vi.mock("@/components/dashboard/footer", () => ({
 
 const mockUseCatalogGraph = vi.fn();
 const mockUseCatalogLibraryGraph = vi.fn();
+const mockUseCatalogGraphSearch = vi.fn();
+
+vi.mock("@/lib/hooks/use-debounce", () => ({
+  useDebounce: <T,>(value: T) => value,
+}));
 
 vi.mock("@/lib/api/hooks/catalog", async importOriginal => {
   const actual = await importOriginal<typeof import("@/lib/api/hooks/catalog")>();
@@ -51,6 +56,8 @@ vi.mock("@/lib/api/hooks/catalog", async importOriginal => {
       mockUseCatalogGraph(entityType, entityId, depth, enabled),
     useCatalogLibraryGraph: (entityTypes?: string, edgeTypes?: string, enabled?: boolean) =>
       mockUseCatalogLibraryGraph(entityTypes, edgeTypes, enabled),
+    useCatalogGraphSearch: (q: string, types?: string, limit?: number, enabled?: boolean) =>
+      mockUseCatalogGraphSearch(q, types, limit, enabled),
   };
 });
 
@@ -61,6 +68,7 @@ vi.mock("@/lib/api/hooks", async importOriginal => {
     useWork: (_id: number, initial?: WorkDetail) => ({ data: initial, isLoading: false, isError: false }),
     useExpression: (_id: number, initial?: ExpressionDetail) => ({ data: initial, isLoading: false }),
     useWorkParts: () => ({ data: { data: [] } }),
+    useUpdateItem: () => ({ mutate: vi.fn(), isPending: false }),
     useProfile: () => ({ data: null }),
   };
 });
@@ -286,5 +294,91 @@ describe("FRBR Relation Graph Explorer (/graph) & Entry Buttons (C133)", () => {
     };
     render(<ItemHeader item={item} />);
     expect(screen.getByTestId("explore-graph-link")).toHaveAttribute("href", "/graph?type=item&id=99");
+  });
+
+  it("supports Switch Root dialog, person/series URL parsing, canonical anchor URL, and contributor recenter", () => {
+    mockSearchParams.set("type", "person");
+    mockSearchParams.set("id", "7");
+    mockSearchParams.set("depth", "2");
+
+    mockUseCatalogGraph.mockReturnValue({
+      data: {
+        anchor: { entity_type: "contributor", entity_id: 7, node_id: "contributor:7" },
+        nodes: [
+          {
+            id: "contributor:7",
+            entity_type: "contributor",
+            entity_id: 7,
+            contributor_type: "person",
+            label: "Stanisław Lem",
+            subtitle: "person",
+            hop: 0,
+            is_anchor: true,
+            url: "/collection?q=Stanis%C5%82aw+Lem",
+          },
+          {
+            id: "contributor:8",
+            entity_type: "contributor",
+            entity_id: 8,
+            contributor_type: "organization",
+            label: "Wydawnictwo Literackie",
+            subtitle: "organization",
+            hop: 1,
+            is_anchor: false,
+            url: "/collection?q=Wydawnictwo+Literackie",
+          },
+        ],
+        edges: [
+          {
+            id: "contributor:7--related--contributor:8",
+            source: "contributor:7",
+            target: "contributor:8",
+            relation: "related",
+            category: "contributors",
+            label: "related",
+          },
+        ],
+        meta: { depth: 2, requested_depth: 2, max_nodes: 150, node_count: 2, edge_count: 1, truncated: false },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    mockUseCatalogGraphSearch.mockReturnValue({
+      data: [
+        {
+          entity_type: "series",
+          entity_id: 55,
+          label: "Dune Chronicles",
+          subtitle: "series",
+          work_kind: "series",
+          url: "/work/55",
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<GraphPage />);
+
+    // Canonical anchor URL must NOT be /person/7
+    const entityLinks = screen.getAllByRole("link", { name: /open entity page/i });
+    expect(entityLinks.length).toBeGreaterThanOrEqual(1);
+    for (const link of entityLinks) {
+      expect(link).toHaveAttribute("href", "/collection?q=Stanis%C5%82aw+Lem");
+    }
+
+    // Recenter on non-anchor contributor node
+    fireEvent.click(screen.getByTestId("graph-node-contributor:8"));
+    fireEvent.click(screen.getByTestId("graph-recenter-button"));
+    expect(mockPush).toHaveBeenCalledWith("/graph?type=contributor&id=8&depth=2");
+
+    // Open Switch Root dialog and select Series candidate
+    fireEvent.click(screen.getByTestId("graph-switch-root-button"));
+    const pickerInput = screen.getByTestId("graph-picker-input");
+    fireEvent.focus(pickerInput);
+    fireEvent.change(pickerInput, { target: { value: "Dune" } });
+    fireEvent.click(screen.getByTestId("graph-picker-option-series:55"));
+    expect(mockPush).toHaveBeenCalledWith("/graph?type=series&id=55&depth=2");
   });
 });

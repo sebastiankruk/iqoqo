@@ -728,3 +728,36 @@ class SharedCollectionCreateSchema(BaseModel):
         effective_scope = self.visibility_scope or merged.get("visibility_scope") or "public_only"
         merged["visibility_scope"] = effective_scope
         return merged
+
+
+class WorkLinkScanRequest(BaseModel):
+    """Pydantic schema for triggering a cross-media Work link scan."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    engine: str = "heuristic"
+    threshold: float = Field(default=0.70, ge=0.0, le=1.0)
+    limit: int | None = Field(default=None, ge=1, le=5000)
+    dry_run: bool = False
+
+
+class WorkLinkAcceptRequest(BaseModel):
+    """Pydantic schema for accepting a pending cross-media WorkLinkCandidate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    relation_type: str | None = None
+    source_work_id: int | None = Field(default=None, ge=1)
+    target_work_id: int | None = Field(default=None, ge=1)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class WorkLinkCreateRequest(BaseModel):
+    """Pydantic schema for manually creating a confirmed WorkRelation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_work_id: int = Field(ge=1)
+    target_work_id: int = Field(ge=1)
+    relation_type: str = "is_adaptation_of"
+    notes: str | None = Field(default=None, max_length=2000)

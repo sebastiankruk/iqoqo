@@ -247,6 +247,11 @@ function CollectionContent() {
     [activeFilters]
   );
 
+  const expressionKindFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "expression_kind").map(f => f.value),
+    [activeFilters]
+  );
+
   const formatFilters = useMemo(
     () => activeFilters.filter(f => f.type === "format").map(f => f.value),
     [activeFilters]
@@ -321,7 +326,8 @@ function CollectionContent() {
     lodStatusFilter,
     currentScope,
     hasMapActive,
-    visibilityFilters.length > 0 ? visibilityFilters : undefined
+    visibilityFilters.length > 0 ? visibilityFilters : undefined,
+    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined
   );
 
   const {
@@ -346,7 +352,9 @@ function CollectionContent() {
     ownershipFilters,
     lodAuthorityFilter,
     lodStatusFilter,
-    hasMapActive
+    hasMapActive,
+    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined,
+    sortBy
   );
 
   const {
@@ -391,6 +399,7 @@ function CollectionContent() {
   const filtersForFacets = useMemo(() => {
     const f: Record<string, string> = {};
     if (categoryFilters.length > 0) f.category = categoryFilters.join(",");
+    if (expressionKindFilters.length > 0) f.expression_kind = expressionKindFilters.join(",");
     if (formatFilters.length > 0) f.format = formatFilters.join(",");
     if (tagFilters.length > 0) f.tags = tagFilters.join(",");
     if (collectionFilters.length > 0) f.collections = collectionFilters.join(",");
@@ -416,6 +425,7 @@ function CollectionContent() {
     return f;
   }, [
     categoryFilters,
+    expressionKindFilters,
     formatFilters,
     tagFilters,
     collectionFilters,
@@ -674,11 +684,29 @@ function CollectionContent() {
         });
       }
 
-      // Filter by category
+      // Filter by category (including mixed-media cd_dvd_combo)
       if (categoryFilters.length > 0) {
         items = items.filter(it => {
           const itemCat = (it as Item).content_type || (it as Item).manifestation_meta?.content_type;
-          return itemCat && categoryFilters.includes(String(itemCat));
+          const itemFmt = String(
+            (it as Item).manifestation_meta?.format ||
+              (it as CatalogEntry).format ||
+              (it as CatalogEntry).format_type ||
+              ""
+          )
+            .trim()
+            .toLowerCase();
+          const isMixedCdDvd =
+            itemFmt === "cd_dvd_combo" && (categoryFilters.includes("music") || categoryFilters.includes("movie"));
+          return isMixedCdDvd || (Boolean(itemCat) && categoryFilters.includes(String(itemCat)));
+        });
+      }
+
+      // Filter by expression kind (live_performance vs studio)
+      if (expressionKindFilters.length > 0) {
+        items = items.filter(it => {
+          const itemKind = (it as Item & { expression_kind?: string | null }).expression_kind || "studio";
+          return expressionKindFilters.includes(itemKind);
         });
       }
 
@@ -781,6 +809,7 @@ function CollectionContent() {
     appliedQuery,
     searchQuery,
     categoryFilters,
+    expressionKindFilters,
     formatFilters,
     statusFilters,
     isBorrowedFilterActive,
@@ -1041,6 +1070,7 @@ function CollectionContent() {
                 statusCounts={statusCounts}
                 formatCounts={formatCounts}
                 categoryCounts={categoryCounts}
+                expressionKindCounts={facetStatsData?.expression_kind_counts}
                 viewMode={viewMode}
                 isLoggedIn={showClientContent}
                 isCurator={showCuratorContent}
@@ -1413,6 +1443,7 @@ function CollectionContent() {
         statusCounts={statusCounts}
         formatCounts={formatCounts}
         categoryCounts={categoryCounts}
+        expressionKindCounts={facetStatsData?.expression_kind_counts}
         viewMode={viewMode}
         isLoggedIn={showClientContent}
         isCurator={showCuratorContent}

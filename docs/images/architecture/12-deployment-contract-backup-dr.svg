@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp12" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="1440" height="960" role="img" aria-labelledby="bp12-title bp12-desc">
             <title id="bp12-title">12 · Source-Free Deployment Contract, Mount Guards &amp; Multi-Tier Backup</title>
-            <desc id="bp12-desc">Modern Athenaeum deployment and disaster recovery diagram for iqoqo v1.1.1 showing Path A Host Checkout and Path B Source-Free DEPLOY_DIR converging into shared pre-flight mount guards, UID 10001/10002 invariants, destructive script guards, and the 4-stage cloud_backup.sh DR pipeline.</desc>
+            <desc id="bp12-desc">Modern Athenaeum deployment and disaster recovery diagram for iqoqo v1.1.2 showing Path A Host Checkout and Path B Source-Free DEPLOY_DIR converging into shared pre-flight mount guards, UID 10001/10002 invariants, destructive script guards, and the 4-stage cloud_backup.sh DR pipeline.</desc>
             <style>
               .bg { fill: #FDFBF7; }
               .title { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -92,7 +92,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title">12 · Source-Free Deployment Contract, Mount Guards &amp; Multi-Tier Backup</text>
-            <text x="32" y="57" class="sub">iqoqo v1.1.1  •  Dual Deploy Topologies, Non-Root UID 10001/10002 Mount Probes, Production Guards &amp; S3 Glacier DR</text>
+            <text x="32" y="57" class="sub">iqoqo v1.1.2  •  Dual Deploy Topologies, Non-Root UID 10001/10002 Mount Probes, Production Guards &amp; S3 Glacier DR</text>
             <rect x="1174" y="16" width="234" height="32" rx="8" class="hdr-pill"/>
             <text x="1291" y="36" text-anchor="middle" class="hdr-pill-txt">Deployment &amp; Disaster Recovery</text>
 

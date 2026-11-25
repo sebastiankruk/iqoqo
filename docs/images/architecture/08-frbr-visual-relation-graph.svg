@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp8-title bp8-desc">
             <title id="bp8-title">Blueprint 8 — Interactive FRBR Visual Relation Graph (/graph) Traversal &amp; Visibility Engine</title>
-            <desc id="bp8-desc">Graph traversal and data-flow diagram for iqoqo v1.1.1 showing UI anchor launch, GET /api/catalog/graph validation, Item visibility pruning, bounded 1–4 hop BFS traversal up to 150 nodes, 6 cross-schema edge categories, and interactive FRBRRelationGraph canvas.</desc>
+            <desc id="bp8-desc">Graph traversal and data-flow diagram for iqoqo v1.1.2 showing UI anchor launch, GET /api/catalog/graph validation, Item visibility pruning, bounded 1–4 hop BFS traversal up to 150 nodes, 7 cross-schema edge categories, and interactive FRBRRelationGraph canvas.</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
               .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -102,7 +102,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title-text">Blueprint 8 — Interactive FRBR Visual Relation Graph (/graph) Traversal &amp; Visibility Engine</text>
-            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.1  •  Bounded 1–4 Hop BFS Neighborhood Expansion, Fail-Closed Item Visibility &amp; 6 Cross-Schema Edge Categories</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.2  •  Bounded 1–4 Hop BFS Neighborhood Expansion, Fail-Closed Item Visibility &amp; 7 Cross-Schema Edge Categories</text>
             <rect x="1168" y="16" width="240" height="32" rx="8" class="header-pill-bg"/>
             <text x="1288" y="36" text-anchor="middle" class="header-pill-text">Graph Traversal &amp; Data-Flow</text>
 
@@ -257,14 +257,14 @@
             <rect x="928" y="78" width="480" height="828" rx="14" class="zone-teal"/>
             <rect x="942" y="90" width="68" height="20" rx="5" class="badge-teal"/>
             <text x="976" y="104" text-anchor="middle" class="badge-text">SOURCES</text>
-            <text x="1018" y="105" class="zone-title">6 Edge Categories &amp; UI Canvas</text>
+            <text x="1018" y="105" class="zone-title">7 Edge Categories &amp; UI Canvas</text>
 
             <!-- Step 5: 6 Edge Categories -->
             <g id="bp8-s5">
               <rect x="944" y="124" width="448" height="456" rx="10" class="card" filter="url(#b8-shadow)"/>
               <rect x="956" y="136" width="52" height="18" rx="4" class="badge-teal"/>
               <text x="982" y="149" text-anchor="middle" class="badge-text">STEP 5</text>
-              <text x="1016" y="150" class="node-title">6 Cross-Schema Edge Categories</text>
+              <text x="1016" y="150" class="node-title">7 Cross-Schema Edge Categories</text>
               <text x="1378" y="149" text-anchor="end" class="zone-meta">catalog + inventory</text>
 
               <!-- 1. frbr -->
@@ -319,7 +319,7 @@
               <text x="1016" y="630" class="node-title">Interactive Canvas — FRBRRelationGraph</text>
               <text x="956" y="652" class="node-mono">frontend/components/.../frbr-relation-graph.tsx</text>
 
-              <text x="956" y="678" class="node-body">• Category Toggle Chips (enable/disable any of 6 edge types)</text>
+              <text x="956" y="678" class="node-body">• Category Toggle Chips (enable/disable any of 7 edge types)</text>
               <text x="956" y="698" class="node-body">• Live Node Label Search Highlight &amp; Pan/Zoom Controls</text>
               <text x="956" y="718" class="node-body">• Truncation Warning Banner when meta.truncated == true</text>
 
@@ -342,7 +342,7 @@
             <!-- Step 4 <-> Step 5 (6 Edge Queries) -->
             <path d="M 870 546 L 942 546" class="edge-teal" marker-start="url(#b8-mk-teal)" marker-end="url(#b8-mk-teal)"/>
             <rect x="872" y="514" width="68" height="26" rx="4" class="edge-pill-teal"/>
-            <text x="906" y="525" text-anchor="middle" class="edge-pill-teal-text">6 Edge</text>
+            <text x="906" y="525" text-anchor="middle" class="edge-pill-teal-text">7 Edge</text>
             <text x="906" y="536" text-anchor="middle" class="edge-pill-teal-text">Queries</text>
 
             <!-- Step 4 -> Step 6 (JSON Graph Payload) -->

@@ -106,7 +106,7 @@ describe("ManifestationActions Component", () => {
       );
     const refetchInterval = call?.[0]?.refetchInterval as (query: any) => number | false;
     expect(refetchInterval({ state: { data: { meta: { cover_status: "processing" } } } })).toBe(3000);
-    expect(refetchInterval({ state: { data: { meta: { cover_status: "pending" } } } })).toBe(false);
+    expect(refetchInterval({ state: { data: { meta: { cover_status: "pending" } } } })).toBe(3000);
     expect(refetchInterval({ state: { data: { meta: { cover_status: "ready" } } } })).toBe(false);
   });
 

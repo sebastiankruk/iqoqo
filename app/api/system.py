@@ -166,7 +166,7 @@ def get_system_status():
         if not is_admin:
             probe_remote = False
 
-    allegro_status = get_allegro_token_status()
+    allegro_status = get_allegro_token_status(probe_remote=probe_remote)
     igdb_status = get_igdb_token_status(probe_remote=probe_remote)
 
     configured_keys = set(InstanceSettings.get_configured_keys())
@@ -317,6 +317,7 @@ def get_faceted_stats():
     has_map = request.args.get("has_map", "false").lower() in ("true", "1")
 
     category_list = parse_csv_param(category_str)
+    expression_kind_list = parse_csv_param(request.args.get("expression_kind"))
     fmt_list_raw = parse_csv_param(fmt_str)
     from app.core.format_normalizer import expand_format_filter
 
@@ -332,6 +333,7 @@ def get_faceted_stats():
     stats = DataManager.get_faceted_stats(
         owner_id=owner_id,
         category=category_list,
+        expression_kind=expression_kind_list,
         fmt=fmt_list,
         tags=tags_list,
         collections=collections_list,

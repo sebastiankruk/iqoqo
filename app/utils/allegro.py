@@ -13,7 +13,7 @@ import os
 import re
 import time
 import urllib.parse
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import requests
 
@@ -38,6 +38,55 @@ def get_allegro_user_agent() -> str:
     return f"{Config.ALLEGRO_APP_NAME}/{Config.VERSION} (+https://iqoqo.cc)"
 
 
+_ALLEGRO_FAILURE_KEYS: tuple[str, ...] = ("refresh_failed", "refresh_error", "refresh_failed_at")
+
+
+def _sanitize_oauth_error_code(raw_error: Any, default: str = "invalid_grant") -> str:
+    """Return a short, secret-free OAuth error code (never verbatim descriptions/JWTs)."""
+    if isinstance(raw_error, str):
+        cleaned = raw_error.strip()
+        if cleaned and len(cleaned) <= 64 and re.fullmatch(r"[A-Za-z0-9_.:-]+", cleaned):
+            return cleaned
+    return default
+
+
+def _extract_oauth_error_code(response: requests.Response) -> str:
+    """Extract a sanitized OAuth error code from an Allegro error response."""
+    default_code = "unauthorized" if response.status_code == 401 else f"http_{response.status_code}"
+    try:
+        payload = response.json()
+        if isinstance(payload, dict) and payload.get("error"):
+            return _sanitize_oauth_error_code(payload.get("error"), default=default_code)
+    except (ValueError, TypeError):
+        pass
+    return default_code
+
+
+def _mark_allegro_refresh_failed(tokens: dict[str, Any] | None, error_code: str) -> dict[str, Any]:
+    """Persist irreversible refresh failure metadata without deleting client credentials."""
+    from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
+    from app.core.cache import cache
+    from app.db.models import InstanceSettings
+
+    token_data = dict(tokens) if isinstance(tokens, dict) else {}
+    token_data["refresh_failed"] = True
+    token_data["refresh_error"] = _sanitize_oauth_error_code(error_code)
+    token_data["refresh_failed_at"] = time.time()
+
+    try:
+        cache.set("allegro_token_data", token_data, timeout=86400)
+    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to persist Allegro refresh failure in cache: %s", e)
+
+    try:
+        InstanceSettings.set_value("ALLEGRO_TOKEN_DATA", token_data)
+    except (SQLAlchemyError, DBAPIError, RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to persist Allegro refresh failure in InstanceSettings: %s", e)
+
+    return token_data
+
+
 def save_allegro_token(tokens: dict[str, Any]) -> None:
     """Save Allegro OAuth token dictionary to cache and database."""
     from sqlalchemy.exc import DBAPIError, SQLAlchemyError
@@ -45,7 +94,7 @@ def save_allegro_token(tokens: dict[str, Any]) -> None:
     from app.core.cache import cache
     from app.db.models import InstanceSettings
 
-    token_data = dict(tokens)
+    token_data = {k: v for k, v in tokens.items() if k not in _ALLEGRO_FAILURE_KEYS}
     if "created_at" not in token_data:
         token_data["created_at"] = time.time()
 
@@ -61,19 +110,14 @@ def save_allegro_token(tokens: dict[str, Any]) -> None:
 
 
 def load_allegro_token() -> dict[str, Any] | None:
-    """Load Allegro OAuth token dictionary from cache or database."""
+    """Load Allegro OAuth token dictionary from database (authoritative) or cache fallback."""
     from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
     from app.core.cache import cache
     from app.db.models import InstanceSettings
 
-    try:
-        cached = cache.get("allegro_token_data")
-        if cached and isinstance(cached, dict) and cached.get("access_token"):
-            return cast(dict[str, Any], cached)
-    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
-        logger.debug("Failed to read Allegro token from cache: %s", e)
-
+    # Always prefer InstanceSettings over in-process SimpleCache so multi-worker
+    # Gunicorn/Celery setups never serve stale refresh_failed tokens after Device Flow.
     try:
         db_token = InstanceSettings.get_value("ALLEGRO_TOKEN_DATA")
         if db_token and isinstance(db_token, dict) and db_token.get("access_token"):
@@ -85,16 +129,23 @@ def load_allegro_token() -> dict[str, Any] | None:
     except (SQLAlchemyError, DBAPIError, RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
         logger.debug("Failed to read Allegro token from InstanceSettings: %s", e)
 
+    try:
+        cached = cache.get("allegro_token_data")
+        if cached and isinstance(cached, dict) and cached.get("access_token"):
+            return cast(dict[str, Any], cached)
+    except (RuntimeError, KeyError, TypeError, ValueError, OSError) as e:
+        logger.debug("Failed to read Allegro token from cache: %s", e)
+
     return None
 
 
 def has_allegro_user_token() -> bool:
-    """Return True if a User Context OAuth token is present in central store."""
+    """Return True if an active (non-failed) User Context OAuth token is present in central store."""
     tokens = load_allegro_token()
-    return bool(tokens and isinstance(tokens, dict) and tokens.get("access_token"))
+    return bool(tokens and isinstance(tokens, dict) and tokens.get("access_token") and not tokens.get("refresh_failed"))
 
 
-def get_allegro_token_status() -> dict[str, Any]:
+def get_allegro_token_status(probe_remote: bool = False) -> dict[str, Any]:
     """Check Allegro configuration and token freshness."""
     from app.db.models import InstanceSettings
 
@@ -137,16 +188,53 @@ def get_allegro_token_status() -> dict[str, Any]:
             "token_age_hours": None,
         }
 
-    created_at = tokens.get("created_at")
-    age_hours: float | None = None
-    if created_at:
-        try:
-            age_hours = round((time.time() - float(created_at)) / 3600.0, 1)
-        except (ValueError, TypeError):
-            age_hours = 0.0
+    def _compute_age(tok_dict: dict[str, Any]) -> tuple[float | None, bool]:
+        c_at = tok_dict.get("created_at")
+        a_hours: float | None = None
+        if c_at:
+            try:
+                a_hours = round((time.time() - float(c_at)) / 3600.0, 1)
+            except (ValueError, TypeError):
+                a_hours = 0.0
+        exp_in = tok_dict.get("expires_in", 43200)
+        expired = (time.time() - float(c_at)) > float(exp_in) if c_at else False
+        return a_hours, expired
 
-    expires_in = tokens.get("expires_in", 43200)
-    is_expired = (time.time() - float(created_at)) > float(expires_in) if created_at else False
+    age_hours, is_expired = _compute_age(tokens)
+
+    if tokens.get("refresh_failed"):
+        return {
+            "configured": True,
+            "allegro_token_active": False,
+            "is_expired": True,
+            "token_age_hours": age_hours,
+            "has_refresh_token": bool(tokens.get("refresh_token")),
+            "reason": "reauth_required",
+            "refresh_error": tokens.get("refresh_error"),
+            "refresh_failed_at": tokens.get("refresh_failed_at"),
+        }
+
+    if probe_remote and is_expired and tokens.get("refresh_token"):
+        try:
+            _refresh_user_token(tokens, client_id, client_secret, {"User-Agent": get_allegro_user_agent()})
+            reloaded = load_allegro_token()
+            if reloaded and isinstance(reloaded, dict):
+                tokens = reloaded
+                age_hours, is_expired = _compute_age(tokens)
+                if tokens.get("refresh_failed"):
+                    return {
+                        "configured": True,
+                        "allegro_token_active": False,
+                        "is_expired": True,
+                        "token_age_hours": age_hours,
+                        "has_refresh_token": bool(tokens.get("refresh_token")),
+                        "reason": "reauth_required",
+                        "refresh_error": tokens.get("refresh_error"),
+                        "refresh_failed_at": tokens.get("refresh_failed_at"),
+                    }
+        except (requests.RequestException, ValueError, KeyError, OSError) as e:
+            logger.warning("Allegro remote status probe failed: %s", e)
+
     is_active = not is_expired or bool(tokens.get("refresh_token"))
 
     return {
@@ -207,8 +295,10 @@ def _refresh_user_token(tokens: dict[str, Any], client_id: str, client_secret: s
     from app.core.cache import cache
 
     with cache.lock("allegro_refresh_lock", timeout=30):
-        # Re-read token inside lock to verify another worker hasn't already refreshed it
+        # Re-read token inside lock to verify another worker hasn't already refreshed or failed it
         fresh_tokens = load_allegro_token()
+        if isinstance(fresh_tokens, dict) and fresh_tokens.get("refresh_failed"):
+            return None
         fresh_created_at = fresh_tokens.get("created_at") if isinstance(fresh_tokens, dict) else None
         fresh_age = (time.time() - float(fresh_created_at)) if fresh_created_at else None
         if (
@@ -240,38 +330,57 @@ def _refresh_user_token(tokens: dict[str, Any], client_id: str, client_secret: s
             headers=auth_headers,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
-        response.raise_for_status()
+        if not response.ok:
+            if response.status_code == 401:
+                err_code = _extract_oauth_error_code(response)
+                _mark_allegro_refresh_failed(fresh_tokens if isinstance(fresh_tokens, dict) else tokens, err_code)
+                logger.warning("Allegro OAuth refresh rejected with HTTP 401 (%s); re-authorization required.", err_code)
+                return None
+            if response.status_code == 400:
+                err_code = _extract_oauth_error_code(response)
+                if err_code in ("invalid_grant", "unauthorized_client"):
+                    _mark_allegro_refresh_failed(fresh_tokens if isinstance(fresh_tokens, dict) else tokens, err_code)
+                    logger.warning("Allegro OAuth refresh rejected with HTTP 400 (%s); re-authorization required.", err_code)
+                    return None
+            response.raise_for_status()
+
         new_tokens = response.json()
         save_allegro_token(new_tokens)
         new_access_token = new_tokens.get("access_token")
         return new_access_token if isinstance(new_access_token, str) else None
 
 
-def get_allegro_token() -> str | None:
-    """Authenticate with Allegro using User Context (if available) or Client Credentials flow."""
+def _get_allegro_token_with_mode() -> tuple[str | None, Literal["user_context", "client_credentials"] | None]:
+    """Authenticate with Allegro, returning ``(token, auth_mode)``."""
     from app.db.models import InstanceSettings
 
     client_id = os.getenv("ALLEGRO_CLIENT_ID") or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
     client_secret = os.getenv("ALLEGRO_CLIENT_SECRET") or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
 
     if not client_id or not client_secret:
-        return None
+        return None, None
 
     auth_headers = {"User-Agent": get_allegro_user_agent()}
 
     # Check for User Context token from Authorization Code / Device flow first
     tokens = load_allegro_token()
     if tokens and isinstance(tokens, dict) and tokens.get("access_token"):
-        try:
-            created_at = tokens.get("created_at")
-            token_age = (time.time() - float(created_at)) if created_at else 0
-            if token_age > 11 * 3600 and tokens.get("refresh_token"):
-                return _refresh_user_token(tokens, client_id, client_secret, auth_headers)
-
-            access_token = tokens.get("access_token")
-            return access_token if isinstance(access_token, str) else None
-        except (requests.RequestException, ValueError, KeyError, OSError) as e:
-            logger.warning("Failed to load or refresh User Context Allegro token from cache/DB: %s", e)
+        if tokens.get("refresh_failed"):
+            logger.debug("Skipping Allegro user-context token refresh; token marked refresh_failed.")
+        else:
+            try:
+                created_at = tokens.get("created_at")
+                token_age = (time.time() - float(created_at)) if created_at else 0
+                if token_age > 11 * 3600 and tokens.get("refresh_token"):
+                    refreshed = _refresh_user_token(tokens, client_id, client_secret, auth_headers)
+                    if refreshed:
+                        return refreshed, "user_context"
+                else:
+                    access_token = tokens.get("access_token")
+                    if isinstance(access_token, str) and access_token:
+                        return access_token, "user_context"
+            except (requests.RequestException, ValueError, KeyError, OSError) as e:
+                logger.warning("Failed to load or refresh User Context Allegro token from cache/DB: %s", e)
 
     # Fallback to Client Credentials
     try:
@@ -287,10 +396,19 @@ def get_allegro_token() -> str | None:
         response.raise_for_status()
         data = response.json()
         token = data.get("access_token")
-        return str(token) if isinstance(token, str) else None
+        return (str(token), "client_credentials") if isinstance(token, str) else (None, None)
     except requests.RequestException as e:
         logger.warning("Failed to obtain Allegro access token: %s", e)
-        return None
+        return None, None
+
+
+def get_allegro_token() -> str | None:
+    """Authenticate with Allegro using User Context (if available) or Client Credentials flow."""
+    token, _ = _get_allegro_token_with_mode()
+    return token
+
+
+_ORIG_GET_ALLEGRO_TOKEN = get_allegro_token
 
 
 def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
@@ -467,7 +585,11 @@ def fetch_allegro_candidates(query: str, max_results: int = 10) -> list[dict[str
     Returns:
         List of normalised metadata dicts, possibly empty.
     """
-    token = get_allegro_token()
+    if get_allegro_token is _ORIG_GET_ALLEGRO_TOKEN:
+        token, auth_mode = _get_allegro_token_with_mode()
+    else:
+        token = get_allegro_token()
+        auth_mode = "user_context" if has_allegro_user_token() else "client_credentials"
     if not token:
         return []
 
@@ -495,11 +617,18 @@ def fetch_allegro_candidates(query: str, max_results: int = 10) -> list[dict[str
                 products = cat_data.get("products", [])
                 for product in products[:max_results]:
                     candidates.append(_normalize_allegro_product(product, query))
+            elif cat_resp.status_code in (401, 403):
+                logger.warning(
+                    "Allegro API %s returned HTTP %s (auth_mode=%s)",
+                    "/sale/products",
+                    cat_resp.status_code,
+                    auth_mode,
+                )
         except requests.exceptions.RequestException:
             pass  # Fall back to Listing if Catalog fails
 
-        # Step 2: Use Listing API (Public Marketplace Search) ONLY if catalog found nothing and user token is active
-        if not candidates and has_allegro_user_token():
+        # Step 2: Use Listing API (Public Marketplace Search) ONLY if catalog found nothing and user_context is active
+        if not candidates and auth_mode == "user_context":
             listing_url = "https://api.allegro.pl/offers/listing"
             listing_params = {"phrase": query}
             record_outbound_telemetry("Allegro", headers, url=listing_url)
@@ -513,8 +642,13 @@ def fetch_allegro_candidates(query: str, max_results: int = 10) -> list[dict[str
                     if len(candidates) >= max_results:
                         break
                     candidates.append(_normalize_allegro_offer(offer, query))
-            elif response.status_code == 403:
-                logger.debug("Allegro Listing API returned 403; skipping fallback.")
+            elif response.status_code in (401, 403):
+                logger.warning(
+                    "Allegro API %s returned HTTP %s (auth_mode=%s)",
+                    "/offers/listing",
+                    response.status_code,
+                    auth_mode,
+                )
     except requests.exceptions.Timeout:
         logger.warning("Allegro lookup timed out for query %s", query)
     except requests.exceptions.HTTPError as e:

@@ -777,3 +777,32 @@ def test_ensure_env_secrets_enforces_0600_on_symlink_target(tmp_path):
 
     ensure_secrets_in_env_file(link)
     assert (target.stat().st_mode & 0o777) == 0o600
+
+
+def test_reconcile_cross_media_dry_run_apply_and_exit_2(app, monkeypatch):
+    """reconcile_cross_media CLI supports dry-run, apply, and exit code 2 on missing Ollama."""
+    from scripts import reconcile_cross_media
+
+    with app.app_context():
+        book = Work(title="The Hobbit")
+        movie = Work(title="The Hobbit (film)")
+        db.session.add_all([book, movie])
+        db.session.flush()
+        db.session.add_all(
+            [
+                Expression(work_id=book.id, content_type="book", language="en"),
+                Expression(work_id=movie.id, content_type="movie", language="en"),
+            ]
+        )
+        db.session.commit()
+
+    dry_report = reconcile_cross_media.run_scan(app=app, dry_run=True)
+    assert dry_report.would_create == 1
+    assert dry_report.created == 0
+
+    apply_report = reconcile_cross_media.run_scan(app=app, dry_run=False)
+    assert apply_report.created == 1
+
+    # Missing/unreachable Ollama with --engine llama returns EXIT_PREREQUISITE (2)
+    monkeypatch.setenv("OLLAMA_URL", "http://127.0.0.1:1")
+    assert reconcile_cross_media.main(["--engine", "llama", "--quiet"]) == reconcile_cross_media.EXIT_PREREQUISITE

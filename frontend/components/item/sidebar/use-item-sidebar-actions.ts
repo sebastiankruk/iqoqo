@@ -16,8 +16,10 @@
 import * as React from "react";
 import { ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Item } from "@/types/frbr";
+import type { CoverUploadResult } from "@/components/scanner/cover-upload-picker";
 import {
   useUpdateItem,
   useUserSearch,
@@ -27,6 +29,7 @@ import {
   useAddItemToCollection,
   useRemoveItemFromCollection,
   useUserCollections,
+  queryKeys,
 } from "@/lib/api/hooks";
 import { STATUS_LABELS } from "./constants";
 
@@ -45,15 +48,42 @@ export interface UseItemSidebarActionsOptions {
  */
 export function useItemSidebarActions(item: Item, options?: UseItemSidebarActionsOptions) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const updateItem = useUpdateItem(item.id);
 
   const isOwner = options?.isOwner ?? !!item.is_owner;
   const canModifyItem = options?.canModifyItem ?? isOwner;
 
-  const handleUploadComplete = () => {
-    toast.success("Cover uploaded and processing started!");
-    // Refresh to show 'processing' status
-    router.refresh();
+  const handleUploadComplete = (result?: CoverUploadResult) => {
+    const nextStatus = result?.cover_status ?? "processing";
+    queryClient.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
+      const base = prev ?? item;
+      return {
+        ...base,
+        cover_status: nextStatus,
+        cover_url: result?.cover_url ?? base.cover_url,
+        meta: {
+          ...(base.meta ?? {}),
+          cover_status: nextStatus,
+          ...(result?.cover_url ? { cover_url: result.cover_url } : {}),
+          ...(result?.cover_source ? { cover_source: result.cover_source } : {}),
+          ...(result?.cover_status_updated_at ? { cover_status_updated_at: result.cover_status_updated_at } : {}),
+        },
+        manifestation_meta: {
+          ...(base.manifestation_meta ?? {}),
+          cover_status: nextStatus,
+          ...(result?.cover_url ? { cover_url: result.cover_url } : {}),
+          ...(result?.cover_source ? { cover_source: result.cover_source } : {}),
+          ...(result?.cover_status_updated_at ? { cover_status_updated_at: result.cover_status_updated_at } : {}),
+        },
+      };
+    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.item(item.id) });
+    if (item.manifestation_id) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.manifestation(item.manifestation_id) });
+    }
+    queryClient.invalidateQueries({ queryKey: ["items"] });
+    toast.success(nextStatus === "ready" ? "Cover updated!" : "Cover uploaded and processing started!");
   };
 
   const [isLentDialogOpen, setIsLentDialogOpen] = React.useState(false);

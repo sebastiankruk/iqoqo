@@ -346,6 +346,126 @@ class WorkExpansionLink(db.Model):  # type: ignore[name-defined]
     )
 
 
+WORK_RELATION_TYPES: tuple[str, ...] = (
+    "is_adaptation_of",
+    "is_derivative_of",
+    "inspired_by",
+    "sequel_to",
+    "spin_off_of",
+    "companion_to",
+)
+WORK_LINK_CANDIDATE_STATUSES: tuple[str, ...] = ("pending", "accepted", "dismissed")
+WORK_LINK_RESOLUTION_SOURCES: tuple[str, ...] = ("heuristic", "llm")
+
+
+class WorkRelation(db.Model):  # type: ignore[name-defined]
+    """Confirmed directional cross-media relation between two FRBR Works (derived -> source)."""
+
+    __tablename__ = "work_relations"
+    __table_args__ = (
+        db.CheckConstraint("source_work_id <> target_work_id", name="ck_work_relations_no_self_link"),
+        db.CheckConstraint(
+            f"relation_type IN ({', '.join(repr(t) for t in WORK_RELATION_TYPES)})",
+            name="ck_work_relations_relation_type",
+        ),
+        db.UniqueConstraint("source_work_id", "target_work_id", "relation_type", name="uq_work_relations_triple"),
+        db.Index("ix_work_relations_source_work_id", "source_work_id"),
+        db.Index("ix_work_relations_target_work_id", "target_work_id"),
+        *(({"schema": _CATALOG},) if _CATALOG else ()),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_work_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_work_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    relation_type = db.Column(db.String(50), nullable=False, default="is_adaptation_of")
+    notes = db.Column(db.Text, nullable=True)
+    created_by_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    source_work = db.relationship("Work", foreign_keys=[source_work_id])
+    target_work = db.relationship("Work", foreign_keys=[target_work_id])
+
+
+class WorkLinkCandidate(db.Model):  # type: ignore[name-defined]
+    """Inventory-scoped review queue candidate for cross-media Work linking."""
+
+    __tablename__ = "work_link_candidates"
+    __table_args__: tuple = (
+        db.CheckConstraint("source_work_id <> target_work_id", name="ck_work_link_candidates_no_self_link"),
+        db.CheckConstraint(
+            f"proposed_relation_type IN ({', '.join(repr(t) for t in WORK_RELATION_TYPES)})",
+            name="ck_work_link_candidates_relation_type",
+        ),
+        db.CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in WORK_LINK_CANDIDATE_STATUSES)})",
+            name="ck_work_link_candidates_status",
+        ),
+        db.CheckConstraint(
+            f"resolution_source IN ({', '.join(repr(r) for r in WORK_LINK_RESOLUTION_SOURCES)})",
+            name="ck_work_link_candidates_resolution_source",
+        ),
+        db.CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0.0 AND confidence <= 1.0)",
+            name="ck_work_link_candidates_confidence_range",
+        ),
+        db.Index("ix_work_link_candidates_status_confidence", "status", "confidence"),
+        db.Index("ix_work_link_candidates_source_work_id", "source_work_id"),
+        db.Index("ix_work_link_candidates_target_work_id", "target_work_id"),
+        db.Index(
+            "uq_work_link_candidates_pair",
+            db.text("(CASE WHEN source_work_id <= target_work_id THEN source_work_id ELSE target_work_id END)"),
+            db.text("(CASE WHEN source_work_id <= target_work_id THEN target_work_id ELSE source_work_id END)"),
+            unique=True,
+        ),
+        *(({"schema": _INVENTORY},) if _INVENTORY else ()),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_work_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_work_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    proposed_relation_type = db.Column(db.String(50), nullable=False, default="is_adaptation_of")
+    confidence = db.Column(db.Float, nullable=True, default=None)
+    resolution_source = db.Column(db.String(20), nullable=False, default="heuristic", server_default="heuristic")
+    llm_reasoning = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    source_work = db.relationship("Work", foreign_keys=[source_work_id])
+    target_work = db.relationship("Work", foreign_keys=[target_work_id])
+
+
 class BoardgameMechanic(db.Model):  # type: ignore[name-defined]
     """
     Controlled vocabulary for board game mechanics sourced from BoardGameGeek.

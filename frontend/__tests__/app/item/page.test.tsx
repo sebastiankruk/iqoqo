@@ -141,8 +141,8 @@ describe("ItemPageClient", () => {
     // Tabs should be visible
     expect(screen.getByTestId("item-tabs")).toBeInTheDocument();
 
-    // Actions should be visible
-    expect(screen.getByTestId("item-actions")).toBeInTheDocument();
+    // Standalone ItemActions is relocated into ItemSidebar accordion
+    expect(screen.queryByTestId("item-actions")).not.toBeInTheDocument();
   });
 
   it("displays error state when item is not found", () => {
@@ -170,7 +170,7 @@ describe("ItemPageClient", () => {
     expect(screen.getByText("Item not found.")).toBeInTheDocument();
   });
 
-  it("renders item actions (edit, delete, export)", () => {
+  it("renders sidebar container without standalone main-column item actions", () => {
     vi.mocked(hooks.useItem).mockReturnValue({
       data: mockItem,
       isLoading: false,
@@ -179,9 +179,8 @@ describe("ItemPageClient", () => {
 
     render(<ItemPageClient itemId={1} />);
 
-    expect(screen.getByTestId("edit-btn")).toBeInTheDocument();
-    expect(screen.getByTestId("delete-btn")).toBeInTheDocument();
-    expect(screen.getByTestId("export-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("item-sidebar")).toBeInTheDocument();
+    expect(screen.queryByTestId("item-actions")).not.toBeInTheDocument();
   });
 
   it("renders back to collection button", () => {

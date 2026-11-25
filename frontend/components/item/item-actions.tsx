@@ -17,32 +17,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useTranslations } from "next-intl";
 import {
   Trash2,
   RefreshCw,
   CloudDownload,
   Pencil,
   Image as ImageIcon,
-  BookOpen,
-  Music,
-  Video,
-  Gamepad2,
   ChevronDown,
   ChevronUp,
-  ImagePlus,
   ImageDown,
   Clock,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useDeleteItem, useRegenerateCover, useUpdateItem, queryKeys } from "@/lib/api/hooks";
+import { useDeleteItem, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { useProfile } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
 import { apiClient } from "@/lib/api/client";
 import { PermissionName } from "@/lib/permissions";
-import { isAudioMedia } from "@/lib/utils";
-import { isBoardGameFormat, isVideoFormat } from "@/lib/media-classification";
 import type { Item } from "@/types/frbr";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 
@@ -57,20 +51,27 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Item actions component.
  *
  * @param root0 - The props object
  * @param root0.item - The item
+ * @param root0.compact - Whether to omit outer card chrome when embedded in sidebar accordion
  * @returns {JSX.Element | null} The component or null if no profile
  */
-export function ItemActions({ item }: { item: Item }) {
+export function ItemActions({ item, compact = false }: { item: Item; compact?: boolean }) {
   const router = useRouter();
+  const tAdmin = useTranslations("ItemDetail.adminActions");
   const regenerateCover = useRegenerateCover();
-  const updateItem = useUpdateItem(item.id);
   const deleteItem = useDeleteItem();
   const qc = useQueryClient();
 
@@ -79,8 +80,6 @@ export function ItemActions({ item }: { item: Item }) {
   const [isRequesting, setIsRequesting] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
   const [isRefetchingCover, setIsRefetchingCover] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [isHierarchyOpen, setIsHierarchyOpen] = useState(false);
   const [isRequestsOpen, setIsRequestsOpen] = useState(false);
 
   const isPending = item.cover_status === "pending" || item.meta?.cover_status === "pending";
@@ -95,34 +94,25 @@ export function ItemActions({ item }: { item: Item }) {
   const itemEscalations = myEscalations?.filter(e => e.item_id === item.id) ?? [];
   const pendingEscalation = itemEscalations.find(e => e.status === "pending");
 
-  const isProcessing = item.cover_status === "processing" || item.meta?.cover_status === "processing";
-  useQuery({
-    queryKey: queryKeys.item(item.id),
-    queryFn: async () => {
-      const response = await apiClient.get<{ data?: Item }>(`/items/${item.id}`);
-      return response.data.data ?? null;
-    },
-    enabled: isPending || isProcessing,
-    refetchInterval: query => {
-      const status = query.state.data
-        ? (query.state.data.cover_status ?? query.state.data.meta?.cover_status)
-        : (item.cover_status ?? item.meta?.cover_status);
-      return status === "pending" || status === "processing" ? 3000 : false;
-    },
-  });
-
   if (!profile) return null;
 
   const hasPermission = (perm: PermissionName): boolean => Boolean(profile.permissions?.includes(perm));
+  const isOwner = Boolean(item.is_owner || (profile.id && item.owner_id === profile.id));
+  const isAdmin = Boolean(profile.roles?.includes("admin"));
+  const canModifyItem = isOwner || isAdmin;
+
+  const canRefetchMetadata = hasPermission(PermissionName.REFETCH_METADATA) && Boolean(item.manifestation_id);
+  const canEditFrbr = hasPermission(PermissionName.WRITE_METADATA) && Boolean(item.manifestation_id);
+  const canRefetchCover = hasPermission(PermissionName.REFETCH_COVER) && Boolean(item.manifestation_id);
+  const canRegenerateCover =
+    (canModifyItem || hasPermission(PermissionName.WRITE_METADATA)) &&
+    hasPermission(PermissionName.REGENERATE_COVER) &&
+    Boolean(item.manifestation_id);
+  const canEditCoverArt = hasPermission(PermissionName.EDIT_COVER) && Boolean(item.manifestation_id);
+  const canDeleteItem = canModifyItem && hasPermission(PermissionName.DELETE_ITEM);
 
   const showAdminActions =
-    hasPermission(PermissionName.REFETCH_METADATA) ||
-    (hasPermission(PermissionName.WRITE_METADATA) && !!item.manifestation_id) ||
-    hasPermission(PermissionName.REFETCH_COVER) ||
-    hasPermission(PermissionName.REGENERATE_COVER) ||
-    hasPermission(PermissionName.UPLOAD_COVER) ||
-    (hasPermission(PermissionName.EDIT_COVER) && !!item.manifestation_id) ||
-    hasPermission(PermissionName.DELETE_ITEM);
+    canRefetchMetadata || canEditFrbr || canRefetchCover || canRegenerateCover || canEditCoverArt || canDeleteItem;
 
   const handleConfirmDelete = () => {
     deleteItem.mutate(item.id, {
@@ -199,117 +189,132 @@ export function ItemActions({ item }: { item: Item }) {
     }
   };
 
-  const handleStatusUpdate = (status: Item["status"]) => {
-    updateItem.mutate(
-      { status },
-      {
-        onSuccess: () => toast.success(`Status updated to ${status.replace(/_/g, " ")}`),
-        onError: e => toast.error(e instanceof Error ? e.message : String(e)),
-      }
-    );
-  };
-
-  // Media type checks
-  const format =
-    (item.manifestation_meta?.["format"] as string | undefined) ??
-    (item.meta?.["format"] as string | undefined) ??
-    "book";
-  const isAudio = isAudioMedia(format);
-  const isVideo = isVideoFormat(format);
-  const isGame = isBoardGameFormat(format);
-  const isBook = !isAudio && !isVideo && !isGame;
+  const showRequestsSection = hasEscalateRequestForHook && !hasWriteMetadataForHook;
+  if (!showAdminActions && !showRequestsSection) {
+    return null;
+  }
 
   return (
-    <div className="mt-8 flex flex-col gap-6 rounded-2xl border bg-card/50 p-6 shadow-sm border-border/40">
-      <div className="flex flex-wrap items-center gap-4 w-full">
-        {/* Polymorphic quick actions */}
-        {item.is_owner && isBook && item.status !== "read" && (
-          <button
-            onClick={() => handleStatusUpdate(item.status === "reading" ? "read" : "reading")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            {item.status === "reading" ? "Mark as Read" : "Log Reading Progress"}
-          </button>
-        )}
-
-        {item.is_owner && isAudio && item.status !== "listened" && (
-          <button
-            onClick={() => handleStatusUpdate(item.status === "listening" ? "listened" : "listening")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
-          >
-            <Music className="h-3.5 w-3.5" />
-            {item.status === "listening" ? "Mark as Listened" : "Now Listening"}
-          </button>
-        )}
-
-        {item.is_owner && isVideo && item.status !== "watched" && (
-          <button
-            onClick={() => handleStatusUpdate("watched")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
-          >
-            <Video className="h-3.5 w-3.5" />
-            Mark as Watched
-          </button>
-        )}
-
-        {item.is_owner && isGame && (
-          <button
-            onClick={() => handleStatusUpdate("played")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-95 w-full sm:w-auto"
-          >
-            <Gamepad2 className="h-3.5 w-3.5" />
-            Log Play
-          </button>
-        )}
-      </div>
-
-      <div className="border-t border-border/40 pt-4 w-full flex flex-col gap-4">
-        {/* Pending status card above all accordion buttons */}
-        {hasEscalateRequestForHook && !hasWriteMetadataForHook && pendingEscalation && (
-          <div
-            data-testid="escalation-status-card"
-            className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
-          >
-            <div className="flex items-center justify-between font-medium">
-              <span className="flex items-center gap-1.5 capitalize">
-                <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
-                Help Request: {pendingEscalation.status}
-              </span>
-              <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
-                {pendingEscalation.field_name}
-              </span>
-            </div>
-            <div className="text-muted-foreground">
-              Suggested: <span className="font-mono text-foreground">{pendingEscalation.suggested_value}</span>
-            </div>
-            {pendingEscalation.resolution_note && (
-              <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
-                Custodian note: &ldquo;{pendingEscalation.resolution_note}&rdquo;
-              </div>
-            )}
+    <div
+      className={
+        compact
+          ? "flex flex-col gap-2.5"
+          : "mt-6 flex flex-col gap-4 rounded-2xl border bg-card/50 p-4 sm:p-5 shadow-sm border-border/40"
+      }
+    >
+      {/* Pending status card above controls */}
+      {showRequestsSection && pendingEscalation && (
+        <div
+          data-testid="escalation-status-card"
+          className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
+        >
+          <div className="flex items-center justify-between font-medium">
+            <span className="flex items-center gap-1.5 capitalize">
+              <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+              {tAdmin("helpRequestStatus", { status: pendingEscalation.status })}
+            </span>
+            <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-mono">
+              {pendingEscalation.field_name}
+            </span>
           </div>
-        )}
+          <div className="text-muted-foreground">
+            Suggested: <span className="font-mono text-foreground">{pendingEscalation.suggested_value}</span>
+          </div>
+          {pendingEscalation.resolution_note && (
+            <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+              Custodian note: &ldquo;{pendingEscalation.resolution_note}&rdquo;
+            </div>
+          )}
+        </div>
+      )}
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const nextVal = !isHierarchyOpen;
-              setIsHierarchyOpen(nextVal);
-              if (nextVal) {
-                setIsPanelOpen(false);
-              }
-            }}
-            className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
-          >
-            {isHierarchyOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            <span>FRBR Hierarchy</span>
-          </Button>
-
-          {hasEscalateRequestForHook &&
-            !hasWriteMetadataForHook &&
+      {showAdminActions && compact ? (
+        <div className="flex flex-col gap-0.5 w-full" data-testid="admin-actions-inline-list">
+          {canRefetchMetadata && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRefetch}
+              disabled={isRefetching}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <CloudDownload className={`h-3.5 w-3.5 shrink-0 ${isRefetching ? "animate-bounce" : ""}`} />
+              <span>{isRefetching ? tAdmin("fetching") : tAdmin("refetchMetadata")}</span>
+            </Button>
+          )}
+          {canEditFrbr && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <Pencil className="h-3.5 w-3.5 shrink-0" />
+              <span>{tAdmin("editFrbr")}</span>
+            </Button>
+          )}
+          {canRefetchCover && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRefetchCover}
+              disabled={isPending || isRefetchingCover}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <ImageDown className="h-3.5 w-3.5 shrink-0" />
+              <span>{tAdmin("refetchCover")}</span>
+            </Button>
+          )}
+          {canRegenerateCover && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRegenerateClick}
+              disabled={isPending || isRequesting}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${isRequesting ? "animate-spin" : ""}`} />
+              <span>{tAdmin("regenerateCover")}</span>
+            </Button>
+          )}
+          {canEditCoverArt && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
+              className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium"
+            >
+              <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+              <span>{tAdmin("editCoverArt")}</span>
+            </Button>
+          )}
+          {canDeleteItem && (
+            <>
+              {(canRefetchMetadata || canEditFrbr || canRefetchCover || canRegenerateCover || canEditCoverArt) && (
+                <div className="my-1 border-t border-border/40" />
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteItem.isPending}
+                className="w-full justify-start h-8 px-2 text-xs gap-2 font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                <span>{tAdmin("removeFromLibrary")}</span>
+              </Button>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {showRequestsSection &&
             (itemEscalations.length > 0 ? (
               <Button
                 variant="ghost"
@@ -318,240 +323,168 @@ export function ItemActions({ item }: { item: Item }) {
                 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
               >
                 {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                <span>Requests ({itemEscalations.length})</span>
+                <span>{tAdmin("requestsCount", { count: itemEscalations.length })}</span>
               </Button>
             ) : (
               <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
             ))}
 
           {showAdminActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="admin-actions-menu-trigger"
+                  className="flex items-center gap-2 text-xs font-semibold"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  <span>{tAdmin("trigger")}</span>
+                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {canRefetchMetadata && (
+                  <DropdownMenuItem onSelect={handleRefetch} disabled={isRefetching} className="cursor-pointer gap-2">
+                    <CloudDownload className={`h-4 w-4 ${isRefetching ? "animate-bounce" : ""}`} />
+                    <span>{isRefetching ? tAdmin("fetching") : tAdmin("refetchMetadata")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canEditFrbr && (
+                  <DropdownMenuItem
+                    onSelect={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
+                    className="cursor-pointer gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span>{tAdmin("editFrbr")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canRefetchCover && (
+                  <DropdownMenuItem
+                    onSelect={handleRefetchCover}
+                    disabled={isPending || isRefetchingCover}
+                    className="cursor-pointer gap-2"
+                  >
+                    <ImageDown className="h-4 w-4" />
+                    <span>{tAdmin("refetchCover")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canRegenerateCover && (
+                  <DropdownMenuItem
+                    onSelect={handleRegenerateClick}
+                    disabled={isPending || isRequesting}
+                    className="cursor-pointer gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRequesting ? "animate-spin" : ""}`} />
+                    <span>{tAdmin("regenerateCover")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canEditCoverArt && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)
+                    }
+                    className="cursor-pointer gap-2"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    <span>{tAdmin("editCoverArt")}</span>
+                  </DropdownMenuItem>
+                )}
+                {canDeleteItem && (
+                  <>
+                    {(canRefetchMetadata ||
+                      canEditFrbr ||
+                      canRefetchCover ||
+                      canRegenerateCover ||
+                      canEditCoverArt) && <DropdownMenuSeparator />}
+                    <DropdownMenuItem
+                      onSelect={() => setDeleteConfirmOpen(true)}
+                      disabled={deleteItem.isPending}
+                      className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>{tAdmin("removeFromLibrary")}</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+
+      {showAdminActions && compact && showRequestsSection && (
+        <div className="pt-1 border-t border-border/40">
+          {itemEscalations.length > 0 ? (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                const nextVal = !isPanelOpen;
-                setIsPanelOpen(nextVal);
-                if (nextVal) {
-                  setIsHierarchyOpen(false);
-                }
-              }}
+              onClick={() => setIsRequestsOpen(!isRequestsOpen)}
               className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer px-2"
             >
-              {isPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              <span>Admin Actions</span>
+              {isRequestsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              <span>Requests ({itemEscalations.length})</span>
             </Button>
+          ) : (
+            <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
           )}
         </div>
+      )}
 
-        {isHierarchyOpen && (
-          <dl className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4 animate-in fade-in slide-in-from-top-2 duration-200">
-            {item.work && (
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Work ID</dt>
-                <dd className="text-sm font-mono text-foreground">#{item.work.id}</dd>
-              </div>
-            )}
-            {item.expression && (
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Expression ID
-                </dt>
-                <dd className="text-sm font-mono text-foreground">#{item.expression.id}</dd>
-              </div>
-            )}
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Manifestation ID
-              </dt>
-              <dd className="text-sm font-mono text-foreground">
-                <Link href={`/manifestation/${item.manifestation_id}`} className="hover:underline">
-                  #{item.manifestation_id}
-                </Link>
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Item ID</dt>
-              <dd className="text-sm font-mono text-foreground">#{item.id}</dd>
-            </div>
-          </dl>
-        )}
-
-        {showAdminActions && isPanelOpen && (
-          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-            {hasPermission(PermissionName.REFETCH_METADATA) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefetch}
-                disabled={isRefetching}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <CloudDownload className={`h-3.5 w-3.5 ${isRefetching ? "animate-bounce" : ""}`} />
-                {isRefetching ? "Fetching..." : "Refetch Metadata"}
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.WRITE_METADATA) && item.manifestation_id && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/admin/content?tab=metadata&manifestationId=${item.manifestation_id}`)}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Edit FRBR
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.UPLOAD_COVER) && item.manifestation_id && (
-              <CoverUploadPicker
-                manifestation_id={item.manifestation_id}
-                onUploadComplete={() => {
-                  toast.success("Cover uploaded and processing started!");
-                  qc.setQueryData(queryKeys.item(item.id), (prev: Item | undefined) => {
-                    if (!prev) return prev;
-                    return {
-                      ...prev,
-                      cover_status: "processing",
-                    };
-                  });
-                }}
-                label={
-                  item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
-                    ? "Replace Cover"
-                    : "Contribute Cover"
-                }
-                icon={<ImagePlus className="h-3.5 w-3.5" />}
-                confirmTitle={
-                  item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
-                    ? "Replace Existing Cover?"
-                    : undefined
-                }
-                confirmMessage={
-                  item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]
-                    ? "This item already has a cover. Are you sure you want to replace it with your own image?"
-                    : undefined
-                }
-                inline
-                variant="outline"
-                buttonClassName="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 h-8 px-3 text-xs"
-              />
-            )}
-
-            {hasPermission(PermissionName.REFETCH_COVER) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefetchCover}
-                disabled={isPending || isRefetchingCover}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <ImageDown className="h-3.5 w-3.5" />
-                Refetch Cover
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.REGENERATE_COVER) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRegenerateClick}
-                disabled={isPending || isRequesting}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRequesting ? "animate-spin" : ""}`} />
-                Regenerate Cover
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.EDIT_COVER) && item.manifestation_id && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/admin/content?tab=cover-art&manifestationId=${item.manifestation_id}`)}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                Edit Cover Art
-              </Button>
-            )}
-
-            {hasPermission(PermissionName.DELETE_ITEM) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteItem.isPending}
-                className="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Remove from library
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Requests accordion content */}
-        {hasEscalateRequestForHook && !hasWriteMetadataForHook && isRequestsOpen && (
-          <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
-            {/* Existing request cards for this target */}
-            {itemEscalations.length > 0 && (
-              <div className="space-y-2">
-                {itemEscalations.map(esc => (
-                  <div
-                    key={esc.id}
-                    className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between font-medium">
-                      <span className="flex items-center gap-1.5 capitalize">
-                        {esc.status === "pending" ? (
-                          <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-                            {esc.status}
-                          </span>
-                        )}
-                        {esc.field_name}
-                      </span>
-                      <span className="text-muted-foreground text-[10px] tabular-nums">
-                        {esc.created_at ? new Date(esc.created_at).toLocaleDateString() : ""}
-                      </span>
-                    </div>
-                    <div className="text-muted-foreground">
-                      Suggested: <span className="font-mono text-foreground">{esc.suggested_value}</span>
-                    </div>
-                    {esc.resolution_note && (
-                      <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
-                        Custodian note: &ldquo;{esc.resolution_note}&rdquo;
-                      </div>
-                    )}
+      {/* Requests accordion content */}
+      {showRequestsSection && isRequestsOpen && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
+          {itemEscalations.length > 0 && (
+            <div className="space-y-2">
+              {itemEscalations.map(esc => (
+                <div key={esc.id} className="rounded-lg border border-border bg-card p-3 text-xs shadow-xs space-y-1.5">
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="flex items-center gap-1.5 capitalize">
+                      {esc.status === "pending" ? (
+                        <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                          {esc.status}
+                        </span>
+                      )}
+                      {esc.field_name}
+                    </span>
+                    <span className="text-muted-foreground text-[10px] tabular-nums">
+                      {esc.created_at ? new Date(esc.created_at).toLocaleDateString() : ""}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="text-muted-foreground">
+                    Suggested: <span className="font-mono text-foreground">{esc.suggested_value}</span>
+                  </div>
+                  {esc.resolution_note && (
+                    <div className="rounded bg-muted/50 p-1.5 text-[11px] italic text-muted-foreground border-l-2 border-primary/50">
+                      Custodian note: &ldquo;{esc.resolution_note}&rdquo;
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
-            {/* Ask custodians button - only inside accordion */}
-            <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
-          </div>
-        )}
-      </div>
+          <EscalationTrigger level="item" targetId={item.id} escalations={itemEscalations} alwaysShowDialog />
+        </div>
+      )}
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from library?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this item from your library. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tAdmin("removeTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{tAdmin("removeDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteItem.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteItem.isPending}>{tAdmin("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={deleteItem.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteItem.isPending ? "Removing…" : "Remove"}
+              {deleteItem.isPending ? tAdmin("removing") : tAdmin("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -560,14 +493,12 @@ export function ItemActions({ item }: { item: Item }) {
       <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Regenerate Cover?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This item already has a cover image. Regenerating it will overwrite the existing cover.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tAdmin("regenerateTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{tAdmin("regenerateDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRegenerate}>Regenerate</AlertDialogAction>
+            <AlertDialogCancel>{tAdmin("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRegenerate}>{tAdmin("regenerate")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

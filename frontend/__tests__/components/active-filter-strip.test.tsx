@@ -177,4 +177,19 @@ describe("FilterBar — Rendering", () => {
     // Should still render
     expect(screen.getByText("1")).toBeDefined();
   });
+
+  it("renders Kind: Live performance chip for expression_kind filter", () => {
+    render(
+      <FilterBar
+        activeFilters={[{ type: "expression_kind", value: "live_performance" }]}
+        onRemoveFilter={vi.fn()}
+        onClearAll={vi.fn()}
+        sortBy="title"
+        onSortChange={vi.fn()}
+        resultCount={2}
+      />
+    );
+
+    expect(screen.getByText("Kind: Live performance")).toBeInTheDocument();
+  });
 });

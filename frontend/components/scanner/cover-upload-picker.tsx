@@ -33,6 +33,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { MediaFormat } from "@/types/frbr";
 
+export interface CoverUploadResult {
+  task_id?: string | null;
+  cover_url?: string | null;
+  cover_source?: string | null;
+  cover_status?: string | null;
+  cover_status_updated_at?: string | null;
+}
+
 /** Props for CoverUploadPicker component */
 export interface CoverUploadPickerProps {
   /** If set, uploads cover for this manifestation */
@@ -48,7 +56,7 @@ export interface CoverUploadPickerProps {
   /** Dialog confirmation description */
   confirmMessage?: string;
   /** Callback fired after successful upload */
-  onUploadComplete?: () => void;
+  onUploadComplete?: (result?: CoverUploadResult) => void;
   /** Button visual variant */
   variant?: ButtonVariant;
   /** Wrapper class name */
@@ -61,6 +69,12 @@ export interface CoverUploadPickerProps {
   disabled?: boolean;
   /** Source identifier override */
   source?: string;
+  /** Optional controlled open state for the source picker modal */
+  open?: boolean;
+  /** Optional controlled open-state callback */
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the built-in trigger button when opened externally (e.g. from a menu item) */
+  hideTrigger?: boolean;
 }
 
 /**
@@ -82,12 +96,18 @@ export function CoverUploadPicker({
   variant = "outline",
   className,
   buttonClassName,
+  inline = false,
   disabled = false,
   source,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  hideTrigger = false,
 }: CoverUploadPickerProps) {
   const t = useTranslations("scanner");
   const [uploading, setUploading] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const confirmOpen = controlledOpen ?? uncontrolledOpen;
+  const setConfirmOpen = controlledOnOpenChange ?? setUncontrolledOpen;
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -99,21 +119,22 @@ export function CoverUploadPicker({
     if (!manifestation_id) return;
     setUploading(true);
 
-    const resizedCover = await resizeImageFile(file, {
-      maxDimension: COVER_MAX_DIMENSION,
-      quality: COVER_JPEG_QUALITY,
-    });
-    const formData = new FormData();
-    formData.append("cover", resizedCover);
-    formData.append("format", String(format));
-    formData.append("source", source || uploadSource);
-
     try {
-      await apiClient.post(`/manifestations/${manifestation_id}/cover`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      const resizedCover = await resizeImageFile(file, {
+        maxDimension: COVER_MAX_DIMENSION,
+        quality: COVER_JPEG_QUALITY,
       });
+      const formData = new FormData();
+      formData.append("cover", resizedCover);
+      formData.append("format", String(format));
+      formData.append("source", source || uploadSource);
+
+      const response = await apiClient.post<{ data?: CoverUploadResult }>(
+        `/manifestations/${manifestation_id}/cover`,
+        formData
+      );
       if (onUploadComplete) {
-        onUploadComplete();
+        onUploadComplete(response?.data?.data);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : t("cameraCapture.processImageFailed");
@@ -155,8 +176,10 @@ export function CoverUploadPicker({
   const dialogTitle = confirmTitle || label || t("cameraCapture.snapCover");
   const dialogDescription = confirmMessage || t("cameraCapture.chooseCoverSource");
 
+  const wrapperClassName = [inline ? "inline-flex items-center" : "", className].filter(Boolean).join(" ") || undefined;
+
   return (
-    <div className={className} data-testid="cover-upload-picker">
+    <div className={wrapperClassName} data-testid="cover-upload-picker">
       {/* Hidden native input for live camera capture */}
       <input
         ref={cameraInputRef}
@@ -166,7 +189,7 @@ export function CoverUploadPicker({
         aria-label="Camera capture"
         data-testid="camera-file-input"
         onChange={e => handleCapture(e, "scanner_camera")}
-        className="hidden"
+        className="sr-only"
       />
 
       {/* Hidden native input for filesystem / photo gallery picker */}
@@ -177,18 +200,20 @@ export function CoverUploadPicker({
         aria-label="Gallery upload"
         data-testid="gallery-file-input"
         onChange={e => handleCapture(e, "user_upload")}
-        className="hidden"
+        className="sr-only"
       />
 
-      <Button
-        type="button"
-        variant={variant}
-        disabled={disabled || uploading}
-        className={buttonClassName}
-        onClick={() => setConfirmOpen(true)}
-      >
-        {buttonContent}
-      </Button>
+      {!hideTrigger && (
+        <Button
+          type="button"
+          variant={variant}
+          disabled={disabled || uploading}
+          className={buttonClassName}
+          onClick={() => setConfirmOpen(true)}
+        >
+          {buttonContent}
+        </Button>
+      )}
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -203,8 +228,8 @@ export function CoverUploadPicker({
               variant="outline"
               data-testid="confirm-take-photo"
               onClick={() => {
-                setConfirmOpen(false);
                 cameraInputRef.current?.click();
+                setConfirmOpen(false);
               }}
               className="flex items-center gap-1.5"
             >
@@ -215,8 +240,8 @@ export function CoverUploadPicker({
               type="button"
               data-testid="confirm-choose-gallery"
               onClick={() => {
-                setConfirmOpen(false);
                 galleryInputRef.current?.click();
+                setConfirmOpen(false);
               }}
               className="flex items-center gap-1.5"
             >

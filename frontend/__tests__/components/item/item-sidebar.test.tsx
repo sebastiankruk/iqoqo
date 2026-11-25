@@ -211,7 +211,9 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={mockItem} />);
 
-      expect(screen.getByText("Named Collections")).toBeInTheDocument();
+      const toggleBtn = screen.getByRole("button", { name: /Named Collections/i });
+      expect(toggleBtn).toBeInTheDocument();
+      fireEvent.click(toggleBtn);
       expect(screen.getByText("Favorites")).toBeInTheDocument();
       expect(screen.getByText("Add to named collection")).toBeInTheDocument();
     });
@@ -232,7 +234,8 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={mockItem} />);
 
-      expect(screen.getByText("Named Collections")).toBeInTheDocument();
+      const toggleBtn = screen.getByRole("button", { name: /Named Collections/i });
+      fireEvent.click(toggleBtn);
       expect(screen.getByText(/Not in any named collections yet/i)).toBeInTheDocument();
     });
 
@@ -245,7 +248,7 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={itemWithModifyPermission} />);
 
-      expect(screen.queryByText("Named Collections")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Named Collections/i })).toBeInTheDocument();
     });
   });
 

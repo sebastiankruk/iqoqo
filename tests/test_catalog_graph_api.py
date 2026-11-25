@@ -318,3 +318,174 @@ def test_catalog_graph_library_mode_and_federation_consent(client, app):
     assert f"item:{ok_id}" in node_ids
     assert f"item:{no_id}" not in node_ids
     assert all(n["entity_type"] in ("work", "item") for n in data["nodes"])
+
+
+def test_catalog_graph_person_contributor_and_organization_roots(app, client):
+    """Verify person, contributor, and organization roots + Work/Expression/Manifestation/LOD + depth=2."""
+    from app.db.models import ExpressionContribution, ManifestationContribution
+
+    with app.app_context():
+        person = Contributor(name="Stanisław Lem", type="person")
+        org = Contributor(name="Wydawnictwo Literackie", type="organization")
+        db.session.add_all([person, org])
+        db.session.flush()
+
+        w1 = Work(title="Solaris")
+        w2 = Work(title="Cyberiada")
+        db.session.add_all([w1, w2])
+        db.session.flush()
+
+        e1 = Expression(work_id=w1.id, content_type="text", language="pl")
+        db.session.add(e1)
+        db.session.flush()
+
+        m1 = Manifestation(expression_id=e1.id, format="hardcover", meta={"title": "Solaris Wyd. 1"})
+        db.session.add(m1)
+        db.session.flush()
+
+        db.session.add(WorkContribution(work_id=w1.id, contributor_id=person.id, role="author", sequence=1))
+        db.session.add(WorkContribution(work_id=w2.id, contributor_id=person.id, role="author", sequence=1))
+        db.session.add(ExpressionContribution(expression_id=e1.id, contributor_id=person.id, role="translator", sequence=1))
+        db.session.add(ManifestationContribution(manifestation_id=m1.id, contributor_id=org.id, role="publisher", sequence=1))
+
+        accepted_lod = SemanticLink(
+            entity_type="contributor",
+            entity_id=person.id,
+            authority="wikidata",
+            external_uri="https://www.wikidata.org/wiki/Q230741",
+            pref_label="Stanisław Lem",
+            status="accepted",
+        )
+        pending_lod = SemanticLink(
+            entity_type="contributor",
+            entity_id=person.id,
+            authority="viaf",
+            external_uri="https://viaf.org/viaf/56612733",
+            pref_label="Pending Lem",
+            status="pending",
+        )
+        db.session.add_all([accepted_lod, pending_lod])
+        db.session.commit()
+        person_id, org_id, w1_id, w2_id, e1_id, m1_id = person.id, org.id, w1.id, w2.id, e1.id, m1.id
+        acc_lod_id, pend_lod_id = accepted_lod.id, pending_lod.id
+
+    # 1. Anchor on person alias -> resolves to contributor:<id>
+    res = client.get(f"/api/catalog/graph?entity_type=person&entity_id={person_id}&depth=1")
+    assert res.status_code == 200
+    data = res.get_json()["data"]
+    assert data["anchor"]["node_id"] == f"contributor:{person_id}"
+    nodes_by_id = {n["id"]: n for n in data["nodes"]}
+    assert nodes_by_id[f"contributor:{person_id}"]["contributor_type"] == "person"
+    assert nodes_by_id[f"contributor:{person_id}"]["is_anchor"] is True
+    assert f"work:{w1_id}" in nodes_by_id
+    assert f"work:{w2_id}" in nodes_by_id
+    assert f"expression:{e1_id}" in nodes_by_id
+    assert f"lod:{acc_lod_id}" in nodes_by_id
+    assert f"lod:{pend_lod_id}" not in nodes_by_id
+
+    # 2. Organization contributor root
+    org_res = client.get(f"/api/catalog/graph?entity_type=contributor&entity_id={org_id}&depth=1")
+    assert org_res.status_code == 200
+    org_data = org_res.get_json()["data"]
+    org_nodes = {n["id"]: n for n in org_data["nodes"]}
+    assert org_nodes[f"contributor:{org_id}"]["contributor_type"] == "organization"
+    assert f"manifestation:{m1_id}" in org_nodes
+
+    # 3. Depth=2 from Work A traverses through Contributor to sibling Work B
+    w_res = client.get(f"/api/catalog/graph?entity_type=work&entity_id={w1_id}&depth=2")
+    assert w_res.status_code == 200
+    w_nodes = {n["id"]: n for n in w_res.get_json()["data"]["nodes"]}
+    assert f"contributor:{person_id}" in w_nodes
+    assert f"work:{w2_id}" in w_nodes
+
+
+def test_catalog_graph_series_roots_and_non_series_404(app, client):
+    """Verify series roots resolve to work:<id> for explicit and legacy series, and 404 on plain works."""
+    with app.app_context():
+        explicit_series = Work(title="Dune Chronicles", work_kind="series")
+        legacy_series = Work(title="Legacy Series Container", work_kind=None)
+        plain_work = Work(title="Standalone Book", work_kind="monograph")
+        member_work = Work(title="Dune")
+        db.session.add_all([explicit_series, legacy_series, plain_work, member_work])
+        db.session.flush()
+        db.session.add(WorkSeriesMembership(series_work_id=explicit_series.id, work_id=member_work.id, sequence=1))
+        db.session.add(WorkSeriesMembership(series_work_id=legacy_series.id, work_id=member_work.id, sequence=2))
+        db.session.commit()
+        exp_id, leg_id, plain_id, mem_id = explicit_series.id, legacy_series.id, plain_work.id, member_work.id
+
+    res1 = client.get(f"/api/catalog/graph?entity_type=series&entity_id={exp_id}&depth=1")
+    assert res1.status_code == 200
+    d1 = res1.get_json()["data"]
+    assert d1["anchor"]["node_id"] == f"work:{exp_id}"
+    assert any(n["id"] == f"work:{mem_id}" for n in d1["nodes"])
+
+    res2 = client.get(f"/api/catalog/graph?entity_type=series&entity_id={leg_id}&depth=1")
+    assert res2.status_code == 200
+    assert res2.get_json()["data"]["anchor"]["node_id"] == f"work:{leg_id}"
+
+    res404 = client.get(f"/api/catalog/graph?entity_type=series&entity_id={plain_id}&depth=1")
+    assert res404.status_code == 404
+
+
+def test_catalog_graph_search_diacritics_visibility_limits_and_federation_head(app, client):
+    """Verify /api/catalog/graph/search diacritic folding, 3-tier Item visibility, limits, 400s, and federation mode."""
+    with app.app_context():
+        owner = User(email="search_owner@iqoqo.local", public_username="s_owner", visibility="public")
+        friend = User(email="search_friend@iqoqo.local", public_username="s_friend", visibility="public")
+        stranger = User(email="search_stranger@iqoqo.local", public_username="s_stranger", visibility="public")
+        db.session.add_all([owner, friend, stranger])
+        db.session.flush()
+        db.session.add(UserFriendship(requester_id=owner.id, addressee_id=friend.id, status="accepted"))
+
+        lem = Contributor(name="Stanisław Lem", type="person")
+        series_w = Work(title="Stanisław Lem Dzieła Zebrane", work_kind="series")
+        secret_w = Work(title="SecretChronicleCopy")
+        db.session.add_all([lem, series_w, secret_w])
+        db.session.flush()
+        expr = Expression(work_id=secret_w.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+        man = Manifestation(expression_id=expr.id, format="paperback", meta={"title": "SecretChronicleCopy"})
+        db.session.add(man)
+        db.session.flush()
+
+        it_pub = Item(manifestation_id=man.id, owner_id=owner.id, visibility="public", is_hidden=False)
+        it_fri = Item(manifestation_id=man.id, owner_id=owner.id, visibility="friends_only", is_hidden=False)
+        it_pri = Item(manifestation_id=man.id, owner_id=owner.id, visibility="private", is_hidden=True)
+        db.session.add_all([it_pub, it_fri, it_pri])
+        db.session.commit()
+        pub_id, fri_id, pri_id = it_pub.id, it_fri.id, it_pri.id
+        owner_hdr = _auth_header(owner)
+        friend_hdr = _auth_header(friend)
+        stranger_hdr = _auth_header(stranger)
+
+    # 1. Diacritic-insensitive search across person + series
+    res = client.get("/api/catalog/graph/search?q=Stanislaw&types=person,series")
+    assert res.status_code == 200
+    rows = res.get_json()["data"]
+    assert any(r["entity_type"] == "person" and r["label"] == "Stanisław Lem" for r in rows)
+    assert any(r["entity_type"] == "series" and r["label"] == "Stanisław Lem Dzieła Zebrane" for r in rows)
+
+    # 2. Three-tier Item visibility in SQL
+    anon_items = client.get("/api/catalog/graph/search?q=SecretChronicleCopy&types=item").get_json()["data"]
+    assert {r["entity_id"] for r in anon_items} == {pub_id}
+
+    stranger_items = client.get("/api/catalog/graph/search?q=SecretChronicleCopy&types=item", headers=stranger_hdr).get_json()["data"]
+    assert {r["entity_id"] for r in stranger_items} == {pub_id}
+
+    friend_items = client.get("/api/catalog/graph/search?q=SecretChronicleCopy&types=item", headers=friend_hdr).get_json()["data"]
+    assert {r["entity_id"] for r in friend_items} == {pub_id, fri_id}
+
+    owner_items = client.get("/api/catalog/graph/search?q=SecretChronicleCopy&types=item", headers=owner_hdr).get_json()["data"]
+    assert {r["entity_id"] for r in owner_items} == {pub_id, fri_id, pri_id}
+
+    # 3. Blank query, limit clamping, invalid types, and FEDERATION_HEAD_MODE=true
+    assert client.get("/api/catalog/graph/search?q=%20%20").get_json()["data"] == []
+    assert client.get("/api/catalog/graph/search?q=Lem&types=invalid_type").status_code == 400
+
+    app.config["FEDERATION_HEAD_MODE"] = True
+    try:
+        fed_res = client.get("/api/catalog/graph/search?q=Lem&limit=500")
+        assert fed_res.status_code == 200
+    finally:
+        app.config["FEDERATION_HEAD_MODE"] = False

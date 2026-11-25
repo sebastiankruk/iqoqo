@@ -110,6 +110,7 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
   const queryClient = useQueryClient();
   const tWishlist = useTranslations("Wishlist");
   const tSerial = useTranslations("SerialIssues");
+  const tGraph = useTranslations("graph");
   const routeId = useResolvedRouteParam("id");
   const effectiveId = workId && !isNaN(workId) && workId > 0 ? workId : routeId ? parseInt(routeId, 10) : 0;
   const { data: clientWork, isLoading } = useWork(effectiveId, initialWork);
@@ -196,10 +197,21 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
               <ArrowLeft className="h-4 w-4" />
               <span>Back</span>
             </Button>
-            <Badge variant="outline" className="gap-1.5 px-3 py-1 font-mono text-xs uppercase tracking-wider">
-              <Layers className="h-3 w-3 text-primary" />
-              FRBR Work #{work.id}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant="outline" data-testid="explore-graph-link" className="gap-1.5">
+                <Link href={`/graph?type=work&id=${work.id}`}>
+                  <GitBranch className="h-3.5 w-3.5" />
+                  <span>{tGraph("exploreGraph")}</span>
+                </Link>
+              </Button>
+              <Badge
+                variant="outline"
+                className="hidden sm:inline-flex gap-1.5 px-3 py-1 font-mono text-xs uppercase tracking-wider"
+              >
+                <Layers className="h-3 w-3 text-primary" />
+                FRBR Work #{work.id}
+              </Badge>
+            </div>
           </div>
         </div>
 
@@ -263,12 +275,6 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
                         </Link>
                       </Button>
                     )}
-                    <Button asChild size="sm" variant="outline" data-testid="explore-graph-link" className="gap-1.5">
-                      <Link href={`/graph?type=work&id=${work.id}`}>
-                        <GitBranch className="h-4 w-4" />
-                        <span>Explore Graph</span>
-                      </Link>
-                    </Button>
                     {profile && (
                       <Button
                         type="button"

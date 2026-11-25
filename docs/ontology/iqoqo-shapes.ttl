@@ -686,6 +686,84 @@ iqoqo:DuplicateCandidateShape a sh:NodeShape ;
         """ ;
     ] .
 
+iqoqo:WorkRelationShape a sh:NodeShape ;
+    sh:targetClass iqoqo:WorkRelation ;
+    sh:name "Work Relation shape" ;
+    sh:description "A WorkRelation links two distinct Works via a controlled cross-media relation type." ;
+    sh:property [
+        sh:path iqoqo:sourceWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "WorkRelation must have exactly one sourceWork." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:targetWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "WorkRelation must have exactly one targetWork." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:relationType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "is_adaptation_of" "is_derivative_of" "inspired_by" "sequel_to" "spin_off_of" "companion_to" ) ;
+        sh:message "relationType must be a controlled cross-media relation type." ;
+    ] ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "sourceWork and targetWork must be distinct Works." ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this iqoqo:sourceWork ?src .
+                $this iqoqo:targetWork ?tgt .
+                FILTER(?src = ?tgt)
+            }
+        """ ;
+    ] .
+
+iqoqo:WorkLinkCandidateShape a sh:NodeShape ;
+    sh:targetClass iqoqo:WorkLinkCandidate ;
+    sh:name "Work Link Candidate shape" ;
+    sh:description "A WorkLinkCandidate records a proposed cross-media Work link for custodian triage." ;
+    sh:property [
+        sh:path iqoqo:candidateSourceWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "WorkLinkCandidate must have exactly one candidateSourceWork." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:candidateTargetWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "WorkLinkCandidate must have exactly one candidateTargetWork." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:linkCandidateStatus ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "pending" "accepted" "dismissed" ) ;
+        sh:message "linkCandidateStatus must be pending, accepted, or dismissed." ;
+    ] ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "candidateSourceWork and candidateTargetWork must be distinct Works." ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this iqoqo:candidateSourceWork ?src .
+                $this iqoqo:candidateTargetWork ?tgt .
+                FILTER(?src = ?tgt)
+            }
+        """ ;
+    ] .
+
 # ---------------------------------------------------------------------------
 # LEGO & Construction Sets Shapes (v1.0.1)
 # ---------------------------------------------------------------------------

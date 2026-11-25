@@ -17,13 +17,35 @@ import * as React from "react";
 import { ChangeEvent } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Pencil, QrCode, Eye, EyeOff, Folder, X, Plus, Loader2, ImagePlus, ArrowRightLeft } from "lucide-react";
+import {
+  Pencil,
+  QrCode,
+  Eye,
+  EyeOff,
+  Folder,
+  X,
+  Plus,
+  Loader2,
+  ImagePlus,
+  ArrowRightLeft,
+  ChevronDown,
+  ChevronUp,
+  MoreHorizontal,
+} from "lucide-react";
 import type { Item, MediaFormat } from "@/types/frbr";
 import { PermissionName } from "@/lib/permissions";
-import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
+import { CoverUploadPicker, type CoverUploadResult } from "@/components/scanner/cover-upload-picker";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
 import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { STATUS_LABELS } from "./constants";
 
 /** Props for SidebarActions component */
@@ -51,7 +73,7 @@ export interface SidebarActionsProps {
   handleToggleVisibility?: () => void;
   isQrOpen?: boolean;
   setIsQrOpen?: (open: boolean) => void;
-  handleUploadComplete?: () => void;
+  handleUploadComplete?: (result?: CoverUploadResult) => void;
   itemCollections?: Array<{ id: number; name: string }> | null;
   collectionsLoading?: boolean;
   removeFromCollection?: { isPending: boolean };
@@ -62,6 +84,9 @@ export interface SidebarActionsProps {
   userCollections?: Array<{ id: number; name: string }> | null;
   addToCollection?: { isPending: boolean };
   handleAddToCollection?: (id: number) => void;
+  linkedOpenDataNode?: React.ReactNode;
+  adminActionsNode?: React.ReactNode;
+  adminAccordionLabel?: string;
 }
 
 /**
@@ -105,8 +130,37 @@ export function SidebarActions({
   userCollections,
   addToCollection = { isPending: false },
   handleAddToCollection = () => {},
+  linkedOpenDataNode,
+  adminActionsNode,
+  adminAccordionLabel,
 }: SidebarActionsProps) {
   const t = useTranslations("ItemDetail");
+  const tSidebar = useTranslations("ItemDetail.sidebar");
+  const [coverPickerOpen, setCoverPickerOpen] = React.useState(false);
+  const [showCollectionsEditor, setShowCollectionsEditor] = React.useState(false);
+  const [showScansEditor, setShowScansEditor] = React.useState(false);
+  const [showTaxonomyEditor, setShowTaxonomyEditor] = React.useState(false);
+  const [showLinkedOpenData, setShowLinkedOpenData] = React.useState(false);
+  const [showAdminActions, setShowAdminActions] = React.useState(false);
+
+  const hasCover = Boolean(item.cover_url || item.manifestation_meta?.["cover_url"] || item.meta?.["cover_url"]);
+  const canReplaceCover = canModifyItem && hasUploadPermission && Boolean(item.manifestation_id);
+  const canTransferOwnership = Boolean(
+    profile &&
+    (profile.roles?.includes("admin") ||
+      profile.roles?.includes("custodian") ||
+      profile.permissions?.includes(PermissionName.TRANSFER_ITEM))
+  );
+  const mediumLabel = isBook
+    ? tSidebar("mediumBook")
+    : isAudio
+      ? tSidebar("mediumAudio")
+      : isVideo
+        ? tSidebar("mediumVideo")
+        : isGame
+          ? tSidebar("mediumGame")
+          : tSidebar("mediumDefault");
+
   return (
     <>
       <div className="flex w-full flex-col gap-3 px-1">
@@ -115,7 +169,7 @@ export function SidebarActions({
             {/* Collection Select */}
             <div className="flex flex-col gap-1">
               <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                Availability & Condition
+                {tSidebar("availabilityLabel")}
               </span>
               <select
                 aria-label="Collection status"
@@ -144,8 +198,7 @@ export function SidebarActions({
             {/* Progress Select */}
             <div className="flex flex-col gap-1">
               <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                {isBook ? "Reading" : isAudio ? "Listening" : isVideo ? "Watching" : isGame ? "Gaming" : "Item"}{" "}
-                Progress
+                {tSidebar("progressLabel", { medium: mediumLabel })}
               </span>
               <select
                 aria-label="Item status"
@@ -344,151 +397,252 @@ export function SidebarActions({
           </div>
         )}
 
-        {canModifyItem && onEdit && (
-          <button
-            onClick={onEdit}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit Metadata
-          </button>
-        )}
-
-        {canModifyItem && (
-          <button
-            onClick={handleToggleVisibility}
-            disabled={updateItem.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
-          >
-            {item.is_hidden ? (
-              <>
-                <Eye className="h-4 w-4" />
-                Make Public
-              </>
-            ) : (
-              <>
-                <EyeOff className="h-4 w-4" />
-                Hide from Public
-              </>
+        {/* Compact Owner Action Row (<= 2 visible buttons: Edit Metadata + Manage menu) */}
+        {(canModifyItem || canTransferOwnership) && (
+          <div className="flex items-center gap-2">
+            {canModifyItem && onEdit && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onEdit}
+                className="flex-1 justify-center gap-2"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span>{tSidebar("editMetadata")}</span>
+              </Button>
             )}
-          </button>
-        )}
-        {/* Print QR Code — hidden for items without manifestation_id: they have no physical copy to tag. */}
-        {canModifyItem && item.manifestation_id && (
-          <button
-            data-testid="qrcode-btn"
-            onClick={() => setIsQrOpen?.(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-          >
-            <QrCode className="h-4 w-4" />
-            Print QR Code
-          </button>
+
+            {(canModifyItem || canTransferOwnership) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="sidebar-manage-menu"
+                    className={`gap-1.5 ${canModifyItem && onEdit ? "" : "w-full justify-center"}`}
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                    <span>{tSidebar("manageMenu")}</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {canModifyItem && (
+                    <DropdownMenuItem
+                      onSelect={() => handleToggleVisibility?.()}
+                      disabled={updateItem.isPending}
+                      className="cursor-pointer gap-2"
+                    >
+                      {item.is_hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      <span>{item.is_hidden ? tSidebar("makePublic") : tSidebar("hideFromPublic")}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {canModifyItem && item.manifestation_id && (
+                    <DropdownMenuItem
+                      data-testid="qrcode-btn"
+                      onSelect={() => setIsQrOpen?.(true)}
+                      className="cursor-pointer gap-2"
+                    >
+                      <QrCode className="h-4 w-4" />
+                      <span>{tSidebar("printQrCode")}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {canReplaceCover && (
+                    <DropdownMenuItem
+                      data-testid="replace-cover-menu-item"
+                      onSelect={() => setCoverPickerOpen(true)}
+                      className="cursor-pointer gap-2"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      <span>{hasCover ? tSidebar("replaceCover") : tSidebar("contributeCover")}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {canTransferOwnership && (
+                    <>
+                      {canModifyItem && <DropdownMenuSeparator />}
+                      <DropdownMenuItem asChild className="cursor-pointer gap-2">
+                        <Link
+                          href={`/admin/ownership?sourceUserId=${encodeURIComponent(item.owner_id || "")}&itemId=${item.id}`}
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                          <span>{t("reassignOwner")}</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         )}
 
-        {canModifyItem && hasUploadPermission && (
+        {/* Single hoisted CoverUploadPicker outside DropdownMenuContent so Radix menu close never unmounts AlertDialog/inputs */}
+        {canReplaceCover && (
           <CoverUploadPicker
             manifestation_id={item.manifestation_id}
             format={format as MediaFormat}
             onUploadComplete={handleUploadComplete}
-            label={item.cover_url ? "Replace Cover" : "Contribute Cover"}
+            label={hasCover ? tSidebar("replaceCover") : tSidebar("contributeCover")}
             icon={<ImagePlus className="h-3.5 w-3.5" />}
-            confirmTitle={item.cover_url ? "Replace Existing Cover?" : undefined}
-            confirmMessage={
-              item.cover_url
-                ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
-                : undefined
-            }
-            className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
+            confirmTitle={hasCover ? tSidebar("replaceCoverConfirmTitle") : undefined}
+            confirmMessage={hasCover ? tSidebar("replaceCoverConfirmMessage") : undefined}
+            open={coverPickerOpen}
+            onOpenChange={setCoverPickerOpen}
+            hideTrigger
           />
         )}
 
+        {/* Collapsible cataloging disclosures */}
         {canModifyItem && hasEditPermission && (
-          <MultiImageUploader
-            manifestationId={item.manifestation_id}
-            currentItemFormat={format}
-            onUploadComplete={handleUploadComplete}
-          />
-        )}
-
-        {canModifyItem && (
-          <div className="flex flex-col gap-2">
-            <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
-              Named Collections
-            </span>
-            {(itemCollections ?? []).length === 0 && !collectionsLoading ? (
-              <p className="text-[10px] text-muted-foreground italic px-1">Not in any named collections yet.</p>
-            ) : collectionsLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mx-auto" />
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {(itemCollections ?? []).map(col => (
-                  <span
-                    key={col.id}
-                    className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-500 px-2.5 py-0.5 text-[10px] font-semibold ring-1 ring-green-200 dark:ring-green-500/20"
-                  >
-                    <Folder className="h-2.5 w-2.5" />
-                    {col.name}
-                    <button
-                      onClick={() => handleRemoveFromCollection(col.id)}
-                      disabled={removeFromCollection.isPending}
-                      className="ml-0.5 p-0.5 rounded-full hover:bg-green-200 dark:hover:bg-green-500/20 transition-colors"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </span>
-                ))}
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowScansEditor(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>{tSidebar("additionalScans")}</span>
+              {showScansEditor ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showScansEditor && (
+              <div className="mt-2">
+                <MultiImageUploader
+                  manifestationId={item.manifestation_id}
+                  currentItemFormat={format}
+                  onUploadComplete={handleUploadComplete}
+                />
               </div>
             )}
-            <div className="relative" ref={collectionDropdownRef}>
-              <button
-                onClick={() => setShowCollectionDropdown(prev => !prev)}
-                disabled={addToCollection.isPending}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-secondary disabled:opacity-60"
-              >
-                <Plus className="h-3 w-3" />
-                Add to named collection
-              </button>
-              {showCollectionDropdown && (userCollections?.length ?? 0) > 0 && (
-                <div className="absolute left-0 top-full mt-1 w-full rounded-md border border-border bg-card shadow-lg overflow-hidden z-50 max-h-40 overflow-y-auto">
-                  {userCollections!
-                    .filter(uc => !(itemCollections ?? []).some(ic => ic.id === uc.id))
-                    .map(uc => (
-                      <button
-                        key={uc.id}
-                        onClick={() => handleAddToCollection(uc.id)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-foreground hover:bg-secondary transition-colors"
-                      >
-                        <Folder className="h-3 w-3 text-primary" />
-                        <span className="truncate">{uc.name}</span>
-                      </button>
-                    ))}
-                  {(userCollections ?? []).filter(uc => !(itemCollections ?? []).some(ic => ic.id === uc.id)).length ===
-                    0 && (
-                    <p className="px-3 py-2 text-[10px] text-muted-foreground italic">
-                      Already in all your named collections.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
-        {canModifyItem && <TaxonomyEditor item={item} />}
-
-        {/* Ownership Reassignment deep-link */}
-        {profile &&
-          (profile.roles?.includes("admin") ||
-            profile.roles?.includes("custodian") ||
-            profile.permissions?.includes(PermissionName.TRANSFER_ITEM)) && (
-            <Link
-              href={`/admin/ownership?sourceUserId=${encodeURIComponent(item.owner_id || "")}&itemId=${item.id}`}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        {canModifyItem && (
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowCollectionsEditor(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
-              <ArrowRightLeft className="h-3.5 w-3.5" />
-              {t("reassignOwner")}
-            </Link>
-          )}
+              <span>
+                {tSidebar("namedCollections")}
+                {(itemCollections?.length ?? 0) > 0 ? ` (${itemCollections?.length})` : ""}
+              </span>
+              {showCollectionsEditor ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showCollectionsEditor && (
+              <div className="mt-2 flex flex-col gap-2">
+                {(itemCollections ?? []).length === 0 && !collectionsLoading ? (
+                  <p className="text-[10px] text-muted-foreground italic px-1">Not in any named collections yet.</p>
+                ) : collectionsLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mx-auto" />
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {(itemCollections ?? []).map(col => (
+                      <span
+                        key={col.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-500 px-2.5 py-0.5 text-[10px] font-semibold ring-1 ring-green-200 dark:ring-green-500/20"
+                      >
+                        <Folder className="h-2.5 w-2.5" />
+                        {col.name}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFromCollection(col.id)}
+                          disabled={removeFromCollection.isPending}
+                          className="ml-0.5 p-0.5 rounded-full hover:bg-green-200 dark:hover:bg-green-500/20 transition-colors"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative" ref={collectionDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCollectionDropdown(prev => !prev)}
+                    disabled={addToCollection.isPending}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add to named collection
+                  </button>
+                  {showCollectionDropdown && (userCollections?.length ?? 0) > 0 && (
+                    <div className="absolute left-0 top-full mt-1 w-full rounded-md border border-border bg-card shadow-lg overflow-hidden z-50 max-h-40 overflow-y-auto">
+                      {userCollections!
+                        .filter(uc => !(itemCollections ?? []).some(ic => ic.id === uc.id))
+                        .map(uc => (
+                          <button
+                            type="button"
+                            key={uc.id}
+                            onClick={() => handleAddToCollection(uc.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-foreground hover:bg-secondary transition-colors"
+                          >
+                            <Folder className="h-3 w-3 text-primary" />
+                            <span className="truncate">{uc.name}</span>
+                          </button>
+                        ))}
+                      {(userCollections ?? []).filter(uc => !(itemCollections ?? []).some(ic => ic.id === uc.id))
+                        .length === 0 && (
+                        <p className="px-3 py-2 text-[10px] text-muted-foreground italic">
+                          Already in all your named collections.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {canModifyItem && (
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowTaxonomyEditor(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>{tSidebar("taxonomy")}</span>
+              {showTaxonomyEditor ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showTaxonomyEditor && (
+              <div className="mt-2">
+                <TaxonomyEditor item={item} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {linkedOpenDataNode && (
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              data-testid="lod-accordion-toggle"
+              onClick={() => setShowLinkedOpenData(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>{tSidebar("linkedOpenData")}</span>
+              {showLinkedOpenData ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showLinkedOpenData && <div className="mt-2">{linkedOpenDataNode}</div>}
+          </div>
+        )}
+
+        {adminActionsNode && (
+          <div className="border-t border-border/40 pt-2">
+            <button
+              type="button"
+              data-testid="admin-actions-accordion-toggle"
+              onClick={() => setShowAdminActions(prev => !prev)}
+              className="flex w-full items-center justify-between px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>{adminAccordionLabel ?? tSidebar("adminActions")}</span>
+              {showAdminActions ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            {showAdminActions && <div className="mt-2">{adminActionsNode}</div>}
+          </div>
+        )}
       </div>
       <PrintQrCodeDialog isOpen={isQrOpen} onOpenChange={setIsQrOpen ?? (() => {})} item={item} />
     </>

@@ -42,6 +42,8 @@ from app.db.core import (
     UserWorkIntent,
     Work,
     WorkExpansionLink,
+    WorkLinkCandidate,
+    WorkRelation,
 )
 from app.db.social import (
     EscalationRequest,
@@ -72,6 +74,8 @@ def create_complete_backup(backup_dir: Path) -> Path:
     manifestation_contributions = db.session.execute(select(ManifestationContribution)).scalars().all()
     work_parts = db.session.execute(select(WorkPart)).scalars().all()
     expansion_links = db.session.execute(select(WorkExpansionLink)).scalars().all()
+    work_relations = db.session.execute(select(WorkRelation)).scalars().all()
+    work_link_candidates = db.session.execute(select(WorkLinkCandidate)).scalars().all()
     user_intents = db.session.execute(select(UserWorkIntent)).scalars().all()
     image_scans = db.session.execute(select(ImageScan)).scalars().all()
     social_feedback = db.session.execute(select(SocialFeedback)).scalars().all()
@@ -86,7 +90,7 @@ def create_complete_backup(backup_dir: Path) -> Path:
         "coverage": {
             "core_frbr": ["works", "expressions", "manifestations", "items"],
             "contributions": ["work_contributions", "manifestation_contributions"],
-            "relationships": ["work_parts", "expansion_links"],
+            "relationships": ["work_parts", "expansion_links", "work_relations", "work_link_candidates"],
             "user_data": ["user_intents", "social_feedback", "social_notes"],
             "inventory": ["image_scans", "item_status_logs"],
             "audit": ["escalation_requests", "audit_logs"],
@@ -100,6 +104,8 @@ def create_complete_backup(backup_dir: Path) -> Path:
             "manifestation_contributions": len(manifestation_contributions),
             "work_parts": len(work_parts),
             "expansion_links": len(expansion_links),
+            "work_relations": len(work_relations),
+            "work_link_candidates": len(work_link_candidates),
             "user_intents": len(user_intents),
             "image_scans": len(image_scans),
             "social_feedback": len(social_feedback),
@@ -175,6 +181,25 @@ def create_complete_backup(backup_dir: Path) -> Path:
                     "expansion_work_id": el.expansion_work_id,
                 }
                 for el in expansion_links
+            ],
+            "work_relations": [
+                {
+                    "id": wr.id,
+                    "source_work_id": wr.source_work_id,
+                    "target_work_id": wr.target_work_id,
+                    "relation_type": wr.relation_type,
+                }
+                for wr in work_relations
+            ],
+            "work_link_candidates": [
+                {
+                    "id": wlc.id,
+                    "source_work_id": wlc.source_work_id,
+                    "target_work_id": wlc.target_work_id,
+                    "proposed_relation_type": wlc.proposed_relation_type,
+                    "status": wlc.status,
+                }
+                for wlc in work_link_candidates
             ],
             "user_intents": [
                 {

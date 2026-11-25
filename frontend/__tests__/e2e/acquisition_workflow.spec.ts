@@ -222,6 +222,7 @@ test.describe("Item Acquisition and Collection Workflow", () => {
             success: true,
             data: {
               id: 789,
+              manifestation_id: 101,
               title: "Dark Side of the Moon",
               status: "available",
               is_owner: true,
@@ -246,9 +247,11 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       // Verify Redirect to Item Page
       await expect(page).toHaveURL(/.*\/item\/789/);
 
-      // Check the sidebar button - it should be 'Contribute Cover' because it has no cover yet
-      const contributeBtn = page.getByRole("button", { name: "Contribute Cover" });
+      // Check the Manage menu item - it should be 'Contribute Cover' because it has no cover yet
+      await page.getByTestId("sidebar-manage-menu").click();
+      const contributeBtn = page.getByTestId("replace-cover-menu-item");
       await expect(contributeBtn).toBeVisible();
+      await expect(contributeBtn).toContainText("Contribute Cover");
     });
   });
 

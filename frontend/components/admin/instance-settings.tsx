@@ -18,7 +18,13 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
+import {
+  getInstanceSettings,
+  getSystemStatus,
+  updateInstanceSettings,
+  revealSettingValue,
+  type AllegroSystemStatus,
+} from "@/lib/api/admin";
 import { getFederationKeyFingerprint, provisionFederationInstanceKey } from "@/lib/api/federation";
 import { queryKeys } from "@/lib/api/hooks/query-keys";
 import { Button } from "@/components/ui/button";
@@ -307,6 +313,7 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [allegroAuthStatus, setAllegroAuthStatus] = useState<string>("");
   const [allegroAuthUrl, setAllegroAuthUrl] = useState<string | null>(null);
   const [isAuthorizingAllegro, setIsAuthorizingAllegro] = useState(false);
+  const [allegroHealth, setAllegroHealth] = useState<AllegroSystemStatus | null>(null);
   const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
   const [isLoadingFingerprint, setIsLoadingFingerprint] = useState(category === "federation");
   const [isProvisioningKey, setIsProvisioningKey] = useState(false);
@@ -345,6 +352,18 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
       .finally(() => {
         if (isMounted) setLoading(false);
       });
+
+    if (category === "external_apis" && typeof getSystemStatus === "function") {
+      Promise.resolve(getSystemStatus())
+        .then(statusData => {
+          if (isMounted && statusData?.allegro) {
+            setAllegroHealth(statusData.allegro);
+          }
+        })
+        .catch(() => {
+          // Non-blocking diagnostic banner
+        });
+    }
 
     if (category === "federation") {
       getFederationKeyFingerprint()
@@ -499,6 +518,9 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
 
         if (pollRes.status === 200) {
           setAllegroAuthStatus("Allegro authorized successfully!");
+          setAllegroHealth(prev =>
+            prev ? { ...prev, allegro_token_active: true, reason: "active", refresh_error: null } : prev
+          );
           setIsAuthorizingAllegro(false);
         } else if (pollRes.status === 202) {
           expires -= interval / 1000;
@@ -619,6 +641,22 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                   <div className="flex flex-col gap-4">{group.items.map(s => renderInputField(s))}</div>
                   {isAllegro && (
                     <div className="flex flex-col gap-3 pt-2">
+                      {allegroHealth?.reason === "reauth_required" && (
+                        <div
+                          data-testid="allegro-reauth-warning"
+                          className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-sm flex items-start gap-2 text-amber-800 dark:text-amber-200"
+                        >
+                          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-semibold">Allegro re-authorization required</span>
+                            <span className="text-xs opacity-90">
+                              The stored Allegro OAuth refresh token was rejected
+                              {allegroHealth.refresh_error ? ` (${allegroHealth.refresh_error})` : ""}. Click
+                              &ldquo;Authorize Allegro Account&rdquo; below to reconnect.
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <Button
                           type="button"

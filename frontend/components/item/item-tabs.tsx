@@ -20,7 +20,6 @@ import { useTranslations } from "next-intl";
 import { FileText, History, Images, BookOpen, MessageSquare, Layers, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useWorkParts, useProfile } from "@/lib/api/hooks";
-import { PermissionName } from "@/lib/permissions";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +27,6 @@ import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
 import { FRBRFeedback } from "../social/frbr-feedback";
-import { SemanticLinks } from "../manifestation/semantic-links";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -198,13 +196,6 @@ function DetailsTab({ item }: { item: Item }) {
           </div>
         </div>
       )}
-
-      {/* Linked Open Data */}
-      {Boolean(item.manifestation_id) && (
-        <div className="border-t pt-2">
-          <SemanticLinks manifestationId={item.manifestation_id!} canEdit={canEdit} />
-        </div>
-      )}
     </div>
   );
 }
@@ -291,13 +282,11 @@ export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
   const { data: profile } = useProfile();
 
-  const permissions = profile?.permissions ?? [];
   const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
   const isBorrower = !!item.is_borrowed || (!!profile && item.lent_to_user_id === profile.id);
   const isAdmin = !!profile?.roles?.includes("admin");
-  const hasUpdatePermission = permissions.includes(PermissionName.UPDATE_ITEM);
 
-  const canViewHistory = isOwner || isBorrower || isAdmin || hasUpdatePermission;
+  const canViewHistory = isOwner || isBorrower || isAdmin;
 
   const visibleTabs = TABS.filter(tab => {
     if (tab.id === "history") return canViewHistory && item.id > 0;

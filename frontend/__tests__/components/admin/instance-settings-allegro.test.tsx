@@ -200,4 +200,22 @@ describe("InstanceSettings - Allegro Device Flow", () => {
     const authorizeBtn = screen.getByRole("button", { name: /Authorize Allegro Account/i });
     expect(allegroSection?.contains(authorizeBtn)).toBe(true);
   });
+
+  it("renders re-authorization warning when Allegro status is reauth_required", async () => {
+    vi.mocked(adminApi.getSystemStatus).mockResolvedValue({
+      allegro: {
+        configured: true,
+        allegro_token_active: false,
+        reason: "reauth_required",
+        refresh_error: "invalid_grant",
+      },
+    });
+
+    render(<InstanceSettings category="external_apis" showApiKeys={true} />);
+
+    const banner = await screen.findByTestId("allegro-reauth-warning");
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveTextContent(/Allegro re-authorization required/i);
+    expect(banner).toHaveTextContent(/invalid_grant/i);
+  });
 });

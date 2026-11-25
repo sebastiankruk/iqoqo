@@ -36,6 +36,10 @@ vi.mock("@/lib/api/hooks", () => ({
   useWorkParts: () => ({
     data: { data: [] },
   }),
+  useUpdateItem: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 // Mock Item data — uses work-level fields as returned by the API

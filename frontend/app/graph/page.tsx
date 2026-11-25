@@ -23,11 +23,13 @@ import { AlertTriangle, ArrowLeft, GitBranch, Loader2 } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FRBRRelationGraph } from "@/components/graph/frbr-relation-graph";
+import { GraphRootPicker } from "@/components/graph/graph-root-picker";
 import { useCatalogGraph, useCatalogLibraryGraph } from "@/lib/api/hooks/catalog";
 import type { GraphAnchorEntityType } from "@/types/frbr";
 
-const VALID_TYPES = new Set<string>(["work", "expression", "manifestation", "item"]);
+const VALID_TYPES = new Set<string>(["work", "expression", "manifestation", "item", "person", "contributor", "series"]);
 const PRIMARY_LIBRARY_ENTITY_TYPES = ["work", "expression", "manifestation", "item"] as const;
 const SECONDARY_LIBRARY_ENTITY_TYPES = ["series", "contributor", "map", "lod"] as const;
 const LIBRARY_ENTITY_TYPES = [...PRIMARY_LIBRARY_ENTITY_TYPES, ...SECONDARY_LIBRARY_ENTITY_TYPES] as const;
@@ -48,6 +50,7 @@ function GraphExplorerContent() {
   const isValidAnchor = VALID_TYPES.has(rawType) && Number.isInteger(rawId) && rawId > 0;
   const isLibraryMode = rawMode === "library" || !isValidAnchor;
   const [showMoreEntityTypes, setShowMoreEntityTypes] = React.useState(false);
+  const [pickerOpen, setPickerOpen] = React.useState(false);
 
   const {
     data: anchorGraph,
@@ -64,6 +67,16 @@ function GraphExplorerContent() {
   const graph = isLibraryMode ? libraryGraph : anchorGraph;
   const isLoading = isLibraryMode ? libraryLoading : anchorLoading;
   const isError = isLibraryMode ? libraryError : anchorError;
+
+  const anchorNode = graph?.nodes.find(n => n.is_anchor);
+  const anchorUrl = anchorNode?.url && anchorNode.url.startsWith("/") ? anchorNode.url : null;
+  const fallbackAnchorUrl =
+    rawType === "series"
+      ? `/work/${rawId}`
+      : rawType === "person" || rawType === "contributor"
+        ? null
+        : `/${rawType}/${rawId}`;
+  const openEntityHref = anchorUrl ?? fallbackAnchorUrl;
 
   const handleDepthChange = (nextDepth: 1 | 2 | 3 | 4) => {
     if (!isValidAnchor) return;
@@ -97,14 +110,23 @@ function GraphExplorerContent() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            {!isLibraryMode && isValidAnchor && (
+            {!isLibraryMode && isValidAnchor && openEntityHref && (
               <Button asChild variant="ghost" size="sm" className="-ml-2 gap-1.5 text-muted-foreground">
-                <Link href={`/${rawType}/${rawId}`}>
+                <Link href={openEntityHref}>
                   <ArrowLeft className="h-4 w-4" />
                   <span>{t("openEntity")}</span>
                 </Link>
               </Button>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="graph-switch-root-button"
+              onClick={() => setPickerOpen(true)}
+            >
+              {t("switchRoot")}
+            </Button>
             {!isLibraryMode && (
               <Button asChild variant="outline" size="sm" data-testid="graph-mode-library">
                 <Link href="/graph?mode=library">{t("libraryMode")}</Link>
@@ -223,6 +245,21 @@ function GraphExplorerContent() {
           />
         </>
       )}
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("pickerDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("pickerDialogDescription")}</DialogDescription>
+          </DialogHeader>
+          <GraphRootPicker
+            onSelect={(entityType, entityId) => {
+              setPickerOpen(false);
+              router.push(`/graph?type=${encodeURIComponent(entityType)}&id=${entityId}&depth=${depth}`);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

@@ -1070,11 +1070,18 @@ else
     is_expired=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('is_expired', False))" 2>/dev/null || echo "False")
     token_age=$(echo "$allegro_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('token_age_hours') if d.get('token_age_hours') is not None else '')" 2>/dev/null || echo "")
     reason=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('reason', ''))" 2>/dev/null || echo "")
+    refresh_error=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('refresh_error') or '')" 2>/dev/null || echo "")
 
     if [[ "$reason" == "query_failed" || "$reason" == "probe_error" ]]; then
         check "Status" warn "probe error (failed to inspect Allegro status)"
     elif [[ "$is_configured" != "True" || "$reason" == "not_configured" || "$reason" == "missing_credentials" ]]; then
         check "Status" info "not configured (missing credentials in .env or Instance Settings)"
+    elif [[ "$reason" == "reauth_required" ]]; then
+        if [[ -n "$refresh_error" ]]; then
+            check "Status" warn "re-authorization required in Instance Settings (refresh failed: ${refresh_error})"
+        else
+            check "Status" warn "re-authorization required in Instance Settings"
+        fi
     elif [[ "$is_active" == "True" ]]; then
         if [[ -n "$token_age" ]]; then
             check "Status" pass "active (token age: ${token_age}h)"

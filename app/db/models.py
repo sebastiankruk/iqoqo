@@ -66,6 +66,9 @@ from app.db.core import (  # noqa: F401
     ITEM_STATUSES,
     ITEM_VISIBILITIES,
     PROGRESS_STATUSES,
+    WORK_LINK_CANDIDATE_STATUSES,
+    WORK_LINK_RESOLUTION_SOURCES,
+    WORK_RELATION_TYPES,
     BoardgameMechanic,
     DuplicateCandidate,
     EntityAuditLog,
@@ -86,6 +89,8 @@ from app.db.core import (  # noqa: F401
     UserWorkIntent,
     Work,
     WorkExpansionLink,
+    WorkLinkCandidate,
+    WorkRelation,
 )
 from app.db.federation import (  # noqa: F401
     ActivityStatus,

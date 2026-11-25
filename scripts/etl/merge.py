@@ -42,6 +42,8 @@ from app.db.core import (
     UserWorkIntent,
     Work,
     WorkExpansionLink,
+    WorkLinkCandidate,
+    WorkRelation,
 )
 from app.db.social import (
     _SOCIAL_PFX,
@@ -169,6 +171,48 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
                 target_id=canonical_work.id,
                 model_class="WorkExpansionLink",
                 record_count=len(dup_expansions),
+            )
+        )
+
+    # Check for WorkRelation reparenting
+    dup_relations = (
+        db.session.execute(
+            select(WorkRelation).where(
+                (WorkRelation.source_work_id == duplicate_work.id) | (WorkRelation.target_work_id == duplicate_work.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if dup_relations:
+        plan.add_operation(
+            MergeOperation(
+                operation_type="reparent",
+                source_id=duplicate_work.id,
+                target_id=canonical_work.id,
+                model_class="WorkRelation",
+                record_count=len(dup_relations),
+            )
+        )
+
+    # Check for WorkLinkCandidate reparenting
+    dup_candidates = (
+        db.session.execute(
+            select(WorkLinkCandidate).where(
+                (WorkLinkCandidate.source_work_id == duplicate_work.id) | (WorkLinkCandidate.target_work_id == duplicate_work.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if dup_candidates:
+        plan.add_operation(
+            MergeOperation(
+                operation_type="reparent",
+                source_id=duplicate_work.id,
+                target_id=canonical_work.id,
+                model_class="WorkLinkCandidate",
+                record_count=len(dup_candidates),
             )
         )
 
@@ -465,6 +509,8 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
         "reparented_contributions": 0,
         "reparented_work_parts": 0,
         "reparented_expansions": 0,
+        "reparented_work_relations": 0,
+        "reparented_work_link_candidates": 0,
         "reparented_intents": 0,
         "reparented_feedback": 0,
         "reparented_notes": 0,
@@ -526,6 +572,54 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_expansions"] += operation.record_count
+            elif operation.model_class == "WorkRelation":
+                wr_table = _CATALOG_PFX + "work_relations"
+                db.session.execute(
+                    text(
+                        f"DELETE FROM {wr_table} WHERE (source_work_id = :source AND target_work_id = :target)"
+                        " OR (source_work_id = :target AND target_work_id = :source)"
+                        f" OR (source_work_id = :source AND EXISTS (SELECT 1 FROM {wr_table} wr2"
+                        f" WHERE wr2.source_work_id = :target AND wr2.target_work_id = {wr_table}.target_work_id"
+                        f" AND wr2.relation_type = {wr_table}.relation_type))"
+                        f" OR (target_work_id = :source AND EXISTS (SELECT 1 FROM {wr_table} wr2"
+                        f" WHERE wr2.target_work_id = :target AND wr2.source_work_id = {wr_table}.source_work_id"
+                        f" AND wr2.relation_type = {wr_table}.relation_type))"
+                    ),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text(f"UPDATE {wr_table} SET source_work_id = :target WHERE source_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text(f"UPDATE {wr_table} SET target_work_id = :target WHERE target_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                stats["reparented_work_relations"] += operation.record_count
+            elif operation.model_class == "WorkLinkCandidate":
+                wlc_table = _INVENTORY_PFX + "work_link_candidates"
+                db.session.execute(
+                    text(
+                        f"DELETE FROM {wlc_table} WHERE (source_work_id = :source AND target_work_id = :target)"
+                        " OR (source_work_id = :target AND target_work_id = :source)"
+                        f" OR (source_work_id = :source AND EXISTS (SELECT 1 FROM {wlc_table} c2"
+                        f" WHERE (c2.source_work_id = :target AND c2.target_work_id = {wlc_table}.target_work_id)"
+                        f" OR (c2.target_work_id = :target AND c2.source_work_id = {wlc_table}.target_work_id)))"
+                        f" OR (target_work_id = :source AND EXISTS (SELECT 1 FROM {wlc_table} c2"
+                        f" WHERE (c2.source_work_id = :target AND c2.target_work_id = {wlc_table}.source_work_id)"
+                        f" OR (c2.target_work_id = :target AND c2.source_work_id = {wlc_table}.source_work_id)))"
+                    ),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text(f"UPDATE {wlc_table} SET source_work_id = :target WHERE source_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                db.session.execute(
+                    text(f"UPDATE {wlc_table} SET target_work_id = :target WHERE target_work_id = :source"),
+                    {"target": plan.canonical_id, "source": plan.duplicate_id},
+                )
+                stats["reparented_work_link_candidates"] += operation.record_count
             elif operation.model_class == "UserWorkIntent":
                 db.session.execute(
                     text("UPDATE " + _INVENTORY_PFX + "user_work_intents SET work_id = :target WHERE work_id = :source"),

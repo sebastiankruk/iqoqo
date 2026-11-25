@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-11-25
+
+### Added
+
+- **Cross-Media FRBR Work Linking & Reconciliation (C144)**:
+  - Added `WorkRelation` (`catalog.work_relations`) and `WorkLinkCandidate` (`inventory.work_link_candidates`) models, linear Alembic migration `v1_1_2_cross_media_work_links`, `frbr_merge` & ETL coverage, SHACL/ontology sync, heuristic + optional local Ollama reconciliation engine (`work_linking_service.py`, `scripts/reconcile_cross_media.py`), Custodian UI `/admin/work-links`, `/graph` `"derivatives"` edge category, and `frbroo:R2_is_derivative_of` / `schema:isBasedOn` RDF emission.
+- **Graph Multi-Root Person, Contributor & Series Picker (C143)**:
+  - Added `GET /api/catalog/graph/search` diacritic-insensitive picker endpoint, `Person` / `Contributor` / `Series` root support in `GraphService`, and `<GraphRootPicker />` on `/graph`.
+- **Mixed Concert Types (`cd_dvd_combo` & `expression_kind`) (C150)**:
+  - Added `mixed_media_categories` (`cd_dvd_combo` -> `music` + `movie`) in `shared/taxonomy.yaml`, `expression_kind` (`live_performance` / `studio`) faceted navigation, FTS/catalog filtering, and shared collection / wishlist parity.
+
+### Changed
+
+- **Item Detail UX Declutter, Compressed LOD & Unified Sidebar Accordion (C142, C151)**:
+  - Reordered `/item/[id]` header (badge -> title/authors -> single-row Primary CTA + `Explore Graph` -> compact Quick Meta), compressed `SemanticLinks` (`compact` mode), and relocated both `Linked Open Data` and inline `Admin Actions` / `Help Requests` into the bottom sidebar accordion without nested dropdowns.
+- **Graph Entry Placement & Scanner Destination Pill Harmony (C148, C149)**:
+  - Aligned `"Explore Graph"` placement and `graph.exploreGraph` i18n across `/work/[id]`, `/expression/[id]`, `/manifestation/[id]`, and `/item/[id]`, and harmonized `/scan` `TopBar` destination pill styling.
+- **Manifestation Browse & Recent Arrivals Copy-Date Sort**:
+  - Updated `GET /api/manifestations` (default `updated` / `added` sort) and `GET /api/manifestations/recent` to rank manifestations with the caller's most recently added/updated physical copy first, and wired `sortBy` into `useInfiniteManifestations` and `/collection?view=manifestations`.
+
+### Fixed
+
+- **Allegro OAuth Visibility, Multi-Worker Token Sync, BN Primo VE Fallback & Preview Readiness (`allegro-oauth-refresh-failure-visibility-v112`, C153)**:
+  - Persisted irreversible Allegro `refresh_failed` (`400 invalid_grant` / `401`) state on `ALLEGRO_TOKEN_DATA`, short-circuited dead refresh loops, surfaced `reauth_required` in `/api/system/status`, `make status`, and Admin Instance Settings, and prioritized PostgreSQL `InstanceSettings` over per-process `SimpleCache` in `load_allegro_token()`.
+  - Added live Biblioteka Narodowa Primo VE REST fallback (`katalogi.bn.org.pl`) when `data.bn.org.pl` lags for new Alma ISBNs, normalized Open Library `cover` size dicts to string URLs before DB insert, disabled LLM fallback during synchronous `upload_cover()` Valkey outages, made `search_root_candidates()` `series`/`work` deduplication order-independent, updated Blueprint 8 SVG to `7` edge categories, and waited for post-reconcile `/api/health` readiness in `scripts/iqopretest.sh`.
+- **Hardening, Merge Collision Integrity & Cross-Media Remediation (C152)**:
+  - Fixed manual `Work` search envelope (`data` vs `results`) and added debounced `useCatalogGraphSearch`, direction swap, null confidence guard, and delete cancel in `WorkLinkReviewer`.
+  - Fixed unordered `WorkLinkCandidate` reversed-pair `UniqueViolation` in `app/core/frbr_merge.py` and third-party `WorkRelation` + `WorkLinkCandidate` collisions in `scripts/etl/merge.py`.
+  - Routed cross-media Ollama tie-breaking through `ConfigService` + `ALLOW_LLM` with `allow_redirects=False` and bounded sync HTTP scan budgets, added `"text"`/`"audiobook"` to `_MEDIA_DERIVATION_RANK`, and made `accept_candidate()` single-commit atomic with `409` status & pair-override validation.
+  - Emitted `"derivatives"` edges in `GraphService.build_library_graph()`, balanced `search_root_candidates()` per-type quotas (`series` dedupe + `person` filter), added `cd_dvd_combo` parity to PostgreSQL `_pg_manifestation_fts()` and Capacitor offline `/collection` filtering, deduplicated multi-expression `Work` facet counts, gated `"Scan External LOD"` on `PermissionName.WRITE_METADATA`, and removed `iqoqo:sourceWork` `rdfs:subPropertyOf frbroo:R2_is_derivative_of` OWL domain clash.
+- **Cover Upload & Shutdown Process Safety (C142, pre-OpenSpec)**:
+  - Fixed `"Replace Cover"` end-to-end (`FormData` upload, React Query polling, and synchronous Redis-down fallback) and hardened `run.sh --stop` process termination safety.
+- **E2E Help Requests & Graph Filter Selectors (C151)**:
+  - Updated `frbr_type_change_workflow.spec.ts` to expand the `"Help Requests"` sidebar accordion before opening the escalation dialog, and updated `item_detail_ux.spec.ts` for inline `Admin Actions`.
+
 ## [1.1.1] - 2026-11-23
 
 ### Added

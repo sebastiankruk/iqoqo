@@ -1052,3 +1052,41 @@ def get_catalog_graph() -> tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Entity not found"}), 404
 
     return jsonify({"success": True, "data": graph, "error": None}), 200
+
+
+@api_bp.route("/catalog/graph/search", methods=["GET"])
+@limiter.limit("60 per minute")
+@optional_auth
+def search_catalog_graph_roots() -> tuple[Response, int]:
+    """Search visibility-safe FRBR and contributor root candidates for the graph picker."""
+    from app.core.graph_service import VALID_GRAPH_SEARCH_TYPES, GraphService
+
+    query = (request.args.get("q") or "").strip()[:200]
+    raw_types = request.args.get("types")
+    parsed_types: list[str] | None = None
+    if raw_types is not None and raw_types.strip():
+        parsed_types = [part.strip().lower() for part in raw_types.split(",") if part.strip()]
+        invalid = [t for t in parsed_types if t not in VALID_GRAPH_SEARCH_TYPES]
+        if invalid:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": f"Invalid types: {', '.join(sorted(set(invalid)))}",
+                    }
+                ),
+                400,
+            )
+
+    limit_arg = request.args.get("limit", default=10, type=int)
+    effective_limit = 10 if limit_arg is None else limit_arg
+    viewer_user_id = getattr(g, "user_id", None)
+
+    candidates = GraphService.search_root_candidates(
+        query,
+        types=parsed_types,
+        limit=effective_limit,
+        viewer_user_id=viewer_user_id,
+    )
+    return jsonify({"success": True, "data": candidates, "error": None}), 200

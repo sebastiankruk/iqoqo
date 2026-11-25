@@ -112,6 +112,35 @@ def _resolve_manifestation_display_author(m: Manifestation) -> list[str]:
     return []
 
 
+def _manifestation_order_clauses(sort_by: str, user_id: Any) -> tuple[Any, ...]:
+    """Build SQLAlchemy ORDER BY clauses for manifestation listings.
+
+    When an authenticated caller browses by ``added`` or ``updated`` (default),
+    manifestations for which the caller recently added or updated a copy bubble
+    to the top, followed by remaining catalog entries in descending ID order.
+    """
+    if sort_by == "title":
+        return (func.lower(Work.title).asc(), Manifestation.id.desc())
+    if sort_by == "title-desc":
+        return (func.lower(Work.title).desc(), Manifestation.id.desc())
+    if sort_by == "author":
+        return (func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc(), Manifestation.id.desc())
+    if sort_by == "newest":
+        return (Manifestation.id.desc(),)
+
+    if user_id is not None:
+        ts_expr = func.max(Item.added_at) if sort_by == "added" else func.max(func.coalesce(Item.updated_at, Item.added_at))
+        latest_copy_subq = (
+            select(ts_expr)
+            .where(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id)
+            .correlate(Manifestation)
+            .scalar_subquery()
+        )
+        return (latest_copy_subq.desc().nulls_last(), Manifestation.id.desc())
+
+    return (Manifestation.id.desc(),)
+
+
 @api_bp.route("/manifestations", methods=["GET"])
 @optional_auth
 def get_manifestations() -> tuple[Response, int]:
@@ -125,10 +154,12 @@ def get_manifestations() -> tuple[Response, int]:
     limit_param = request.args.get("limit", "20")
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
+    expression_kind_filter = request.args.get("expression_kind")
     format_filter = request.args.get("format")
     lod_authority = (request.args.get("lod_authority") or "").strip().lower()
     lod_status = (request.args.get("lod_status") or "").strip().lower()
     category_list = parse_csv_param(category_filter)
+    expression_kind_list = parse_csv_param(expression_kind_filter)
     format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
 
@@ -196,6 +227,7 @@ def get_manifestations() -> tuple[Response, int]:
             limit,
             offset,
             category=category_list,
+            expression_kind=expression_kind_list,
             format_filter=format_list,
             missing_cover=missing_cover,
             missing_id=missing_id,
@@ -236,6 +268,7 @@ def get_manifestations() -> tuple[Response, int]:
 
         query = CatalogFilterBuilder(query, user_id=user_id).apply(
             category=category_list,
+            expression_kind=expression_kind_list,
             fmt=format_list,
             tags=tags_list,
             collections=collections_list,
@@ -250,8 +283,8 @@ def get_manifestations() -> tuple[Response, int]:
             has_map=has_map,
         )
 
-        query = query.order_by(Manifestation.id.desc())
         if use_cursor:
+            query = query.order_by(Manifestation.id.desc())
             # CURSOR_START is the sentinel for "no lower bound yet".
             if cursor_id > CURSOR_START:
                 query = query.filter(Manifestation.id < cursor_id)
@@ -263,6 +296,8 @@ def get_manifestations() -> tuple[Response, int]:
             next_cursor = encode_manifestation_cursor(manifestations[-1].id) if has_more and manifestations else None
             total = None
         else:
+            sort_by = request.args.get("sort", "updated")
+            query = query.order_by(*_manifestation_order_clauses(sort_by, user_id))
             total = query.count()
             manifestations = query.offset(offset).limit(limit).all()
             next_cursor = None
@@ -549,18 +584,22 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
 
 @api_bp.route("/manifestations/recent", methods=["GET"])
+@optional_auth
 def get_recent_manifestations() -> tuple[Response, int]:
     """Return the most recently added manifestations for the caller.
 
     Used by the dashboard. Scoped to the caller's own library."""
     try:
+        user_id = getattr(g, "user_id", None)
         limit = request.args.get("limit", 10, type=int)
 
         recent = (
             db.session.execute(
                 select(Manifestation)
+                .join(Expression)
+                .join(Work)
                 .options(selectinload(Manifestation.expression).selectinload(Expression.work))
-                .order_by(Manifestation.id.desc())
+                .order_by(*_manifestation_order_clauses("added", user_id))
                 .limit(limit)
             )
             .scalars()
@@ -963,13 +1002,24 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     )
 
     if task_id is None:
-        # Queue unavailable (e.g. Redis down): raw file is saved; mark as pending so
-        # the user or admin can trigger regeneration once the queue recovers.
-        manifestation.update_meta(cover_status="pending")
-        db.session.commit()
-
+        # Queue unavailable (e.g. Redis down): execute Tier 1 user-photo processing
+        # synchronously so the cover is immediately ready rather than stranded in RAW_DIR.
         from app.core.events import publish_transition_event
         from app.core.tasks import enqueue_fts_reindex
+        from app.utils.covers import process_cover_pipeline
+
+        process_cover_pipeline(
+            manifestation.id,
+            identifier,
+            title,
+            author,
+            llm_permissions={},
+            user_id=user_id_str,
+            user_image_path=filepath,
+        )
+        db.session.refresh(manifestation)
+        meta = manifestation.meta or {}
+        cover_status = meta.get("cover_status", "ready")
 
         enqueue_fts_reindex("manifestation", manifestation.id)
         publish_transition_event("manifestation_updated", {"manifestation_id": manifestation.id})
@@ -977,11 +1027,18 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
             jsonify(
                 {
                     "success": True,
-                    "data": {"task_id": None, "message": "Cover saved; processing deferred — queue unavailable"},
+                    "data": {
+                        "task_id": None,
+                        "cover_url": manifestation.cover_url,
+                        "cover_source": meta.get("cover_source"),
+                        "cover_status": cover_status,
+                        "cover_status_updated_at": meta.get("cover_status_updated_at"),
+                        "message": "Cover uploaded and processed synchronously",
+                    },
                     "error": None,
                 }
             ),
-            202,
+            200,
         )
 
     return jsonify({"success": True, "data": {"task_id": task_id, "message": "Cover upload processing started"}, "error": None}), 202

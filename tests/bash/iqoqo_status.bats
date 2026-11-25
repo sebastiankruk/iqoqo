@@ -77,6 +77,19 @@ teardown() {
   [[ "$output" =~ "probe error detected" ]]
 }
 
+@test "iqoqo-status.sh warns on Allegro reauth_required" {
+  run bash -c '
+    allegro_status_json="{\"configured\": true, \"allegro_token_active\": false, \"reason\": \"reauth_required\", \"refresh_error\": \"invalid_grant\"}"
+    reason=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get(\"reason\", \"\"))")
+    refresh_error=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get(\"refresh_error\") or \"\")")
+    if [[ "$reason" == "reauth_required" ]]; then
+      echo "re-authorization required in Instance Settings (refresh failed: ${refresh_error})"
+    fi
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "re-authorization required in Instance Settings (refresh failed: invalid_grant)" ]]
+}
+
 @test "iqoqo-status.sh discriminates active token correctly" {
   run bash -c '
     allegro_status_json="{\"configured\": true, \"allegro_token_active\": true, \"token_age_hours\": 2.5, \"reason\": \"active\"}"

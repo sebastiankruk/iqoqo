@@ -111,6 +111,22 @@ def generate_python(data: dict) -> str:
 
     py_code.append(f"FORMAT_TO_CATEGORY: dict[str, str] = {json.dumps(format_to_category, indent=4)}\n")
 
+    # Multi-carrier mixed media format categories
+    mixed_cats = data.get("mixed_media_categories", {})
+    py_code.append("MIXED_MEDIA_FORMAT_CATEGORIES: dict[str, tuple[str, ...]] = {")
+    for fmt_id, cats in mixed_cats.items():
+        py_code.append(f'    "{fmt_id}": {tuple(cats)!r},')
+    py_code.append("}\n")
+    py_code.append(
+        "def get_format_categories(fmt: str) -> tuple[str, ...]:\n"
+        '    """Return all MediaCategories associated with a format (including mixed-media carriers)."""\n'
+        '    norm = (fmt or "").strip().lower()\n'
+        "    if norm in MIXED_MEDIA_FORMAT_CATEGORIES:\n"
+        "        return MIXED_MEDIA_FORMAT_CATEGORIES[norm]\n"
+        "    cat = FORMAT_TO_CATEGORY.get(norm) or FORMAT_ALIAS_TO_CATEGORY.get(norm)\n"
+        "    return (cat,) if cat else ()\n"
+    )
+
     # FORMAT_ALIAS_TO_CATEGORY — merges canonical formats + aliases into one
     # lookup dict so consumers only need a single `dict.get()`.
     alias_to_cat: dict[str, str] = dict(format_to_category)

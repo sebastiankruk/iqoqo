@@ -205,6 +205,7 @@ class ItemSearchFilters:
     friend_ids: list[Any] | None = None
     visibility: list[str] | None = None
     excluded_formats: tuple[str, ...] | list[str] | None = None
+    expression_kind: tuple[str, ...] | list[str] | None = None
 
 
 class SearchService:
@@ -221,6 +222,7 @@ class SearchService:
         limit: int,
         offset: int,
         category: list[str] | None = None,
+        expression_kind: list[str] | None = None,
         format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
@@ -241,7 +243,16 @@ class SearchService:
             return 0, []
 
         if db.engine.dialect.name == "postgresql" and not (
-            tags or collections or genres or publishers or statuses or ownership or has_map or lod_authority or lod_status
+            expression_kind
+            or tags
+            or collections
+            or genres
+            or publishers
+            or statuses
+            or ownership
+            or has_map
+            or lod_authority
+            or lod_status
         ):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
@@ -257,6 +268,7 @@ class SearchService:
             format_filter,
             missing_cover,
             missing_id,
+            expression_kind=expression_kind,
             tags=tags,
             collections=collections,
             genres=genres,
@@ -367,8 +379,16 @@ class SearchService:
 
         extra_filters_sql = ""
         if category:
-            params["category"] = tuple(category)
-            extra_filters_sql += " AND e.content_type IN :category"
+            from app.core.taxonomy import MIXED_MEDIA_FORMAT_CATEGORIES
+
+            cat_list = [str(c).strip().lower() for c in category if str(c).strip()]
+            params["category"] = tuple(cat_list)
+            mixed_fmts = tuple(sorted({fmt for fmt, cats in MIXED_MEDIA_FORMAT_CATEGORIES.items() if any(c in cats for c in cat_list)}))
+            if mixed_fmts:
+                params["cat_mixed_formats"] = mixed_fmts
+                extra_filters_sql += " AND (e.content_type IN :category" " OR LOWER(TRIM(COALESCE(m.format, ''))) IN :cat_mixed_formats)"
+            else:
+                extra_filters_sql += " AND e.content_type IN :category"
         if format_filter:
             from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
 
@@ -433,6 +453,7 @@ class SearchService:
         format_filter: list[str] | None = None,
         missing_cover: bool = False,
         missing_id: bool = False,
+        expression_kind: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
         genres: list[str] | None = None,
@@ -455,6 +476,7 @@ class SearchService:
         # ``statuses_style="progress_only"``.
         base_query = CatalogFilterBuilder(base_query, user_id=user_id, statuses_style="progress_only").apply(
             category=category,
+            expression_kind=expression_kind,
             fmt=format_filter,
             tags=tags,
             collections=collections,
@@ -544,8 +566,41 @@ class SearchService:
             extra_filters_sql += " AND (i.status IN :statuses OR i.collection_status IN :statuses)"
 
         if category:
+            from app.core.taxonomy import MIXED_MEDIA_FORMAT_CATEGORIES
+
+            cat_set = {str(c).strip().lower() for c in category if str(c).strip()}
+            mixed_formats = tuple(fmt for fmt, cats in MIXED_MEDIA_FORMAT_CATEGORIES.items() if any(c in cat_set for c in cats))
             params["category"] = tuple(category)
-            extra_filters_sql += " AND e.content_type IN :category"
+            if mixed_formats:
+                params["mixed_category_formats"] = mixed_formats
+                extra_filters_sql += (
+                    " AND (e.content_type IN :category"
+                    " OR LOWER(COALESCE(m.format, m.format_type, m.meta ->> 'format')) IN :mixed_category_formats)"
+                )
+            else:
+                extra_filters_sql += " AND e.content_type IN :category"
+
+        if filters.expression_kind:
+            from app.db.core import EXPRESSION_KINDS
+
+            valid_kinds = set(EXPRESSION_KINDS) | {"studio"}
+            kind_sql_parts: list[str] = []
+            exact_kinds: list[str] = []
+            for raw_k in filters.expression_kind:
+                k_norm = str(raw_k).strip().lower()
+                if k_norm not in valid_kinds:
+                    continue
+                if k_norm == "studio":
+                    kind_sql_parts.append("e.kind IS NULL")
+                else:
+                    exact_kinds.append(k_norm)
+            if exact_kinds:
+                params["expression_kinds"] = tuple(exact_kinds)
+                kind_sql_parts.append("e.kind IN :expression_kinds")
+            if kind_sql_parts:
+                extra_filters_sql += f" AND ({' OR '.join(kind_sql_parts)})"
+            else:
+                extra_filters_sql += " AND 1=0"
 
         if format_filter:
             from app.core.format_normalizer import expand_format_filter, filter_includes_null_format
@@ -650,6 +705,12 @@ class SearchService:
         if "excluded_formats" in params:
             count_stmt = count_stmt.bindparams(bindparam("excluded_formats", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("excluded_formats", expanding=True))
+        if "mixed_category_formats" in params:
+            count_stmt = count_stmt.bindparams(bindparam("mixed_category_formats", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("mixed_category_formats", expanding=True))
+        if "expression_kinds" in params:
+            count_stmt = count_stmt.bindparams(bindparam("expression_kinds", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("expression_kinds", expanding=True))
         if filters.visibility and "visibility_filter" in params:
             count_stmt = count_stmt.bindparams(bindparam("visibility_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("visibility_filter", expanding=True))
@@ -691,6 +752,7 @@ class SearchService:
             friend_ids,
             visibility,
             excluded_formats,
+            expression_kind,
         ) = dataclasses.astuple(filters)
 
         # Subquery to get matching item IDs. Contributor matching lives inside the
@@ -797,6 +859,7 @@ class SearchService:
             ensure_frbr_join=False,
         ).apply(
             category=category,
+            expression_kind=list(expression_kind) if expression_kind else None,
             fmt=format_filter,
             tags=tags,
             collections=collections,

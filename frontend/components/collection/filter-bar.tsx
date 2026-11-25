@@ -37,6 +37,7 @@ export type FilterType =
   | "status"
   | "visibility"
   | "category"
+  | "expression_kind"
   | "format"
   | "tag"
   | "collection"
@@ -102,6 +103,11 @@ export function chipLabel(filter: ActiveFilter): string {
     return `Visibility: ${visLabels[filter.value] ?? filter.value}`;
   }
   if (filter.type === "category") return `Category: ${filter.value.replace("_", " ")}`;
+  if (filter.type === "expression_kind") {
+    if (filter.value === "live_performance") return "Kind: Live performance";
+    if (filter.value === "studio") return "Kind: Studio";
+    return `Kind: ${filter.value.replace("_", " ")}`;
+  }
   if (filter.type === "format") {
     const label = getFormatLabel(filter.value);
     return `Format: ${label ?? filter.value.replace("_", " ")}`;
@@ -137,6 +143,7 @@ function chipColor(filter: ActiveFilter): string {
   if (filter.type === "visibility")
     return "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
   if (filter.type === "category") return "bg-primary/10 text-primary border-primary/20";
+  if (filter.type === "expression_kind") return "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20";
   if (filter.type === "format") return "bg-secondary text-secondary-foreground border-border";
   if (filter.type === "tag")
     return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20";

@@ -56,22 +56,8 @@ describe("ItemTabs Component", () => {
     meta: {},
   };
 
-  it("renders SemanticLinks component in Details tab when manifestation_id is present", () => {
+  it("does not render SemanticLinks inside Details tab (moved to sidebar accordion)", () => {
     render(<ItemTabs item={baseItem} />);
-
-    const lodElement = screen.getByTestId("mock-semantic-links");
-    expect(lodElement).toBeInTheDocument();
-    expect(lodElement).toHaveAttribute("data-manifestation-id", "2069");
-    expect(lodElement).toHaveAttribute("data-can-edit", "true");
-  });
-
-  it("does not render SemanticLinks if manifestation_id is missing", () => {
-    const itemWithoutManif: Item = {
-      ...baseItem,
-      manifestation_id: 0,
-    };
-
-    render(<ItemTabs item={itemWithoutManif} />);
     expect(screen.queryByTestId("mock-semantic-links")).not.toBeInTheDocument();
   });
 

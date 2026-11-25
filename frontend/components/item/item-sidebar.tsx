@@ -16,6 +16,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import type { Item } from "@/types/frbr";
 import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
@@ -39,6 +40,8 @@ import { SidebarActions } from "./sidebar/sidebar-actions";
 import { SidebarFrbrInfo } from "./sidebar/sidebar-frbr-info";
 import { ReadingDurationCard } from "./reading-duration-card";
 import { EditItemDialog } from "./edit-item-dialog";
+import { ItemActions } from "./item-actions";
+import { SemanticLinks } from "../manifestation/semantic-links";
 
 import { STATUS_LABELS } from "./sidebar/constants";
 export { STATUS_LABELS };
@@ -58,6 +61,7 @@ interface ItemSidebarProps {
  * @returns {JSX.Element} The component
  */
 export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
+  const tSidebar = useTranslations("ItemDetail.sidebar");
   const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
 
   const coverUrl =
@@ -73,6 +77,20 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
   const isAdmin = !!profile?.roles?.includes("admin");
   const canModifyItem = isOwner || isAdmin;
+  const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
+  const hasManifestation = Boolean(item.manifestation_id);
+  const showAdminAccordionActions =
+    Boolean(profile) &&
+    ((hasPermission(PermissionName.REFETCH_METADATA) && hasManifestation) ||
+      (hasPermission(PermissionName.WRITE_METADATA) && hasManifestation) ||
+      (hasPermission(PermissionName.REFETCH_COVER) && hasManifestation) ||
+      ((canModifyItem || hasPermission(PermissionName.WRITE_METADATA)) &&
+        hasPermission(PermissionName.REGENERATE_COVER) &&
+        hasManifestation) ||
+      (hasPermission(PermissionName.EDIT_COVER) && hasManifestation) ||
+      (canModifyItem && hasPermission(PermissionName.DELETE_ITEM)));
+  const showRequestsAccordion =
+    Boolean(profile) && hasPermission(PermissionName.ESCALATE_REQUEST) && !hasPermission(PermissionName.WRITE_METADATA);
   // Media type detection
   const format =
     (item.manifestation_meta?.["format"] as string | undefined) ??
@@ -192,6 +210,17 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         userCollections={userCollections}
         addToCollection={addToCollection}
         handleAddToCollection={handleAddToCollection}
+        linkedOpenDataNode={
+          item.manifestation_id ? (
+            <SemanticLinks manifestationId={item.manifestation_id} canEdit={hasEditPermission} compact />
+          ) : undefined
+        }
+        adminActionsNode={
+          showAdminAccordionActions || showRequestsAccordion ? <ItemActions item={item} compact /> : undefined
+        }
+        adminAccordionLabel={
+          !showAdminAccordionActions && showRequestsAccordion ? tSidebar("helpRequests") : tSidebar("adminActions")
+        }
       />
 
       {/* Reading Duration Card (owned text items) */}

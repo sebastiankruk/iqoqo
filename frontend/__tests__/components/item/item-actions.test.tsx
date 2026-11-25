@@ -13,12 +13,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemActions } from "@/components/item/item-actions";
 import * as hooks from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
-import { useQuery } from "@tanstack/react-query";
 
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
@@ -51,13 +51,8 @@ const mockItem = {
 } as unknown as Item;
 
 describe("ItemActions Component", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
   afterEach(() => {
     vi.clearAllMocks();
-    vi.useRealTimers();
   });
 
   it("renders no buttons if user has no permissions", () => {
@@ -65,79 +60,47 @@ describe("ItemActions Component", () => {
       data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
 
-    render(<ItemActions item={mockItem} />);
+    const { container } = render(<ItemActions item={mockItem} />);
 
-    expect(screen.queryByText(/Refetch Metadata/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Regenerate Cover/i)).not.toBeInTheDocument();
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText(/FRBR Hierarchy/i)).not.toBeInTheDocument();
+  });
+
+  it("hides Admin Actions and Remove from library for non-owner user accounts", () => {
+    vi.mocked(hooks.useProfile).mockReturnValue({
+      data: {
+        id: "other-user",
+        email: "other@example.com",
+        roles: ["user"],
+        permissions: ["delete:item", "upload:cover"],
+      },
+    } as unknown as ReturnType<typeof hooks.useProfile>);
+
+    const nonOwnerItem = { ...mockItem, is_owner: false } as unknown as Item;
+    render(<ItemActions item={nonOwnerItem} />);
+
+    expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
     expect(screen.queryByText(/Remove from library/i)).not.toBeInTheDocument();
   });
 
-  it("renders only permitted buttons", () => {
+  it("renders only permitted buttons in labeled Admin Actions dropdown for owner", async () => {
+    const user = userEvent.setup();
     vi.mocked(hooks.useProfile).mockReturnValue({
       data: { id: "test-id", email: "test@example.com", permissions: ["delete:item"] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
 
-    render(<ItemActions item={mockItem} />);
+    render(<ItemActions item={{ ...mockItem, is_owner: true }} />);
 
-    // First click to open Admin Actions panel
-    fireEvent.click(screen.getByText(/Admin Actions/i));
+    expect(screen.queryByText(/FRBR Hierarchy/i)).not.toBeInTheDocument();
+    const trigger = screen.getByTestId("admin-actions-menu-trigger");
+    await user.click(trigger);
 
     expect(screen.queryByText(/Refetch Metadata/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Regenerate Cover/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Remove from library/i)).toBeInTheDocument();
   });
 
-  it("configures declarative polling while the cover is pending", () => {
-    vi.mocked(hooks.useProfile).mockReturnValue({
-      data: { id: "test-id", email: "test@example.com", permissions: [] },
-    } as unknown as ReturnType<typeof hooks.useProfile>);
-
-    const pendingItem = { ...mockItem, cover_status: "pending" } as unknown as Item;
-    render(<ItemActions item={pendingItem} />);
-
-    const options = vi.mocked(useQuery).mock.calls.find(call => call[0].queryKey[0] === "item")?.[0];
-    expect(options?.enabled).toBe(true);
-    const refetchInterval = options?.refetchInterval as (query: {
-      state: { data: Item | null | undefined };
-    }) => number | false;
-    expect(refetchInterval({ state: { data: undefined } })).toBe(3000);
-    expect(refetchInterval({ state: { data: { ...pendingItem, cover_status: "ready" } } })).toBe(false);
-  });
-
-  it("does not poll when cover_status is ready", () => {
-    vi.mocked(hooks.useProfile).mockReturnValue({
-      data: { id: "test-id", email: "test@example.com", permissions: [] },
-    } as unknown as ReturnType<typeof hooks.useProfile>);
-
-    render(<ItemActions item={mockItem} />);
-
-    const options = vi.mocked(useQuery).mock.calls.find(call => call[0].queryKey[0] === "item")?.[0];
-    expect(options?.enabled).toBe(false);
-  });
-
-  it("stops declarative polling when cover_status changes from pending to ready", () => {
-    vi.mocked(hooks.useProfile).mockReturnValue({
-      data: { id: "test-id", email: "test@example.com", permissions: [] },
-    } as unknown as ReturnType<typeof hooks.useProfile>);
-
-    const pendingItem = { ...mockItem, cover_status: "pending" } as unknown as Item;
-    const { rerender } = render(<ItemActions item={pendingItem} />);
-
-    // Cover becomes ready - rerender with updated prop
-    rerender(<ItemActions item={mockItem} />);
-
-    const options = vi
-      .mocked(useQuery)
-      .mock.calls.filter(call => call[0].queryKey[0] === "item")
-      .at(-1)?.[0];
-    expect(options?.enabled).toBe(false);
-    const refetchInterval = options?.refetchInterval as (query: {
-      state: { data: Item | null | undefined };
-    }) => number | false;
-    expect(refetchInterval({ state: { data: { ...pendingItem, cover_status: "ready" } } })).toBe(false);
-  });
-
-  describe("Polymorphic Quick Actions", () => {
+  describe("Visibility Guards", () => {
     it("renders nothing for unauthenticated user", () => {
       vi.mocked(hooks.useProfile).mockReturnValue({
         data: undefined,
@@ -147,7 +110,7 @@ describe("ItemActions Component", () => {
       expect(container.firstChild).toBeNull();
     });
 
-    it("does not render quick actions for non-owner", () => {
+    it("does not render admin actions for non-owner without admin permissions", () => {
       vi.mocked(hooks.useProfile).mockReturnValue({
         data: { id: "test-id", email: "test@example.com", permissions: [] },
       } as unknown as ReturnType<typeof hooks.useProfile>);
@@ -155,142 +118,7 @@ describe("ItemActions Component", () => {
       const nonOwnerItem = { ...mockItem, is_owner: false, meta: { format: "book" } } as unknown as Item;
       render(<ItemActions item={nonOwnerItem} />);
 
-      expect(screen.queryByText(/Mark as Read/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Log Reading Progress/i)).not.toBeInTheDocument();
-    });
-
-    it("renders quick actions for owner", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const ownerItem = { ...mockItem, is_owner: true, status: "reading", meta: { format: "book" } } as unknown as Item;
-      render(<ItemActions item={ownerItem} />);
-
-      expect(screen.getByText(/Mark as Read/i)).toBeInTheDocument();
-    });
-  });
-
-  describe("Wishlist Tagging", () => {
-    it("wishlist item with tags displays tags in item metadata", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const wishlistItem = {
-        ...mockItem,
-        is_owner: true,
-        status: "want_to_read",
-        collection_status: "wish_list",
-        meta: { tags: ["horror", "classic"] },
-      } as unknown as Item;
-
-      const { container } = render(<ItemActions item={wishlistItem} />);
-      // Tags are part of item metadata, rendered by parent components
-      expect(container).toBeTruthy();
-    });
-
-    it("wishlist item without tags renders normally", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const wishlistItem = {
-        ...mockItem,
-        is_owner: true,
-        status: "want_to_read",
-        collection_status: "wish_list",
-        meta: {},
-      } as unknown as Item;
-
-      const { container } = render(<ItemActions item={wishlistItem} />);
-      expect(container).toBeTruthy();
-    });
-
-    it("non-owner cannot see owner-only tag editing controls", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const nonOwnerItem = {
-        ...mockItem,
-        is_owner: false,
-        status: "want_to_read",
-        collection_status: "wish_list",
-      } as unknown as Item;
-
-      render(<ItemActions item={nonOwnerItem} />);
-      // Quick actions are hidden for non-owners
-      expect(screen.queryByText(/Mark as Read/i)).not.toBeInTheDocument();
-    });
-  });
-
-  describe("Loan Button Visibility", () => {
-    it("does not render action for unauthenticated user on item", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: undefined,
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const availableItem = {
-        ...mockItem,
-        is_owner: true,
-        collection_status: "available",
-      } as unknown as Item;
-
-      const { container } = render(<ItemActions item={availableItem} />);
-      expect(container.firstChild).toBeNull();
-    });
-
-    it("renders quick actions for owner on available (borrowable) item", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const availableItem = {
-        ...mockItem,
-        is_owner: true,
-        collection_status: "available",
-        status: "reading",
-        meta: { format: "book" },
-      } as unknown as Item;
-
-      render(<ItemActions item={availableItem} />);
-      // Owner should see quick actions — "Mark as Read" for a reading item
-      expect(screen.queryByText(/Mark as Read/i)).toBeTruthy();
-    });
-
-    it("wishlist-only item does not show loan-related controls", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const wishlistItem = {
-        ...mockItem,
-        is_owner: true,
-        status: "want_to_read",
-        collection_status: "wish_list",
-      } as unknown as Item;
-
-      render(<ItemActions item={wishlistItem} />);
-      // Wishlist items are not borrowable; the UI should reflect this
-      // ItemActions doesn't show loan buttons for wishlist items
-      expect(screen.queryByText(/Request Loan/i)).not.toBeInTheDocument();
-    });
-
-    it("non-owner does not see owner actions on borrowable item", () => {
-      vi.mocked(hooks.useProfile).mockReturnValue({
-        data: { id: "test-id", email: "test@example.com", permissions: [] },
-      } as unknown as ReturnType<typeof hooks.useProfile>);
-
-      const nonOwnerAvailableItem = {
-        ...mockItem,
-        is_owner: false,
-        collection_status: "available",
-      } as unknown as Item;
-
-      render(<ItemActions item={nonOwnerAvailableItem} />);
-      // Non-owner of a physical item shouldn't see admin/quick actions
-      expect(screen.queryByText(/Mark as Read/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
     });
   });
 
@@ -306,12 +134,12 @@ describe("ItemActions Component", () => {
 
       render(<ItemActions item={mockItem} />);
 
-      // Admin panel should NOT be visible for read-only metadata users
-      expect(screen.queryByText(/Admin Actions/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
       expect(screen.queryByText(/Edit FRBR/i)).not.toBeInTheDocument();
     });
 
-    it("renders Edit FRBR for user with write:metadata permission", () => {
+    it("renders Edit FRBR inside Admin Actions dropdown for user with write:metadata permission", async () => {
+      const user = userEvent.setup();
       vi.mocked(hooks.useProfile).mockReturnValue({
         data: {
           id: "test-id",
@@ -322,8 +150,25 @@ describe("ItemActions Component", () => {
 
       render(<ItemActions item={mockItem} />);
 
-      fireEvent.click(screen.getByText(/Admin Actions/i));
+      await user.click(screen.getByTestId("admin-actions-menu-trigger"));
       expect(screen.getByText(/Edit FRBR/i)).toBeInTheDocument();
+    });
+
+    it("renders flat inline actions without a nested Admin Actions dropdown when compact=true", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "test-id",
+          email: "test@example.com",
+          permissions: ["write:metadata", "delete:item"],
+        },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      render(<ItemActions item={{ ...mockItem, is_owner: true }} compact={true} />);
+
+      expect(screen.queryByTestId("admin-actions-menu-trigger")).not.toBeInTheDocument();
+      expect(screen.getByTestId("admin-actions-inline-list")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Edit FRBR/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Remove from library/i })).toBeInTheDocument();
     });
   });
 });

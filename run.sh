@@ -75,10 +75,10 @@ while [ $# -gt 0 ]; do
             STOP=true
             ;;
         *)
-            # Non-flag positional arg (if first) is treated as mode
+            # Reject unknown positional mode (e.g. typo like 'previeww') before it can spawn a stray Compose project
             if [[ "$1" != -* ]] && [[ "$MODE_SET" = false ]]; then
-                MODE="$1"
-                MODE_SET=true
+                echo "❌ Error: Invalid mode '$1'. Expected one of: dev, preview, prod." >&2
+                exit 1
             else
                 EXTRA_ARGS+=("$1")
             fi
@@ -439,29 +439,31 @@ elif [ "$MODE" != "dev" ] && [ "$MODE" != "prod" ]; then
     echo "⚠️ Warning: Mode '$MODE' requested but $ENV_FILE not found. Falling back to base .env."
 fi
 
-# Auto-generate or rotate keys in all modes
-auto_generate_or_rotate_keys
+if [ "$STOP" != true ]; then
+    # Auto-generate or rotate keys in all modes (never during --stop)
+    auto_generate_or_rotate_keys
 
-# 1a. Validate required environment variables
-REQUIRED_VARS=("DATABASE_URL" "REDIS_URL" "SECRET_KEY")
-MISSING_VARS=()
-for var in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!var}" ]; then
-        MISSING_VARS+=("$var")
+    # 1a. Validate required environment variables
+    REQUIRED_VARS=("DATABASE_URL" "REDIS_URL" "SECRET_KEY")
+    MISSING_VARS=()
+    for var in "${REQUIRED_VARS[@]}"; do
+        if [ -z "${!var}" ]; then
+            MISSING_VARS+=("$var")
+        fi
+    done
+
+    if [ ${#MISSING_VARS[@]} -ne 0 ]; then
+        echo "❌ Error: Missing required environment variables: ${MISSING_VARS[*]}"
+        exit 1
     fi
-done
 
-if [ ${#MISSING_VARS[@]} -ne 0 ]; then
-    echo "❌ Error: Missing required environment variables: ${MISSING_VARS[*]}"
-    exit 1
-fi
-
-# Warning for production-critical variables
-if [ "$MODE" != "dev" ] && [ -z "$AUTH_SECRET" ]; then
-    echo "❌ Error: AUTH_SECRET is required for '$MODE' mode but is not set."
-    exit 1
-elif [ -z "$AUTH_SECRET" ]; then
-    echo "⚠️  Warning: AUTH_SECRET is not set. Auth might fail in $MODE mode."
+    # Warning for production-critical variables
+    if [ "$MODE" != "dev" ] && [ -z "$AUTH_SECRET" ]; then
+        echo "❌ Error: AUTH_SECRET is required for '$MODE' mode but is not set."
+        exit 1
+    elif [ -z "$AUTH_SECRET" ]; then
+        echo "⚠️  Warning: AUTH_SECRET is not set. Auth might fail in $MODE mode."
+    fi
 fi
 
 # 2. Version and Metadata
@@ -554,11 +556,21 @@ if [ "$STOP" = true ]; then
     else
         export COMPOSE_PROJECT_NAME="iqoqo-$MODE"
         [ "$MODE" == "prod" ] && export COMPOSE_PROJECT_NAME="iqoqo"
-        COMPOSE_DOWN_CMD="docker compose -f docker-compose.yml"
-        if [ -f "docker-compose.monitoring.yml" ]; then
-            COMPOSE_DOWN_CMD="$COMPOSE_DOWN_CMD -f docker-compose.monitoring.yml"
+        stop_env_file=""
+        if [ -f ".env.$MODE" ]; then
+            stop_env_file=".env.$MODE"
+        elif [ -f ".env" ]; then
+            stop_env_file=".env"
         fi
-        $COMPOSE_DOWN_CMD down --remove-orphans
+        COMPOSE_DOWN_ARGS=(-f docker-compose.yml)
+        if [ -f "docker-compose.monitoring.yml" ]; then
+            COMPOSE_DOWN_ARGS+=(-f docker-compose.monitoring.yml)
+        fi
+        if [ -n "$stop_env_file" ]; then
+            ENV_FILE="$stop_env_file" docker compose --env-file "$stop_env_file" "${COMPOSE_DOWN_ARGS[@]}" down --remove-orphans
+        else
+            docker compose "${COMPOSE_DOWN_ARGS[@]}" down --remove-orphans
+        fi
     fi
     echo "✅ Stopped."
     exit 0

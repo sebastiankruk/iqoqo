@@ -429,4 +429,24 @@ describe("SidebarFilters — unauthenticated users", () => {
     );
     expect(screen.queryByText("Visibility")).not.toBeInTheDocument();
   });
+
+  it("renders Performance / Kind facet with counts and toggles expression_kind filters", () => {
+    const mockToggle = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={mockToggle}
+          isLoggedIn={true}
+          expressionKindCounts={{ live_performance: 3, studio: 7 }}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText("Performance / Kind")).toBeInTheDocument();
+    expect(screen.getByText("Live performance (Concert)")).toBeInTheDocument();
+    expect(screen.getByText("Studio / Standard")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("filter-expression-kind-live_performance"));
+    expect(mockToggle).toHaveBeenCalledWith({ type: "expression_kind", value: "live_performance" });
+  });
 });

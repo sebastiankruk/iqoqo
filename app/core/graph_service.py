@@ -22,18 +22,30 @@ from collections import deque
 from typing import Any
 from urllib.parse import quote_plus
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import selectinload
 
+from app.api.filters import escape_ilike_term
 from app.core.friend_service import get_friend_user_ids
+from app.core.search_service import _meta_text, normalize_diacritics
 from app.db.contributions import Contributor, ExpressionContribution, WorkContribution, WorkPart, WorkSeriesMembership
-from app.db.core import Expression, Item, Manifestation, SemanticLink, Work, WorkExpansionLink
+from app.db.core import Expression, Item, Manifestation, SemanticLink, Work, WorkExpansionLink, WorkRelation
 from app.db.federation import FederationConsent
 from app.db.games import ContainerAggregation
 from app.db.models import db
 from app.db.video import ManifestationContribution
 
-VALID_GRAPH_ENTITY_TYPES: tuple[str, ...] = ("work", "expression", "manifestation", "item")
+VALID_GRAPH_ENTITY_TYPES: tuple[str, ...] = (
+    "work",
+    "expression",
+    "manifestation",
+    "item",
+    "person",
+    "contributor",
+    "series",
+)
+VALID_GRAPH_SEARCH_TYPES: tuple[str, ...] = VALID_GRAPH_ENTITY_TYPES
+DEFAULT_GRAPH_SEARCH_TYPES: tuple[str, ...] = ("person", "series", "work", "manifestation", "item")
 VALID_LIBRARY_ENTITY_TYPES: tuple[str, ...] = (
     "work",
     "series",
@@ -44,7 +56,7 @@ VALID_LIBRARY_ENTITY_TYPES: tuple[str, ...] = (
     "map",
     "lod",
 )
-VALID_EDGE_CATEGORIES: tuple[str, ...] = ("frbr", "series", "parts_expansions", "contributors", "maps", "lod")
+VALID_EDGE_CATEGORIES: tuple[str, ...] = ("frbr", "series", "parts_expansions", "derivatives", "contributors", "maps", "lod")
 MAX_GRAPH_DEPTH = 4
 MAX_GRAPH_NODES = 150
 MAX_GRAPH_EDGES = 400
@@ -196,15 +208,17 @@ def _item_node_dict(item: Item, *, hop: int, is_anchor: bool) -> dict[str, Any]:
     }
 
 
-def _contributor_node_dict(contributor: Contributor, *, hop: int) -> dict[str, Any]:
+def _contributor_node_dict(contributor: Contributor, *, hop: int, is_anchor: bool = False) -> dict[str, Any]:
+    contributor_type = contributor.type or "person"
     return {
         "id": _node_key("contributor", contributor.id),
         "entity_type": "contributor",
         "entity_id": contributor.id,
+        "contributor_type": contributor_type,
         "label": contributor.name or f"Contributor #{contributor.id}",
-        "subtitle": contributor.type or "person",
+        "subtitle": contributor_type,
         "hop": hop,
-        "is_anchor": False,
+        "is_anchor": is_anchor,
         "url": f"/collection?q={quote_plus(contributor.name)}" if contributor.name else None,
     }
 
@@ -277,6 +291,8 @@ class GraphService:
         if anchor_orm is None:
             return None
 
+        canonical_type = "contributor" if norm_type in ("person", "contributor") else ("work" if norm_type == "series" else norm_type)
+
         nodes: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
         seen_edges: set[tuple[str, str, str]] = set()
@@ -284,9 +300,9 @@ class GraphService:
         edge_truncated = False
         queue: deque[tuple[str, Any, int]] = deque()
 
-        root_key = _node_key(norm_type, entity_id)
-        nodes[root_key] = GraphService._serialize_node(norm_type, anchor_orm, hop=0, is_anchor=True)
-        queue.append((norm_type, anchor_orm, 0))
+        root_key = _node_key(canonical_type, entity_id)
+        nodes[root_key] = GraphService._serialize_node(canonical_type, anchor_orm, hop=0, is_anchor=True)
+        queue.append((canonical_type, anchor_orm, 0))
 
         def try_add_node(node_key: str, node_payload: dict[str, Any]) -> bool:
             nonlocal node_truncated
@@ -407,6 +423,16 @@ class GraphService:
                     bounded_enqueue,
                     add_edge,
                 )
+            elif cur_type == "contributor":
+                GraphService._expand_contributor(
+                    cur_orm,
+                    cur_key,
+                    next_hop,
+                    allowed_categories,
+                    bounded_enqueue,
+                    bounded_try_add,
+                    add_edge,
+                )
 
         truncated = node_truncated or edge_truncated
         truncated_reason: str | None = None
@@ -418,7 +444,7 @@ class GraphService:
             truncated_reason = "edge_cap"
 
         return {
-            "anchor": {"entity_type": norm_type, "entity_id": entity_id, "node_id": root_key},
+            "anchor": {"entity_type": canonical_type, "entity_id": entity_id, "node_id": root_key},
             "mode": "neighborhood",
             "nodes": list(nodes.values()),
             "edges": edges,
@@ -837,6 +863,29 @@ class GraphService:
                         mc.role,
                     )
 
+        if "derivatives" in allowed_categories and len(present_work_ids) >= 2 and len(edges) < effective_max_edges:
+            work_relations = (
+                db.session.execute(
+                    select(WorkRelation)
+                    .where(
+                        WorkRelation.source_work_id.in_(present_work_ids),
+                        WorkRelation.target_work_id.in_(present_work_ids),
+                    )
+                    .order_by(WorkRelation.id.asc())
+                    .limit(effective_max_edges)
+                )
+                .scalars()
+                .all()
+            )
+            for rel in work_relations:
+                add_edge(
+                    _node_key("work", rel.source_work_id),
+                    _node_key("work", rel.target_work_id),
+                    rel.relation_type,
+                    "derivatives",
+                    rel.relation_type.replace("_", " "),
+                )
+
         node_truncated = node_truncated or quota_truncated
         truncated = node_truncated or edge_truncated
         truncated_reason: str | None = None
@@ -874,6 +923,15 @@ class GraphService:
     ) -> Any:
         if entity_type == "work":
             return db.session.get(Work, entity_id)
+        if entity_type == "series":
+            series_cond = or_(
+                Work.work_kind == "series",
+                exists(select(WorkSeriesMembership.id).where(WorkSeriesMembership.series_work_id == Work.id)),
+                exists(select(WorkPart.container_work_id).where(WorkPart.container_work_id == Work.id)),
+            )
+            return db.session.execute(select(Work).where(Work.id == entity_id, series_cond)).scalar_one_or_none()
+        if entity_type in ("person", "contributor"):
+            return db.session.get(Contributor, entity_id)
         if entity_type == "expression":
             return db.session.execute(
                 select(Expression).options(selectinload(Expression.work)).where(Expression.id == entity_id)
@@ -893,8 +951,10 @@ class GraphService:
 
     @staticmethod
     def _serialize_node(entity_type: str, orm_obj: Any, *, hop: int, is_anchor: bool) -> dict[str, Any]:
-        if entity_type == "work":
+        if entity_type in ("work", "series"):
             return _work_node_dict(orm_obj, hop=hop, is_anchor=is_anchor)
+        if entity_type in ("person", "contributor"):
+            return _contributor_node_dict(orm_obj, hop=hop, is_anchor=is_anchor)
         if entity_type == "expression":
             return _expression_node_dict(orm_obj, hop=hop, is_anchor=is_anchor)
         if entity_type == "manifestation":
@@ -1074,6 +1134,42 @@ class GraphService:
                         if ai_key:
                             add_edge(work_key, ai_key, "has_part", "parts_expansions", agg.component_name)
 
+        # 3b. Confirmed cross-media WorkRelation links (derivatives)
+        if "derivatives" in allowed_categories:
+            outgoing_relations = (
+                db.session.execute(
+                    select(WorkRelation)
+                    .options(selectinload(WorkRelation.target_work))
+                    .where(WorkRelation.source_work_id == work.id)
+                    .order_by(WorkRelation.id.asc())
+                    .limit(MAX_GRAPH_NODES)
+                )
+                .scalars()
+                .all()
+            )
+            for rel in outgoing_relations:
+                if rel.target_work:
+                    t_key = enqueue_neighbor("work", rel.target_work, next_hop)
+                    if t_key:
+                        add_edge(work_key, t_key, rel.relation_type, "derivatives", rel.relation_type.replace("_", " "))
+
+            incoming_relations = (
+                db.session.execute(
+                    select(WorkRelation)
+                    .options(selectinload(WorkRelation.source_work))
+                    .where(WorkRelation.target_work_id == work.id)
+                    .order_by(WorkRelation.id.asc())
+                    .limit(MAX_GRAPH_NODES)
+                )
+                .scalars()
+                .all()
+            )
+            for rel in incoming_relations:
+                if rel.source_work:
+                    s_key = enqueue_neighbor("work", rel.source_work, next_hop)
+                    if s_key:
+                        add_edge(s_key, work_key, rel.relation_type, "derivatives", rel.relation_type.replace("_", " "))
+
         # 4. Contributors
         if "contributors" in allowed_categories:
             contributions = (
@@ -1091,9 +1187,9 @@ class GraphService:
                 for wc in contributions:
                     contrib = contribs.get(wc.contributor_id)
                     if contrib:
-                        contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
-                        if try_add_node(contrib_payload["id"], contrib_payload):
-                            add_edge(work_key, contrib_payload["id"], "contributed_by", "contributors", wc.role)
+                        c_key = enqueue_neighbor("contributor", contrib, next_hop)
+                        if c_key:
+                            add_edge(work_key, c_key, "contributed_by", "contributors", wc.role)
 
         # 5. Accepted LOD links
         if "lod" in allowed_categories:
@@ -1151,9 +1247,9 @@ class GraphService:
                 for ec in contributions:
                     contrib = contribs.get(ec.contributor_id)
                     if contrib:
-                        contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
-                        if try_add_node(contrib_payload["id"], contrib_payload):
-                            add_edge(expr_key, contrib_payload["id"], "contributed_by", "contributors", ec.role)
+                        c_key = enqueue_neighbor("contributor", contrib, next_hop)
+                        if c_key:
+                            add_edge(expr_key, c_key, "contributed_by", "contributors", ec.role)
 
         if "lod" in allowed_categories:
             GraphService._add_semantic_links("expression", expr.id, expr_key, next_hop, try_add_node, add_edge)
@@ -1232,9 +1328,9 @@ class GraphService:
                 for mc in contributions:
                     contrib = contribs.get(mc.contributor_id)
                     if contrib:
-                        contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
-                        if try_add_node(contrib_payload["id"], contrib_payload):
-                            add_edge(man_key, contrib_payload["id"], "contributed_by", "contributors", mc.role)
+                        c_key = enqueue_neighbor("contributor", contrib, next_hop)
+                        if c_key:
+                            add_edge(man_key, c_key, "contributed_by", "contributors", mc.role)
 
         if "lod" in allowed_categories:
             GraphService._add_semantic_links("manifestation", manifestation.id, man_key, next_hop, try_add_node, add_edge)
@@ -1277,3 +1373,318 @@ class GraphService:
                         c_key = enqueue_neighbor("work", container, next_hop)
                         if c_key:
                             add_edge(c_key, item_key, "has_part", "parts_expansions", agg.component_name)
+
+    @staticmethod
+    def _expand_contributor(
+        contributor: Contributor,
+        contrib_key: str,
+        next_hop: int,
+        allowed_categories: set[str],
+        enqueue_neighbor: Any,
+        try_add_node: Any,
+        add_edge: Any,
+    ) -> None:
+        if "contributors" in allowed_categories:
+            work_contribs = (
+                db.session.execute(
+                    select(WorkContribution)
+                    .where(WorkContribution.contributor_id == contributor.id)
+                    .order_by(WorkContribution.sequence.asc(), WorkContribution.id.asc())
+                    .limit(MAX_GRAPH_NODES)
+                )
+                .scalars()
+                .all()
+            )
+            if work_contribs:
+                work_ids = [wc.work_id for wc in work_contribs]
+                works_by_id = {w.id: w for w in db.session.execute(select(Work).where(Work.id.in_(work_ids))).scalars().all()}
+                for wc in work_contribs:
+                    w = works_by_id.get(wc.work_id)
+                    if w:
+                        w_key = enqueue_neighbor("work", w, next_hop)
+                        if w_key:
+                            add_edge(w_key, contrib_key, "contributed_by", "contributors", wc.role)
+
+            expr_contribs = (
+                db.session.execute(
+                    select(ExpressionContribution)
+                    .where(ExpressionContribution.contributor_id == contributor.id)
+                    .order_by(ExpressionContribution.sequence.asc(), ExpressionContribution.id.asc())
+                    .limit(MAX_GRAPH_NODES)
+                )
+                .scalars()
+                .all()
+            )
+            if expr_contribs:
+                expr_ids = [ec.expression_id for ec in expr_contribs]
+                exprs_by_id = {
+                    e.id: e
+                    for e in db.session.execute(
+                        select(Expression).options(selectinload(Expression.work)).where(Expression.id.in_(expr_ids))
+                    )
+                    .scalars()
+                    .all()
+                }
+                for ec in expr_contribs:
+                    e = exprs_by_id.get(ec.expression_id)
+                    if e:
+                        e_key = enqueue_neighbor("expression", e, next_hop)
+                        if e_key:
+                            add_edge(e_key, contrib_key, "contributed_by", "contributors", ec.role)
+
+            man_contribs = (
+                db.session.execute(
+                    select(ManifestationContribution)
+                    .where(ManifestationContribution.contributor_id == contributor.id)
+                    .order_by(ManifestationContribution.sequence.asc(), ManifestationContribution.id.asc())
+                    .limit(MAX_GRAPH_NODES)
+                )
+                .scalars()
+                .all()
+            )
+            if man_contribs:
+                man_ids = [mc.manifestation_id for mc in man_contribs]
+                mans_by_id = {
+                    m.id: m
+                    for m in db.session.execute(
+                        select(Manifestation)
+                        .options(selectinload(Manifestation.expression).selectinload(Expression.work))
+                        .where(Manifestation.id.in_(man_ids))
+                    )
+                    .scalars()
+                    .all()
+                }
+                for mc in man_contribs:
+                    m = mans_by_id.get(mc.manifestation_id)
+                    if m:
+                        m_key = enqueue_neighbor("manifestation", m, next_hop)
+                        if m_key:
+                            add_edge(m_key, contrib_key, "contributed_by", "contributors", mc.role)
+
+        if "lod" in allowed_categories:
+            GraphService._add_semantic_links("contributor", contributor.id, contrib_key, next_hop, try_add_node, add_edge)
+
+    @staticmethod
+    def search_root_candidates(
+        query: str,
+        *,
+        types: list[str] | None = None,
+        limit: int = 10,
+        viewer_user_id: uuid.UUID | str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search visibility-safe FRBR & contributor root candidates for the graph picker."""
+        q_clean = (query or "").strip()
+        if not q_clean:
+            return []
+
+        effective_limit = max(1, min(int(limit), 25))
+        folded = normalize_diacritics(q_clean)
+        pattern = f"%{escape_ilike_term(folded)}%"
+        requested = list(dict.fromkeys(types)) if types else list(DEFAULT_GRAPH_SEARCH_TYPES)
+
+        buckets: dict[str, list[dict[str, Any]]] = {ent_type: [] for ent_type in requested}
+        seen_contributors: set[int] = set()
+        seen_series_work_ids: set[int] = set()
+        per_type_quota = max(1, effective_limit // len(requested))
+
+        for ent_type in requested:
+            bucket = buckets[ent_type]
+
+            if ent_type in ("person", "contributor"):
+                conds: list[Any] = [db.func.immutable_unaccent(func.coalesce(Contributor.name, "")).ilike(pattern, escape="\\")]
+                if ent_type == "person" and "contributor" not in requested:
+                    conds.append(or_(Contributor.type == "person", Contributor.type.is_(None)))
+                stmt = select(Contributor).where(*conds).order_by(Contributor.id.asc()).limit(effective_limit)
+                for c in db.session.execute(stmt).scalars().all():
+                    if c.id in seen_contributors:
+                        continue
+                    seen_contributors.add(c.id)
+                    c_type = c.type or "person"
+                    bucket.append(
+                        {
+                            "entity_type": ent_type,
+                            "entity_id": c.id,
+                            "label": c.name or f"Contributor #{c.id}",
+                            "subtitle": c_type,
+                            "contributor_type": c_type,
+                            "url": f"/collection?q={quote_plus(c.name)}" if c.name else None,
+                        }
+                    )
+
+            elif ent_type == "series":
+                series_cond = or_(
+                    Work.work_kind == "series",
+                    exists(select(WorkSeriesMembership.id).where(WorkSeriesMembership.series_work_id == Work.id)),
+                    exists(select(WorkPart.container_work_id).where(WorkPart.container_work_id == Work.id)),
+                )
+                stmt = (
+                    select(Work)
+                    .where(
+                        series_cond,
+                        or_(
+                            db.func.immutable_unaccent(func.coalesce(Work.title, "")).ilike(pattern, escape="\\"),
+                            db.func.immutable_unaccent(func.coalesce(Work.issn, "")).ilike(pattern, escape="\\"),
+                        ),
+                    )
+                    .order_by(Work.id.asc())
+                    .limit(effective_limit)
+                )
+                for w in db.session.execute(stmt).scalars().all():
+                    seen_series_work_ids.add(w.id)
+                    bucket.append(
+                        {
+                            "entity_type": "series",
+                            "entity_id": w.id,
+                            "label": w.title or f"Series #{w.id}",
+                            "subtitle": f"ISSN {w.issn}" if w.issn else (w.work_kind or "series"),
+                            "work_kind": w.work_kind,
+                            "issn": w.issn,
+                            "url": f"/work/{w.id}",
+                        }
+                    )
+
+            elif ent_type == "work":
+                stmt = (
+                    select(Work)
+                    .where(
+                        or_(
+                            db.func.immutable_unaccent(func.coalesce(Work.title, "")).ilike(pattern, escape="\\"),
+                            db.func.immutable_unaccent(func.coalesce(Work.issn, "")).ilike(pattern, escape="\\"),
+                        )
+                    )
+                    .order_by(Work.id.asc())
+                    .limit(effective_limit)
+                )
+                for w in db.session.execute(stmt).scalars().all():
+                    if w.id in seen_series_work_ids:
+                        continue
+                    authors = w.meta.get("authors", []) if isinstance(w.meta, dict) else []
+                    sub = ", ".join(str(a) for a in authors[:2] if a) if isinstance(authors, list) and authors else w.work_kind
+                    bucket.append(
+                        {
+                            "entity_type": "work",
+                            "entity_id": w.id,
+                            "label": w.title or f"Work #{w.id}",
+                            "subtitle": sub,
+                            "work_kind": w.work_kind,
+                            "issn": w.issn,
+                            "url": f"/work/{w.id}",
+                        }
+                    )
+
+            elif ent_type == "expression":
+                stmt = (
+                    select(Expression)
+                    .options(selectinload(Expression.work))
+                    .join(Work, Expression.work_id == Work.id)
+                    .where(
+                        or_(
+                            db.func.immutable_unaccent(func.coalesce(Work.title, "")).ilike(pattern, escape="\\"),
+                            db.func.immutable_unaccent(func.coalesce(Expression.language, "")).ilike(pattern, escape="\\"),
+                            db.func.immutable_unaccent(func.coalesce(Expression.content_type, "")).ilike(pattern, escape="\\"),
+                        )
+                    )
+                    .order_by(Expression.id.asc())
+                    .limit(effective_limit)
+                )
+                for e in db.session.execute(stmt).scalars().all():
+                    w_title = e.work.title if e.work else f"Work #{e.work_id}"
+                    details = [p for p in (e.content_type, e.language, e.kind) if p]
+                    bucket.append(
+                        {
+                            "entity_type": "expression",
+                            "entity_id": e.id,
+                            "label": f"{w_title} ({e.language or e.content_type or 'Expression'})",
+                            "subtitle": " • ".join(details) if details else "Expression",
+                            "url": f"/expression/{e.id}",
+                        }
+                    )
+
+            elif ent_type == "manifestation":
+                stmt = (
+                    select(Manifestation)
+                    .options(selectinload(Manifestation.expression).selectinload(Expression.work))
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .join(Work, Expression.work_id == Work.id)
+                    .where(
+                        or_(
+                            db.func.immutable_unaccent(func.coalesce(_meta_text(Manifestation.meta), "")).ilike(pattern, escape="\\"),
+                            db.func.immutable_unaccent(func.coalesce(Work.title, "")).ilike(pattern, escape="\\"),
+                            func.coalesce(Manifestation.isbn13, "").ilike(pattern, escape="\\"),
+                            func.coalesce(Manifestation.barcode, "").ilike(pattern, escape="\\"),
+                            func.coalesce(Manifestation.full_barcode, "").ilike(pattern, escape="\\"),
+                        )
+                    )
+                    .order_by(Manifestation.id.asc())
+                    .limit(effective_limit)
+                )
+                for m in db.session.execute(stmt).scalars().all():
+                    details = [p for p in (m.format, m.publisher, str(m.publication_year) if m.publication_year else None) if p]
+                    bucket.append(
+                        {
+                            "entity_type": "manifestation",
+                            "entity_id": m.id,
+                            "label": m.title or f"Manifestation #{m.id}",
+                            "subtitle": " • ".join(details) if details else None,
+                            "url": f"/manifestation/{m.id}",
+                        }
+                    )
+
+            elif ent_type == "item":
+                viewer_uuid: uuid.UUID | None = None
+                if viewer_user_id:
+                    try:
+                        viewer_uuid = uuid.UUID(str(viewer_user_id)) if not isinstance(viewer_user_id, uuid.UUID) else viewer_user_id
+                    except (ValueError, TypeError):
+                        viewer_uuid = None
+                viewer_friend_ids = get_friend_user_ids(viewer_uuid) if viewer_uuid else set()
+                opted_out_user_ids = get_federation_opted_out_user_ids()
+                vis_where = build_sql_item_visibility_clause(viewer_uuid, viewer_friend_ids, opted_out_user_ids)
+
+                stmt = (
+                    select(Item)
+                    .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .join(Work, Expression.work_id == Work.id)
+                    .where(
+                        vis_where,
+                        or_(
+                            db.func.immutable_unaccent(func.coalesce(_meta_text(Manifestation.meta), "")).ilike(pattern, escape="\\"),
+                            db.func.immutable_unaccent(func.coalesce(Work.title, "")).ilike(pattern, escape="\\"),
+                        ),
+                    )
+                    .order_by(Item.id.asc())
+                    .limit(effective_limit)
+                )
+                for it in db.session.execute(stmt).scalars().all():
+                    man_title = it.manifestation.title if it.manifestation and it.manifestation.title else None
+                    eff_vis = (it.visibility or ("private" if it.is_hidden else "public")).lower()
+                    details = [p for p in (it.collection_status, it.status, eff_vis) if p]
+                    bucket.append(
+                        {
+                            "entity_type": "item",
+                            "entity_id": it.id,
+                            "label": f"{man_title} (Copy #{it.id})" if man_title else f"Copy #{it.id}",
+                            "subtitle": " • ".join(details) if details else "Item",
+                            "url": f"/item/{it.id}",
+                        }
+                    )
+
+        if seen_series_work_ids and "work" in buckets:
+            buckets["work"] = [row for row in buckets["work"] if row["entity_id"] not in seen_series_work_ids]
+
+        results: list[dict[str, Any]] = []
+        for ent_type in requested:
+            if len(results) >= effective_limit:
+                break
+            take = min(per_type_quota, effective_limit - len(results))
+            results.extend(buckets[ent_type][:take])
+        for ent_type in requested:
+            if len(results) >= effective_limit:
+                break
+            overflow = buckets[ent_type][per_type_quota:]
+            if overflow:
+                results.extend(overflow[: effective_limit - len(results)])
+
+        return results[:effective_limit]

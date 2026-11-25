@@ -73,7 +73,7 @@ def _get_route_tag(path: str) -> str:
         return "Federation & Public LOD"
     if path.startswith("/api/federation"):
         return "Federation"
-    if path.startswith("/api/admin") or path.startswith("/admin"):
+    if path.startswith("/api/admin") or path.startswith("/api/v1/admin") or path.startswith("/admin"):
         return "Admin"
     return "System"
 
@@ -688,9 +688,32 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         "schema": {"type": "string"},
                         "description": "Comma-separated visibility filter (public, friends_only, private, hidden).",
                     }
+                    expr_kind_param = {
+                        "name": "expression_kind",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Comma-separated FRBR expression kind filter (live_performance, studio).",
+                    }
                     op_params = operation.setdefault("parameters", [])
                     if not any(isinstance(p, dict) and p.get("name") == "visibility" for p in op_params):
                         op_params.append(vis_param)
+                    if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
+                        op_params.append(expr_kind_param)
+                elif (
+                    openapi_path in ("/api/manifestations", "/api/v1/manifestations", "/api/stats/facets", "/api/v1/stats/facets")
+                    and method == "get"
+                ):
+                    expr_kind_param = {
+                        "name": "expression_kind",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Comma-separated FRBR expression kind filter (live_performance, studio).",
+                    }
+                    op_params = operation.setdefault("parameters", [])
+                    if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
+                        op_params.append(expr_kind_param)
                 elif openapi_path in ("/api/items/bulk-visibility", "/api/v1/items/bulk-visibility") and method == "patch":
                     if not operation.get("requestBody"):
                         operation["requestBody"] = {
@@ -825,6 +848,40 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path in ("/api/catalog/graph/search", "/api/v1/catalog/graph/search") and method == "get":
+                    search_query_params = [
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Diacritic-insensitive search query matching entity titles, names, ISBNs, or ISSNs.",
+                        },
+                        {
+                            "name": "types",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Comma-separated entity types (person,contributor,series,work,expression,manifestation,item).",
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 10, "minimum": 1, "maximum": 25},
+                            "description": "Maximum number of candidate results returned (clamped to 1..25).",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for s_param in search_query_params:
+                        if s_param["name"] not in op_param_names:
+                            op_params.append(s_param)
+                            op_param_names.add(s_param["name"])
+                    operation["tags"] = ["Catalog"]
+                    operation.setdefault("responses", {})
+                    operation["responses"].setdefault("400", {"description": "Invalid search parameters (e.g., invalid types)"})
+                    operation["responses"].setdefault("429", {"description": "Rate limit exceeded"})
                 elif openapi_path in ("/api/catalog/graph", "/api/v1/catalog/graph") and method == "get":
                     graph_query_params = [
                         {
@@ -838,8 +895,11 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             "name": "entity_type",
                             "in": "query",
                             "required": False,
-                            "schema": {"type": "string", "enum": ["work", "expression", "manifestation", "item"]},
-                            "description": "Root FRBR entity type for neighborhood traversal (required when mode=neighborhood).",
+                            "schema": {
+                                "type": "string",
+                                "enum": ["work", "expression", "manifestation", "item", "person", "contributor", "series"],
+                            },
+                            "description": "Root FRBR or contributor entity type for neighborhood traversal (required when mode=neighborhood).",
                         },
                         {
                             "name": "entity_id",
@@ -881,7 +941,7 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             "in": "query",
                             "required": False,
                             "schema": {"type": "string"},
-                            "description": "Comma-separated edge categories (frbr,series,parts_expansions,contributors,maps,lod).",
+                            "description": "Comma-separated edge categories (frbr,series,parts_expansions,derivatives,contributors,maps,lod).",
                         },
                     ]
                     op_params = operation.setdefault("parameters", [])
@@ -890,6 +950,92 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path == "/api/v1/admin/work-links/candidates" and method == "get":
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in (
+                        {"name": "status", "in": "query", "required": False, "schema": {"type": "string", "default": "pending"}},
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 50, "minimum": 1, "maximum": 200},
+                        },
+                        {"name": "offset", "in": "query", "required": False, "schema": {"type": "integer", "default": 0, "minimum": 0}},
+                    ):
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                elif openapi_path == "/api/v1/admin/work-links" and method == "get":
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in (
+                        {"name": "work_id", "in": "query", "required": False, "schema": {"type": "integer", "minimum": 1}},
+                        {"name": "relation_type", "in": "query", "required": False, "schema": {"type": "string"}},
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 50, "minimum": 1, "maximum": 200},
+                        },
+                        {"name": "offset", "in": "query", "required": False, "schema": {"type": "integer", "default": 0, "minimum": 0}},
+                    ):
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                elif openapi_path == "/api/v1/admin/work-links/scan" and method == "post":
+                    operation["requestBody"] = {
+                        "required": False,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "engine": {"type": "string", "enum": ["heuristic", "llama"], "default": "heuristic"},
+                                        "threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.7},
+                                        "limit": {"type": "integer", "minimum": 1, "maximum": 5000},
+                                        "dry_run": {"type": "boolean", "default": False},
+                                    },
+                                }
+                            }
+                        },
+                    }
+                elif openapi_path == "/api/v1/admin/work-links/candidates/{candidate_id}/accept" and method == "post":
+                    operation["requestBody"] = {
+                        "required": False,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "relation_type": {"type": "string"},
+                                        "source_work_id": {"type": "integer", "minimum": 1},
+                                        "target_work_id": {"type": "integer", "minimum": 1},
+                                        "notes": {"type": "string", "maxLength": 2000},
+                                    },
+                                }
+                            }
+                        },
+                    }
+                elif openapi_path == "/api/v1/admin/work-links" and method == "post":
+                    operation["requestBody"] = {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["source_work_id", "target_work_id"],
+                                    "properties": {
+                                        "source_work_id": {"type": "integer", "minimum": 1},
+                                        "target_work_id": {"type": "integer", "minimum": 1},
+                                        "relation_type": {"type": "string", "default": "is_adaptation_of"},
+                                        "notes": {"type": "string", "maxLength": 2000},
+                                    },
+                                }
+                            }
+                        },
+                    }
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

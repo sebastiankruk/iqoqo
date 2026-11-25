@@ -17,13 +17,17 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { isBoardGameFormat, isVideoFormat } from "@/lib/media-classification";
 import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
-import { useWorkParts } from "@/lib/api/hooks";
-import { Disc, BookOpen, Calendar, ChevronRight, GitBranch } from "lucide-react";
+import { useWorkParts, useUpdateItem } from "@/lib/api/hooks";
+import { Disc, BookOpen, Calendar, ChevronRight, GitBranch, Music, Video, Gamepad2 } from "lucide-react";
 import { TagCloud } from "@/components/ui/tag-cloud";
 
 import { DiscoveryPivot } from "./discovery-pivot";
@@ -79,6 +83,10 @@ function normalizeAuthors(authors: unknown): string[] {
  * @returns {JSX.Element} The component
  */
 export function ItemHeader({ item }: ItemHeaderProps) {
+  const tGraph = useTranslations("graph");
+  const tCta = useTranslations("ItemDetail.primaryCta");
+  const updateItem = useUpdateItem(item.id);
+
   const work = item.work;
   const meta = item.manifestation_meta ?? {};
   const tags = Array.from(new Set([...(item.tags ?? []), ...((meta["tags"] as string[] | undefined) ?? [])]));
@@ -89,7 +97,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
   const title = work?.title ?? item.title ?? "Untitled";
 
-  const timestamp = getCoverTimestamp(meta);
+  const timestamp = getCoverTimestamp(meta, item.meta);
 
   // Cover cascade: item's own cover → manifestation meta cover_url → item meta cover_url → placeholder
   const coverUrl =
@@ -98,8 +106,11 @@ export function ItemHeader({ item }: ItemHeaderProps) {
     getCoverUrl(meta["cover_url"] as string | undefined, timestamp) ||
     "/file.svg";
 
-  const format = readMeta<string>(meta, "format");
+  const format = readMeta<string>(meta, "format") || readMeta<string>(item.meta ?? {}, "format") || "book";
   const isAudio = isAudioMedia(format);
+  const isVideo = isVideoFormat(format);
+  const isGame = isBoardGameFormat(format);
+  const isBook = !isAudio && !isVideo && !isGame;
   // ISBN is a canonical field on Item; `barcode` is the provider's fallback.
   const identifier = item.isbn || readMetaChain<string>(meta, IDENTIFIER_KEYS);
   const publisher = item.publisher || readMeta<string>(meta, "publisher");
@@ -115,11 +126,56 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
   const badgeLabel = isSeries ? `${composedLabel} (Series)` : composedLabel;
 
+  const handlePrimaryStatusUpdate = (status: Item["status"]) => {
+    updateItem.mutate(
+      { status },
+      {
+        onSuccess: () => toast.success(tCta("statusUpdated", { status: status.replace(/_/g, " ") })),
+        onError: e => toast.error(e instanceof Error ? e.message : String(e)),
+      }
+    );
+  };
+
+  const primaryCtaConfig = (() => {
+    if (!item.is_owner) return null;
+    if (isBook && item.status !== "read") {
+      const nextStatus: Item["status"] = item.status === "reading" ? "read" : "reading";
+      return {
+        label: item.status === "reading" ? tCta("markAsRead") : tCta("logReading"),
+        nextStatus,
+        icon: <BookOpen className="h-3.5 w-3.5" />,
+      };
+    }
+    if (isAudio && item.status !== "listened") {
+      const nextStatus: Item["status"] = item.status === "listening" ? "listened" : "listening";
+      return {
+        label: item.status === "listening" ? tCta("markAsListened") : tCta("nowListening"),
+        nextStatus,
+        icon: <Music className="h-3.5 w-3.5" />,
+      };
+    }
+    if (isVideo && item.status !== "watched") {
+      return {
+        label: tCta("markAsWatched"),
+        nextStatus: "watched" as Item["status"],
+        icon: <Video className="h-3.5 w-3.5" />,
+      };
+    }
+    if (isGame) {
+      return {
+        label: tCta("logPlay"),
+        nextStatus: "played" as Item["status"],
+        icon: <Gamepad2 className="h-3.5 w-3.5" />,
+      };
+    }
+    return null;
+  })();
+
   return (
-    <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-8 items-start">
-      {/* Cover Image stacks at top on mobile, ensuring no collision with actions below */}
+    <div className="flex flex-col md:flex-row gap-6 lg:gap-10 mb-4 items-start">
+      {/* Cover Image shown on mobile/tablet only (< lg); desktop renders SidebarCover */}
       <div
-        className={`w-full md:w-1/3 lg:w-1/4 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? "aspect-square" : "aspect-[2/3]"}`}
+        className={`lg:hidden w-full md:w-1/3 shrink-0 overflow-hidden rounded-xl shadow-2xl bg-muted relative ${isAudio ? "aspect-square" : "aspect-[2/3]"}`}
       >
         <Image
           src={coverUrl}
@@ -184,7 +240,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
         </nav>
 
         {/* Media type Badge */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           <Badge
             variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
@@ -192,27 +248,17 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {badge.isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
             {badgeLabel}
           </Badge>
-          {item.id && (
-            <Link
-              href={`/graph?type=item&id=${item.id}`}
-              data-testid="explore-graph-link"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <GitBranch className="h-3.5 w-3.5 text-primary" />
-              <span>Explore Graph</span>
-            </Link>
-          )}
         </div>
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="mb-3">
+          <div className="mb-2">
             <TagCloud tags={tags} pivotType="tags" maxInitial={10} />
           </div>
         )}
 
-        {/* Core details */}
-        <div className="space-y-2 mb-6">
+        {/* Core details (Title + Authors before action buttons) */}
+        <div className="space-y-1.5 mb-3">
           <h1
             className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight"
             property="schema:name"
@@ -244,49 +290,79 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           )}
         </div>
 
+        {/* Above-the-Fold Primary & Graph Actions */}
+        {(primaryCtaConfig || item.id > 0) && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {primaryCtaConfig && (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                data-testid="primary-consumption-cta"
+                disabled={updateItem.isPending}
+                onClick={() => handlePrimaryStatusUpdate(primaryCtaConfig.nextStatus)}
+                className="gap-1.5 h-8 font-semibold shadow-sm"
+              >
+                {primaryCtaConfig.icon}
+                <span>{primaryCtaConfig.label}</span>
+              </Button>
+            )}
+            {item.id > 0 && (
+              <Button asChild variant="outline" size="sm" data-testid="explore-graph-link" className="gap-1.5 h-8">
+                <Link href={`/graph?type=item&id=${item.id}`}>
+                  <GitBranch className="h-3.5 w-3.5 text-primary" />
+                  <span>{tGraph("exploreGraph")}</span>
+                </Link>
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Quick Meta block */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-muted/30 p-5 rounded-2xl mb-8 border border-border/50">
-          {identifier && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                Identifier
-              </span>
-              <span className="font-mono text-xs">{identifier}</span>
-            </div>
-          )}
-          {publisher && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                {isAudio ? "Label" : "Publisher"}
-              </span>
-              <DiscoveryPivot type="publishers" value={publisher} variant="link" className="font-semibold" />
-            </div>
-          )}
-          {year && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
-                <Calendar className="h-2.5 w-2.5" />
-                Released
-              </span>
-              <span className="font-semibold">{year}</span>
-            </div>
-          )}
-          {Boolean(hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
-                {isAudio ? "Tracks" : "Pages"}
-              </span>
-              <span className="font-semibold">
-                {(() => {
-                  const val = readMeta(meta, "tracks") ?? readMeta(meta, "pages");
-                  if (val === null || val === undefined) return "";
-                  if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
-                  return String(val).slice(0, 50);
-                })()}
-              </span>
-            </div>
-          )}
-        </div>
+        {(identifier || publisher || year || hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm bg-muted/30 px-4 py-3 rounded-xl mb-2 border border-border/50">
+            {identifier && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                  Identifier
+                </span>
+                <span className="font-mono text-xs">{identifier}</span>
+              </div>
+            )}
+            {publisher && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                  {isAudio ? "Label" : "Publisher"}
+                </span>
+                <DiscoveryPivot type="publishers" value={publisher} variant="link" className="font-semibold" />
+              </div>
+            )}
+            {year && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest flex items-center gap-1">
+                  <Calendar className="h-2.5 w-2.5" />
+                  Released
+                </span>
+                <span className="font-semibold">{year}</span>
+              </div>
+            )}
+            {Boolean(hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
+                  {isAudio ? "Tracks" : "Pages"}
+                </span>
+                <span className="font-semibold">
+                  {(() => {
+                    const val = readMeta(meta, "tracks") ?? readMeta(meta, "pages");
+                    if (val === null || val === undefined) return "";
+                    if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
+                    return String(val).slice(0, 50);
+                  })()}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

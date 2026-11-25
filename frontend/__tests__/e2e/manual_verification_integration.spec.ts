@@ -196,15 +196,19 @@ test.describe("Manual Verification Integration E2E", () => {
     // Verify page has loaded
     await page.waitForURL(/\/item\/\d+$/);
 
-    // Toggle the hidden setting
-    const visibilityBtn = page.getByRole("button", { name: /hide from public|make public/i });
+    // Toggle the hidden setting inside consolidated Manage menu
+    await page.getByTestId("sidebar-manage-menu").click();
+    const visibilityBtn = page.getByRole("menuitem", { name: /hide from public|make public/i });
     await expect(visibilityBtn).toBeVisible();
     const btnText = (await visibilityBtn.innerText()).trim();
     await visibilityBtn.click();
+    await expect(visibilityBtn).not.toBeVisible();
     if (/make public/i.test(btnText)) {
       await expect(page.getByText(/item is now public/i)).toBeVisible();
       // Click again to hide
-      const hideBtn = page.getByRole("button", { name: /hide from public/i });
+      await page.getByTestId("sidebar-manage-menu").click();
+      const hideBtn = page.getByRole("menuitem", { name: /hide from public/i });
+      await expect(hideBtn).toBeVisible();
       await hideBtn.click();
       await expect(page.getByText(/item is now hidden/i)).toBeVisible();
     } else {

@@ -524,7 +524,7 @@ def process_cover_pipeline(
     individual keyword arguments, so existing call sites keep working.
     """
     job = _cover_job(job, kwargs)
-    llm_permissions = job.llm_permissions if llm_permissions is None else llm_permissions
+    llm_permissions = (job.llm_permissions if llm_permissions is None else llm_permissions) or {}
     user_id = job.user_id
     user_image_path = job.user_image_path
     description = job.description
@@ -559,6 +559,7 @@ def process_cover_pipeline(
         # Tier 1: User Photo
         if user_image_path and os.path.exists(user_image_path):
             try:
+                os.makedirs(COVERS_DIR, exist_ok=True)
                 filename = f"{identifier}_user.jpg"
                 dest_path = os.path.join(COVERS_DIR, filename)
 

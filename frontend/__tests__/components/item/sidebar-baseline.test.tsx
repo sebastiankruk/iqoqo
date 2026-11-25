@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import type { Item } from "@/types/frbr";
@@ -113,14 +114,16 @@ describe("ItemSidebar Baseline Suite (Task 1.1)", () => {
     expect(screen.getByText("ISBN: 978-0-395-07122-1")).toBeInTheDocument();
   });
 
-  it("renders action buttons and status selects region distinguishing elements", () => {
+  it("renders action buttons and status selects region distinguishing elements", async () => {
+    const user = userEvent.setup();
     const onEdit = vi.fn();
     render(<ItemSidebar item={comprehensiveItem} onEdit={onEdit} />);
     expect(screen.getByLabelText("Collection status")).toBeInTheDocument();
     expect(screen.getByLabelText("Item status")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Edit Metadata/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Make Public/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Print QR Code/i })).toBeInTheDocument();
+    await user.click(screen.getByTestId("sidebar-manage-menu"));
+    expect(screen.getByText(/Make Public/i)).toBeInTheDocument();
+    expect(screen.getByTestId("qrcode-btn")).toBeInTheDocument();
   });
 
   it("renders FRBR quick info region distinguishing elements", () => {

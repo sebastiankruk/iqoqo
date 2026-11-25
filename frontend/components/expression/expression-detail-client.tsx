@@ -19,6 +19,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BookOpen, Disc, Film, Gamepad2, GitBranch, Layers, Loader2, Music, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +88,7 @@ function getFormatIcon(format?: string | null, contentType?: string | null) {
  */
 export function ExpressionDetailClient({ expressionId, initialExpression }: ExpressionDetailClientProps) {
   const router = useRouter();
+  const tGraph = useTranslations("graph");
   const routeId = useResolvedRouteParam("id");
   const effectiveId =
     expressionId && !isNaN(expressionId) && expressionId > 0 ? expressionId : routeId ? parseInt(routeId, 10) : 0;
@@ -137,10 +139,13 @@ export function ExpressionDetailClient({ expressionId, initialExpression }: Expr
               <Button asChild size="sm" variant="outline" data-testid="explore-graph-link" className="gap-1.5">
                 <Link href={`/graph?type=expression&id=${expr.id}`}>
                   <GitBranch className="h-3.5 w-3.5" />
-                  <span>Explore Graph</span>
+                  <span>{tGraph("exploreGraph")}</span>
                 </Link>
               </Button>
-              <Badge variant="outline" className="gap-1.5 px-3 py-1 font-mono text-xs uppercase tracking-wider">
+              <Badge
+                variant="outline"
+                className="hidden sm:inline-flex gap-1.5 px-3 py-1 font-mono text-xs uppercase tracking-wider"
+              >
                 <Layers className="h-3 w-3 text-primary" />
                 FRBR Expression #{expr.id}
               </Badge>

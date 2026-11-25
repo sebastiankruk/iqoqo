@@ -143,4 +143,31 @@ describe("C129 ShareCollectionDialog & SSR cookie forwarding", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("serializes expression_kind and defaults name to Live Performances when live_performance is active", async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { success: true, data: { share_token: "live-tok" } },
+    });
+
+    render(
+      <ShareCollectionDialog activeFilters={[{ type: "expression_kind", value: "live_performance" }]} appliedQuery="" />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /share/i }));
+
+    const nameInput = screen.getByDisplayValue("Live Performances");
+    expect(nameInput).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /create link|generate/i }));
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/sharing/",
+        expect.objectContaining({
+          name: "Live Performances",
+          filters: expect.objectContaining({
+            expression_kind: ["live_performance"],
+          }),
+        })
+      );
+    });
+  });
 });

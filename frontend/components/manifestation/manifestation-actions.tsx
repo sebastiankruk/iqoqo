@@ -94,10 +94,10 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
       const res = await apiClient.get<ApiResponse<CatalogEntry>>(`/manifestations/${manifestation.id}`);
       return res.data?.data ?? null;
     },
-    enabled: Boolean(manifestation.id && isProcessing),
+    enabled: Boolean(manifestation.id && (isPending || isProcessing)),
     refetchInterval: query => {
       const status = query.state.data ? query.state.data.meta?.cover_status : manifestation.meta?.cover_status;
-      return status === "processing" ? 3000 : false;
+      return status === "pending" || status === "processing" ? 3000 : false;
     },
   });
 

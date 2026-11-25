@@ -81,6 +81,10 @@ describe("TopBar", () => {
     const policyTrigger = screen.getByTestId("policy-selector-trigger");
     expect(formatTrigger).toHaveTextContent("Book");
     expect(policyTrigger).toHaveTextContent("Shelf");
+    expect(policyTrigger.className).toContain("bg-white/10");
+    expect(policyTrigger.className).toContain("text-white");
+    expect(policyTrigger.className).not.toMatch(/(?:^|\s)bg-white(?:\s|$)/);
+    expect(policyTrigger.className).not.toContain("text-black");
     expect(screen.getByTestId("batch-accessory")).toBeInTheDocument();
 
     await user.click(formatTrigger);

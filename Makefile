@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop monitoring-reset-auth ensure-secrets ensure-mount-perms preview-up preview-down preview-reconcile preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain install-wizard presync-check
+.PHONY: help status start stop monitoring-start monitoring-stop monitoring-reset-auth ensure-secrets ensure-mount-perms preview-up preview-down preview-reconcile preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr reconcile-cross-media sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain install-wizard presync-check
 
 SHELL := /bin/bash
 
@@ -1368,6 +1368,13 @@ etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for pr
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
+	fi
+
+reconcile-cross-media: ## Screen catalog for cross-media Work link candidates (dry-run by default; pass ARGS="--apply", USE_DOCKER=true for production)
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/reconcile_cross_media.py $(ARGS); \
+	else \
+		$(PYTHON_CMD) scripts/reconcile_cross_media.py $(ARGS); \
 	fi
 
 sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production)

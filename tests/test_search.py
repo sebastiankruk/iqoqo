@@ -420,3 +420,31 @@ def test_search_items_accepts_excluded_formats_kwarg(app):
         )
         assert total == 1
         assert [r["item_id"] for r in rows] == [it_cd.id]
+
+
+def test_pg_manifestation_fts_includes_mixed_media_categories(app, monkeypatch):
+    """_pg_manifestation_fts expands category filter with MIXED_MEDIA_FORMAT_CATEGORIES."""
+    from unittest.mock import MagicMock
+
+    from app.core.search_service import SearchService
+    from app.db import db
+
+    captured_sql: list[str] = []
+    captured_params: list[dict] = []
+
+    def _fake_execute(stmt, params=None):
+        captured_sql.append(str(stmt))
+        captured_params.append(dict(params or {}))
+        res = MagicMock()
+        res.scalar.return_value = 0
+        res.scalar_one.return_value = 0
+        res.all.return_value = []
+        return res
+
+    with app.app_context():
+        monkeypatch.setattr(db.session, "execute", _fake_execute)
+        total, rows = SearchService._pg_manifestation_fts("concert", 20, 0, ["movie"], None, False, False)
+        assert total == 0
+        assert rows == []
+        assert any("cat_mixed_formats" in sql for sql in captured_sql)
+        assert any("cd_dvd_combo" in params.get("cat_mixed_formats", ()) for params in captured_params)

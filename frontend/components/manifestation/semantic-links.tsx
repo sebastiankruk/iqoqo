@@ -37,6 +37,7 @@ import { toast } from "sonner";
 export interface SemanticLinksProps {
   manifestationId: number;
   canEdit?: boolean;
+  compact?: boolean;
 }
 
 /**
@@ -88,7 +89,7 @@ function getAuthorityConfig(authority: string) {
  * @param props.canEdit - Whether the current user has permission to edit or remove links.
  * @returns Rendered SemanticLinks card component.
  */
-export function SemanticLinks({ manifestationId, canEdit = false }: SemanticLinksProps) {
+export function SemanticLinks({ manifestationId, canEdit = false, compact = false }: SemanticLinksProps) {
   const t = useTranslations("SemanticLinks");
   const { data, isLoading } = useSemanticLinks(manifestationId);
   const relinkMutation = useTriggerRelink(manifestationId);
@@ -118,6 +119,121 @@ export function SemanticLinks({ manifestationId, canEdit = false }: SemanticLink
 
   const links = data?.links ?? [];
 
+  const scanButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleRelink}
+      disabled={relinkMutation.isPending}
+      className={
+        compact
+          ? "text-xs h-7 px-2.5 gap-1.5 shrink-0 self-start whitespace-nowrap"
+          : "text-xs h-8 gap-1.5 shrink-0 self-start sm:self-auto whitespace-nowrap"
+      }
+      title={t("scanButton")}
+    >
+      {relinkMutation.isPending ? (
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+      ) : (
+        <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+      )}
+      <span>{relinkMutation.isPending ? t("scanning") : t("scanButton")}</span>
+    </Button>
+  );
+
+  const bodyContent = isLoading ? (
+    <div className="space-y-2 py-1">
+      <div className="h-8 w-full bg-muted/50 animate-pulse rounded-lg" />
+      <div className="h-8 w-3/4 bg-muted/50 animate-pulse rounded-lg" />
+    </div>
+  ) : links.length === 0 ? (
+    compact ? (
+      <p className="text-[11px] text-muted-foreground italic">{t("noLinks")}</p>
+    ) : (
+      <div className="text-center py-5 px-4 border border-dashed rounded-lg bg-muted/10">
+        <p className="text-xs font-medium text-muted-foreground">{t("noLinks")}</p>
+        <p className="text-[11px] text-muted-foreground/75 mt-1">{t("noLinksHint")}</p>
+      </div>
+    )
+  ) : (
+    <div className="divide-y divide-border/60">
+      {links.map(link => {
+        const config = getAuthorityConfig(link.authority);
+        const Icon = config.icon;
+        const confidencePercent = Math.round((link.confidence || 0) * 100);
+
+        return (
+          <div
+            key={link.id}
+            className={`${compact ? "py-1.5" : "py-2.5"} first:pt-0 last:pb-0 flex items-center justify-between gap-3 group`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Badge variant="outline" className={`text-[11px] font-medium gap-1 px-2 py-0.5 ${config.badgeClass}`}>
+                <Icon className="h-3 w-3" />
+                <span>{config.name}</span>
+              </Badge>
+
+              <div className="flex flex-col min-w-0">
+                <a
+                  href={link.external_uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate"
+                  title={link.external_uri}
+                >
+                  <span className="truncate">{link.pref_label || link.external_uri}</span>
+                  <ExternalLink className="h-3 w-3 opacity-60 flex-shrink-0" />
+                </a>
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                  <span>{t("confidence", { score: confidencePercent })}</span>
+                  <span>•</span>
+                  <span className="capitalize">
+                    {link.entity_type === "work" ? t("levels.work") : t("levels.manifestation")}
+                  </span>
+                  {link.verified && (
+                    <>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                        <CheckCircle2 className="h-2.5 w-2.5" />
+                        {t("verified")}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDelete(link)}
+                disabled={deleteMutation.isPending}
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive transition-colors opacity-70 group-hover:opacity-100"
+                title={t("deleteLink")}
+                aria-label={t("deleteLink")}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div className="space-y-2.5" data-testid="semantic-links-compact">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] leading-snug text-muted-foreground">{t("description")}</p>
+          {canEdit && scanButton}
+        </div>
+        {bodyContent}
+      </div>
+    );
+  }
+
   return (
     <Card className="rounded-xl shadow-sm border border-border mt-6">
       <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
@@ -128,104 +244,10 @@ export function SemanticLinks({ manifestationId, canEdit = false }: SemanticLink
           </CardTitle>
           <CardDescription className="text-xs text-muted-foreground mt-0.5">{t("description")}</CardDescription>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRelink}
-          disabled={relinkMutation.isPending}
-          className="text-xs h-8 gap-1.5 shrink-0 self-start sm:self-auto whitespace-nowrap"
-          title={t("scanButton")}
-        >
-          {relinkMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-          )}
-          <span>{relinkMutation.isPending ? t("scanning") : t("scanButton")}</span>
-        </Button>
+        {canEdit && scanButton}
       </CardHeader>
 
-      <CardContent className="pt-2">
-        {isLoading ? (
-          <div className="space-y-2 py-2">
-            <div className="h-9 w-full bg-muted/50 animate-pulse rounded-lg" />
-            <div className="h-9 w-3/4 bg-muted/50 animate-pulse rounded-lg" />
-          </div>
-        ) : links.length === 0 ? (
-          <div className="text-center py-5 px-4 border border-dashed rounded-lg bg-muted/10">
-            <p className="text-xs font-medium text-muted-foreground">{t("noLinks")}</p>
-            <p className="text-[11px] text-muted-foreground/75 mt-1">{t("noLinksHint")}</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/60">
-            {links.map(link => {
-              const config = getAuthorityConfig(link.authority);
-              const Icon = config.icon;
-              const confidencePercent = Math.round((link.confidence || 0) * 100);
-
-              return (
-                <div
-                  key={link.id}
-                  className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3 group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Badge
-                      variant="outline"
-                      className={`text-[11px] font-medium gap-1 px-2 py-0.5 ${config.badgeClass}`}
-                    >
-                      <Icon className="h-3 w-3" />
-                      <span>{config.name}</span>
-                    </Badge>
-
-                    <div className="flex flex-col min-w-0">
-                      <a
-                        href={link.external_uri}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate"
-                        title={link.external_uri}
-                      >
-                        <span className="truncate">{link.pref_label || link.external_uri}</span>
-                        <ExternalLink className="h-3 w-3 opacity-60 flex-shrink-0" />
-                      </a>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
-                        <span>{t("confidence", { score: confidencePercent })}</span>
-                        <span>•</span>
-                        <span className="capitalize">
-                          {link.entity_type === "work" ? t("levels.work") : t("levels.manifestation")}
-                        </span>
-                        {link.verified && (
-                          <>
-                            <span>•</span>
-                            <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                              <CheckCircle2 className="h-2.5 w-2.5" />
-                              {t("verified")}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(link)}
-                      disabled={deleteMutation.isPending}
-                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive transition-colors opacity-70 group-hover:opacity-100"
-                      title={t("deleteLink")}
-                      aria-label={t("deleteLink")}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
+      <CardContent className="pt-2">{bodyContent}</CardContent>
     </Card>
   );
 }

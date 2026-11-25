@@ -1,0 +1,14 @@
+## 1. Implementation — Compressed SemanticLinks & Sidebar Accordion Relocation
+
+- [x] 1.1 Add `compact?: boolean` prop to `SemanticLinks` (`frontend/components/manifestation/semantic-links.tsx`): when `compact` is true, omit `<Card>` / `<CardHeader>` / `<CardContent>` / `mt-6` wrappers and the tall dashed empty box, rendering a condensed 1-line description/empty state, compact `"Scan External LOD"` trigger (`h-7 text-xs`), and tight authority rows (`py-1.5`).
+- [x] 1.2 Add `compact?: boolean` layout support to `ItemActions` (`frontend/components/item/item-actions.tsx`) so it renders direct inline action buttons inside the accordion without a nested `"Admin Actions"` `<DropdownMenu>` trigger, while preserving `Requests`, active `escalation-status-card`, dialogs, and exact RBAC checks.
+- [x] 1.3 Remove `<SemanticLinks />` from `DetailsTab` (`frontend/components/item/item-tabs.tsx`) and remove standalone `<ItemActions />` from the main column of `ItemDetail` (`frontend/components/item/item-page-client.tsx`).
+- [x] 1.4 Extend `SidebarActionsProps` (`frontend/components/item/sidebar/sidebar-actions.tsx`) with pure-props slot props (`linkedOpenDataNode`, `adminActionsNode`, `adminAccordionLabel`) and render collapsed-by-default `"Linked Open Data"` and `"Admin Actions"` / `"Help Requests"` chevron accordion rows below `"Taxonomy"`; wire from `ItemSidebar` (`frontend/components/item/item-sidebar.tsx`).
+- [x] 1.5 Add/verify sentence-case i18n keys in `frontend/messages/en.json` and `frontend/messages/pl.json` under `ItemDetail.sidebar` (`linkedOpenData`, `adminActions`, `helpRequests`).
+- [x] 1.6 Reorder `ItemHeader` (`frontend/components/item/item-header.tsx`) so media badge sits alone, followed by title & authors (`<h1>`), followed by `[Primary CTA] + [Explore Graph]`, and tighten Quick Meta (`Identifier`) padding/margins.
+
+## 2. Verification — Frontend Unit, E2E & Local CI Parity
+
+- [x] 2.1 Update and add Vitest unit specs in `frontend/__tests__/components/item/` (`item-sidebar.test.tsx`, `item-actions.test.tsx`, `sidebar/sidebar-actions.test.tsx`, and `SemanticLinks` compact test) asserting: (a) `<SemanticLinks />` is absent from `ItemTabs`, (b) `Linked Open Data` and `Admin Actions` start collapsed in the bottom accordion below `Taxonomy`, (c) expanding `Linked Open Data` renders compact borderless LOD controls, (d) standard non-owners never see `Admin Actions`, and (e) `SidebarActions` stays hook/context-free.
+- [x] 2.2 Update Playwright E2E spec `frontend/__tests__/e2e/item_detail_ux.spec.ts` to verify mobile & desktop item layout places owner status/actions cleanly ahead of the bottom accordion stack and allows expanding `Linked Open Data` and `Admin Actions`.
+- [x] 2.3 Run `IQOQO_AI_MODE=1 make format-js && IQOQO_AI_MODE=1 make lint && IQOQO_AI_MODE=1 make secret-scan && IQOQO_AI_MODE=1 npm --prefix frontend test -- --run` and confirm exit `0`.

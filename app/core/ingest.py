@@ -165,7 +165,11 @@ class IngestService:
         title = meta.get("title") or meta.get("Title") or "Unknown Title"
         raw_author = meta.get("author") or meta.get("artist") or (meta.get("Authors") or meta.get("authors") or [None])[0]
         author_name = raw_author.get("name") if isinstance(raw_author, dict) else raw_author
-        cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
+        from app.utils.isbn import _extract_cover_url
+
+        cover_url = (
+            _extract_cover_url(meta.get("cover_url")) or _extract_cover_url(meta.get("thumb")) or _extract_cover_url(meta.get("cover"))
+        )
         raw_format = (meta.get("format") or meta.get("Format") or "audio").lower()
 
         from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
@@ -440,7 +444,11 @@ class IngestService:
         # Normalize keys that might come back differently from MusicBrainz/Discogs
         title = meta.get("title") or meta.get("Title") or "Unknown Title"
         author_name = meta.get("author") or meta.get("artist") or meta.get("Artist")
-        cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
+        from app.utils.isbn import _extract_cover_url
+
+        cover_url = (
+            _extract_cover_url(meta.get("cover_url")) or _extract_cover_url(meta.get("thumb")) or _extract_cover_url(meta.get("cover"))
+        )
 
         # Create FRBR hierarchy
         work_genres = _extract_genres(meta)
@@ -931,7 +939,11 @@ class IngestService:
                 raise ValueError("Ambiguous bare 977 periodical barcode requires an EAN-2 add-on, issue number, date, or headline.")
 
         # 5. Create new issue Manifestation
-        cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
+        from app.utils.isbn import _extract_cover_url
+
+        cover_url = (
+            _extract_cover_url(meta.get("cover_url")) or _extract_cover_url(meta.get("thumb")) or _extract_cover_url(meta.get("cover"))
+        )
         _item_only_keys = {
             "collection_status",
             "status",

@@ -279,9 +279,47 @@ class CatalogFilterBuilder:
 
     # ── filter groups ───────────────────────────────────────────────────
 
+    @staticmethod
+    def build_category_clause(category: list[str] | tuple[str, ...]):
+        """Build Expression.content_type IN category OR mixed-media format match."""
+        from app.core.taxonomy import MIXED_MEDIA_FORMAT_CATEGORIES
+
+        cat_list = [str(c).strip() for c in category if str(c).strip()]
+        cat_set = {c.lower() for c in cat_list}
+        mixed_formats = [fmt for fmt, cats in MIXED_MEDIA_FORMAT_CATEGORIES.items() if any(c in cat_set for c in cats)]
+        if mixed_formats:
+            fmt_expr = db.func.lower(
+                db.func.coalesce(Manifestation.format, Manifestation.format_type, Manifestation.meta["format"].as_string())
+            )
+            return db.or_(Expression.content_type.in_(cat_list), fmt_expr.in_(mixed_formats))
+        return Expression.content_type.in_(cat_list)
+
+    @staticmethod
+    def build_expression_kind_clause(expression_kind: list[str] | tuple[str, ...]):
+        """Build Expression.kind predicate (live_performance -> kind=='live_performance', studio -> kind IS NULL)."""
+        from app.db.core import EXPRESSION_KINDS
+
+        valid_kinds = set(EXPRESSION_KINDS) | {"studio"}
+        clauses = []
+        for raw in expression_kind:
+            k = str(raw).strip().lower()
+            if not k or k not in valid_kinds:
+                continue
+            if k == "studio":
+                clauses.append(Expression.kind.is_(None))
+            else:
+                clauses.append(Expression.kind == k)
+        if not clauses:
+            return db.false()
+        return db.or_(*clauses) if len(clauses) > 1 else clauses[0]
+
     def _apply_category(self, category: list[str] | None) -> None:
         if category:
-            self.query = self.query.filter(Expression.content_type.in_(category))
+            self.query = self.query.filter(self.build_category_clause(category))
+
+    def _apply_expression_kind(self, expression_kind: list[str] | None) -> None:
+        if expression_kind:
+            self.query = self.query.filter(self.build_expression_kind_clause(expression_kind))
 
     def _apply_format(self, fmt: list[str] | None) -> None:
         if fmt:
@@ -488,6 +526,7 @@ class CatalogFilterBuilder:
         self,
         *,
         category: list[str] | None = None,
+        expression_kind: list[str] | None = None,
         fmt: list[str] | None = None,
         tags: list[str] | None = None,
         collections: list[str] | None = None,
@@ -504,6 +543,7 @@ class CatalogFilterBuilder:
         """Apply every supplied filter group and return the built query."""
         needs_frbr = bool(
             category
+            or expression_kind
             or fmt
             or publishers
             or genres
@@ -518,6 +558,7 @@ class CatalogFilterBuilder:
             self._ensure_frbr_joins()
 
         self._apply_category(category)
+        self._apply_expression_kind(expression_kind)
         self._apply_format(fmt)
         self._apply_missing_cover(missing_cover)
         self._apply_missing_id(missing_id)

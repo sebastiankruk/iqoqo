@@ -84,9 +84,22 @@ describe("SemanticLinks Component", () => {
       isLoading: false,
     } as unknown as ReturnType<typeof hooks.useSemanticLinks>);
 
-    render(<SemanticLinks manifestationId={1} />);
+    render(<SemanticLinks manifestationId={1} canEdit={true} />);
     expect(screen.getByText("No external Linked Open Data authorities linked yet.")).toBeInTheDocument();
     expect(screen.getByText("Scan External LOD")).toBeInTheDocument();
+  });
+
+  it("hides Scan External LOD when canEdit is false in both card and compact modes", () => {
+    vi.mocked(hooks.useSemanticLinks).mockReturnValue({
+      data: { manifestation_id: 1, total: 0, links: [], grouped: {} },
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useSemanticLinks>);
+
+    const { rerender } = render(<SemanticLinks manifestationId={1} canEdit={false} />);
+    expect(screen.queryByRole("button", { name: /scan external lod/i })).not.toBeInTheDocument();
+
+    rerender(<SemanticLinks manifestationId={1} canEdit={false} compact={true} />);
+    expect(screen.queryByRole("button", { name: /scan external lod/i })).not.toBeInTheDocument();
   });
 
   it("triggers LOD relink on scan button click", () => {
@@ -95,7 +108,7 @@ describe("SemanticLinks Component", () => {
       isLoading: false,
     } as unknown as ReturnType<typeof hooks.useSemanticLinks>);
 
-    render(<SemanticLinks manifestationId={1} />);
+    render(<SemanticLinks manifestationId={1} canEdit={true} />);
     const scanBtn = screen.getByRole("button", { name: /scan external lod/i });
     expect(scanBtn).toHaveClass("whitespace-nowrap");
     expect(scanBtn).toHaveAttribute("title", "Scan External LOD");
@@ -165,5 +178,17 @@ describe("SemanticLinks Component", () => {
     expect(deleteButtons.length).toBe(2);
     fireEvent.click(deleteButtons[0]);
     expect(mockDeleteMutate).toHaveBeenCalledWith(101, expect.any(Object));
+  });
+
+  it("renders compact borderless layout when compact=true", () => {
+    vi.mocked(hooks.useSemanticLinks).mockReturnValue({
+      data: { links: [], total: 0, grouped: {}, manifestation_id: 3 },
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useSemanticLinks>);
+
+    render(<SemanticLinks manifestationId={3} canEdit={true} compact={true} />);
+    expect(screen.getByTestId("semantic-links-compact")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scan External LOD/i })).toBeInTheDocument();
+    expect(screen.getByText("No external Linked Open Data authorities linked yet.")).toBeInTheDocument();
   });
 });

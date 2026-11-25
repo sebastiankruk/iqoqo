@@ -32,6 +32,7 @@ interface MobileFilterDrawerProps {
   statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
   categoryCounts?: Record<string, number>;
+  expressionKindCounts?: Record<string, number>;
   viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
   isLoggedIn?: boolean;
   isCurator?: boolean;
@@ -79,6 +80,7 @@ export function MobileFilterDrawer({
   statusCounts,
   formatCounts,
   categoryCounts,
+  expressionKindCounts,
   viewMode = "items",
   isLoggedIn = false,
   isCurator = false,
@@ -116,6 +118,7 @@ export function MobileFilterDrawer({
             statusCounts={statusCounts}
             formatCounts={formatCounts}
             categoryCounts={categoryCounts}
+            expressionKindCounts={expressionKindCounts}
             viewMode={viewMode}
             isLoggedIn={isLoggedIn}
             isCurator={isCurator}
