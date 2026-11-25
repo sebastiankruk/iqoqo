@@ -152,4 +152,44 @@ describe("useInfiniteManifestations", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.hasNextPage).toBe(false);
   });
+
+  it("forwards sort param to /manifestations", async () => {
+    (apiClient.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        data: [],
+        meta: { page: 1, pages: 1, total: 0 },
+      },
+    });
+
+    renderHook(
+      () =>
+        useInfiniteManifestations(
+          20,
+          undefined,
+          true,
+          undefined,
+          undefined,
+          false,
+          false,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          false,
+          undefined,
+          "added"
+        ),
+      { wrapper: Wrapper }
+    );
+
+    await waitFor(() => {
+      expect(apiClient.get).toHaveBeenCalledWith("/manifestations", {
+        params: expect.objectContaining({ page: 1, limit: 20, sort: "added" }),
+      });
+    });
+  });
 });

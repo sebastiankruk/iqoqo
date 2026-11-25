@@ -353,7 +353,8 @@ function CollectionContent() {
     lodAuthorityFilter,
     lodStatusFilter,
     hasMapActive,
-    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined
+    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined,
+    sortBy
   );
 
   const {

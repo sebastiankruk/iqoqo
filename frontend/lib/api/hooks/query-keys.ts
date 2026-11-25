@@ -91,7 +91,8 @@ export const queryKeys = {
     genres?: string[],
     publishers?: string[],
     statuses?: string[],
-    ownership?: string[]
+    ownership?: string[],
+    sort?: string
   ) =>
     [
       "manifestations",
@@ -106,6 +107,7 @@ export const queryKeys = {
       publishers?.join(",") ?? "",
       statuses?.join(",") ?? "",
       ownership?.join(",") ?? "",
+      sort ?? "",
     ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
   work: (id: number) => ["work", id] as const,

@@ -326,7 +326,8 @@ export function useInfiniteManifestations(
   lodAuthority?: string,
   lodStatus?: string,
   hasMap?: boolean,
-  expressionKind?: string
+  expressionKind?: string,
+  sort?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -341,7 +342,8 @@ export function useInfiniteManifestations(
         genres,
         publishers,
         statuses,
-        ownership
+        ownership,
+        sort
       ),
       "infinite",
       missingCover,
@@ -356,6 +358,7 @@ export function useInfiniteManifestations(
     queryFn: async ({ pageParam = 1 }) => {
       const params: Record<string, string | number | boolean> = { page: pageParam, limit };
       if (query && query.length > 0) params.q = query;
+      if (sort) params.sort = sort;
       if (category) params.category = category;
       if (expressionKind) params.expression_kind = expressionKind;
       if (formatFilter) params.format = formatFilter;

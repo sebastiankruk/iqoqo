@@ -112,6 +112,35 @@ def _resolve_manifestation_display_author(m: Manifestation) -> list[str]:
     return []
 
 
+def _manifestation_order_clauses(sort_by: str, user_id: Any) -> tuple[Any, ...]:
+    """Build SQLAlchemy ORDER BY clauses for manifestation listings.
+
+    When an authenticated caller browses by ``added`` or ``updated`` (default),
+    manifestations for which the caller recently added or updated a copy bubble
+    to the top, followed by remaining catalog entries in descending ID order.
+    """
+    if sort_by == "title":
+        return (func.lower(Work.title).asc(), Manifestation.id.desc())
+    if sort_by == "title-desc":
+        return (func.lower(Work.title).desc(), Manifestation.id.desc())
+    if sort_by == "author":
+        return (func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc(), Manifestation.id.desc())
+    if sort_by == "newest":
+        return (Manifestation.id.desc(),)
+
+    if user_id is not None:
+        ts_expr = func.max(Item.added_at) if sort_by == "added" else func.max(func.coalesce(Item.updated_at, Item.added_at))
+        latest_copy_subq = (
+            select(ts_expr)
+            .where(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id)
+            .correlate(Manifestation)
+            .scalar_subquery()
+        )
+        return (latest_copy_subq.desc().nulls_last(), Manifestation.id.desc())
+
+    return (Manifestation.id.desc(),)
+
+
 @api_bp.route("/manifestations", methods=["GET"])
 @optional_auth
 def get_manifestations() -> tuple[Response, int]:
@@ -254,23 +283,25 @@ def get_manifestations() -> tuple[Response, int]:
             has_map=has_map,
         )
 
+    if use_cursor:
         query = query.order_by(Manifestation.id.desc())
-        if use_cursor:
-            # CURSOR_START is the sentinel for "no lower bound yet".
-            if cursor_id > CURSOR_START:
-                query = query.filter(Manifestation.id < cursor_id)
-            # Fetch one extra row to detect whether a further page exists
-            # without a COUNT query.
-            rows = query.limit(limit + 1).all()
-            has_more = len(rows) > limit
-            manifestations = rows[:limit]
-            next_cursor = encode_manifestation_cursor(manifestations[-1].id) if has_more and manifestations else None
-            total = None
-        else:
-            total = query.count()
-            manifestations = query.offset(offset).limit(limit).all()
-            next_cursor = None
-            has_more = False
+        # CURSOR_START is the sentinel for "no lower bound yet".
+        if cursor_id > CURSOR_START:
+            query = query.filter(Manifestation.id < cursor_id)
+        # Fetch one extra row to detect whether a further page exists
+        # without a COUNT query.
+        rows = query.limit(limit + 1).all()
+        has_more = len(rows) > limit
+        manifestations = rows[:limit]
+        next_cursor = encode_manifestation_cursor(manifestations[-1].id) if has_more and manifestations else None
+        total = None
+    else:
+        sort_by = request.args.get("sort", "updated")
+        query = query.order_by(*_manifestation_order_clauses(sort_by, user_id))
+        total = query.count()
+        manifestations = query.offset(offset).limit(limit).all()
+        next_cursor = None
+        has_more = False
 
     owned_manifestation_map = {}
     if user_id and manifestations:
@@ -553,18 +584,22 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
 
 @api_bp.route("/manifestations/recent", methods=["GET"])
+@optional_auth
 def get_recent_manifestations() -> tuple[Response, int]:
     """Return the most recently added manifestations for the caller.
 
     Used by the dashboard. Scoped to the caller's own library."""
     try:
+        user_id = getattr(g, "user_id", None)
         limit = request.args.get("limit", 10, type=int)
 
         recent = (
             db.session.execute(
                 select(Manifestation)
+                .join(Expression)
+                .join(Work)
                 .options(selectinload(Manifestation.expression).selectinload(Expression.work))
-                .order_by(Manifestation.id.desc())
+                .order_by(*_manifestation_order_clauses("added", user_id))
                 .limit(limit)
             )
             .scalars()
