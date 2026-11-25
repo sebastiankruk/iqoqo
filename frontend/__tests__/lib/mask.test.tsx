@@ -48,6 +48,7 @@ import { getInstanceSettings, revealSettingValue } from "@/lib/api/admin";
 
 vi.mock("@/lib/api/admin", () => ({
   getInstanceSettings: vi.fn(),
+  getSystemStatus: vi.fn().mockResolvedValue(undefined),
   updateInstanceSettings: vi.fn().mockResolvedValue(undefined),
   revealSettingValue: vi.fn(),
 }));
