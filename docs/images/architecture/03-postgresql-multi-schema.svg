@@ -16,7 +16,7 @@
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
 <svg id="svg-bp3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp3-title bp3-desc">
-            <title id="bp3-title">iqoqo v1.1.2 — PostgreSQL 18 Multi-Schema Physical Database &amp; Merge Integrity (Blueprint 3)</title>
+            <title id="bp3-title">iqoqo v1.2.0 — PostgreSQL 18 Multi-Schema Physical Database &amp; Merge Integrity (Blueprint 3)</title>
             <desc id="bp3-desc">Physical ER and schema boundary diagram for PostgreSQL 18 showing auth, catalog, inventory, social, public, and config schemas alongside the frbr_merge.py consolidation map.</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
@@ -96,7 +96,7 @@
             <rect x="0" y="0" width="1440" height="980" fill="url(#b3-grid)"/>
 
             <!-- Header -->
-            <text x="32" y="38" class="title-text">iqoqo v1.1.2 — PostgreSQL 18 Multi-Schema Database &amp; Merge Integrity</text>
+            <text x="32" y="38" class="title-text">iqoqo v1.2.0 — PostgreSQL 18 Multi-Schema Database &amp; Merge Integrity</text>
             <text x="32" y="60" class="subtitle-text">Blueprint 3 of 12  •  Schema Partitioning (auth, catalog, inventory, social, public), GIN FTS &amp; frbr_merge.py</text>
             <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
             <text x="1280" y="39" text-anchor="middle" class="header-pill-text">Physical ER / Schema Boundaries</text>

@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp6-title bp6-desc">
             <title id="bp6-title">Blueprint 6 — Three-Tier Privacy Gate, Bulk Visibility &amp; Shared Collection Access Matrix</title>
-            <desc id="bp6-desc">Access control and visibility matrix diagram for iqoqo v1.1.2 showing private, friends_only, and public item states, three mutation paths including bulk visibility fan-out, and the SharedCollection visibility_scope evaluation table with Friend Bonus.</desc>
+            <desc id="bp6-desc">Access control and visibility matrix diagram for iqoqo v1.2.0 showing private, friends_only, and public item states, three mutation paths including bulk visibility fan-out, and the SharedCollection visibility_scope evaluation table with Friend Bonus.</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
               .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -102,7 +102,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title-text">Blueprint 6 — Three-Tier Privacy Gate, Bulk Visibility &amp; Shared Collection Access Matrix</text>
-            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.2  •  Item Visibility States, BOLA Guards, Atomic Bulk Mutations &amp; SharedCollection Friend Bonus Evaluation</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.2.0  •  Item Visibility States, BOLA Guards, Atomic Bulk Mutations &amp; SharedCollection Friend Bonus Evaluation</text>
             <rect x="1184" y="16" width="224" height="32" rx="8" class="header-pill-bg"/>
             <text x="1296" y="36" text-anchor="middle" class="header-pill-text">Access Control &amp; Privacy Matrix</text>
 

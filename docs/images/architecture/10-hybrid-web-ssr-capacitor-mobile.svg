@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="1440" height="960" role="img" aria-labelledby="bp10-title bp10-desc">
             <title id="bp10-title">10 · Hybrid Web SSR &amp; Capacitor 7 Native Mobile Architecture</title>
-            <desc id="bp10-desc">Modern Athenaeum dual-target build diagram for iqoqo v1.1.2 showing the shared frontend mono-repo branching into Target A Web SSR Docker and Target B Capacitor 7 Native Mobile with _placeholder routing, deep-link OAuth, secure storage, and offline cache resilience.</desc>
+            <desc id="bp10-desc">Modern Athenaeum dual-target build diagram for iqoqo v1.2.0 showing the shared frontend mono-repo branching into Target A Web SSR Docker and Target B Capacitor 7 Native Mobile with _placeholder routing, deep-link OAuth, secure storage, and offline cache resilience.</desc>
             <style>
               .bg { fill: #FDFBF7; }
               .title { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -92,7 +92,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title">10 · Hybrid Web SSR &amp; Capacitor 7 Native Mobile Architecture</text>
-            <text x="32" y="57" class="sub">iqoqo v1.1.2  •  Dual-Target Mono-Repo Build, _placeholder Native Flight Routing, Deep-Link OAuth &amp; Offline Resilience</text>
+            <text x="32" y="57" class="sub">iqoqo v1.2.0  •  Dual-Target Mono-Repo Build, _placeholder Native Flight Routing, Deep-Link OAuth &amp; Offline Resilience</text>
             <rect x="1174" y="16" width="234" height="32" rx="8" class="hdr-pill"/>
             <text x="1291" y="36" text-anchor="middle" class="hdr-pill-txt">Dual-Target Build &amp; Mobile</text>
 

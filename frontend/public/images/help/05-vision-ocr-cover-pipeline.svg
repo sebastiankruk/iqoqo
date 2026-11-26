@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp5-title bp5-desc">
             <title id="bp5-title">Blueprint 5 — 50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall &amp; 7-Tier Cover Pipeline</title>
-            <desc id="bp5-desc">Two-band architecture diagram for iqoqo v1.1.2 showing Sub-Pipeline A (client 50MP downscaling, 100MP pixel bomb guard, 3-tier Gemini/Ollama/Tesseract waterfall, LLMTelemetry audit) and Sub-Pipeline B (7-tier manifestation cover acquisition and perceptual hash junk rejection).</desc>
+            <desc id="bp5-desc">Two-band architecture diagram for iqoqo v1.2.0 showing Sub-Pipeline A (client 50MP downscaling, 100MP pixel bomb guard, 3-tier Gemini/Ollama/Tesseract waterfall, LLMTelemetry audit) and Sub-Pipeline B (7-tier manifestation cover acquisition and perceptual hash junk rejection).</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
               .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -102,7 +102,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title-text">Blueprint 5 — 50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall &amp; 7-Tier Cover Pipeline</text>
-            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.2  •  Client Pre-Resize, Pixel Bomb Guard, Multimodal Extraction, LLMTelemetry &amp; Perceptual Hash Filtering</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.2.0  •  Client Pre-Resize, Pixel Bomb Guard, Multimodal Extraction, LLMTelemetry &amp; Perceptual Hash Filtering</text>
             <rect x="1184" y="16" width="224" height="32" rx="8" class="header-pill-bg"/>
             <text x="1296" y="36" text-anchor="middle" class="header-pill-text">Multi-Stage Fallback Pipeline</text>
 
