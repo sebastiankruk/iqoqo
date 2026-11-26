@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Preview Clone Re-Encryption Key Propagation & `APP_VERSION` Tag Parity (C155)**:
+  - Extended `scripts/reconcile_preview_settings.py --dotenv-stdin` to pop an optional framed `__IQOQO_SRC_SECRET_KEY__=` first-line stdin header without persisting it to disk, argv, env, or DB, and to emit a `⚠️ Encrypted settings partially reconciled (..., preserved undecryptable: N)` warning whenever undecryptable rows remain.
+  - Updated `Makefile` (`start` prebuilt preview, `preview-reconcile`, and `monitoring-reset-auth`) to default `SKIP_CLONE` to `0`, propagate optional `SRC_SECRET_KEY`/`SRC_LOC` via pure-shell `printf` stdin framing without host `python3` or `2>/dev/null`, force-recreate `web`/`worker`, and preserve running `web` container `APP_VERSION` tags.
+  - Updated `scripts/clone.sh` preview follow-up instructions to include exact `SRC_LOC`, `SRC_NAME`, optional `SRC_HOST`, and `SKIP_CLONE=0`.
 - **ISBN Lookup Wall-Clock Budget & Scanner Timeout Parity (C154)**:
   - Added configurable `max_retries` to `_make_session()` and provider outcome helpers in `app/utils/isbn.py`, enforced `max_retries=0` and minimum viable budget checks (`_MIN_ENRICHMENT_BUDGET = 1.0s`) for optional secondary gap-filling, and reserved viable read timeout budget (`>= 1.5s`) for Biblioteka Narodowa on Polish ISBNs.
   - Exported `API_TIMEOUT_MS = 15_000` from `frontend/lib/api/client.ts` and aligned `BottomSheet` and `/scan` quick-lookup `Promise.race` timeouts with `AbortController` cancellation so valid in-flight lookups are not dropped at 10s.

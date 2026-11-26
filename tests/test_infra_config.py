@@ -403,8 +403,10 @@ exit 0
         self.assertIn("exit 1", iqopretest)
         self.assertIn('DEPLOY_DIR="$DST_LOC" make status preview', iqopretest)
         self.assertIn("make preview-reconcile", iqopretest)
+        self.assertIn('SKIP_CLONE="1"', iqopretest)
         makefile_text = (self.repo_root / "Makefile").read_text()
         self.assertIn("reconcile_preview_settings.py", makefile_text)
+        self.assertIn("__IQOQO_SRC_SECRET_KEY__=", makefile_text)
 
 
 if __name__ == "__main__":

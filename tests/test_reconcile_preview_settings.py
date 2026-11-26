@@ -160,3 +160,64 @@ def test_reconcile_main_stdin_never_leaks_secrets(app, monkeypatch, capsys):
     assert secret_val not in captured.out
     assert src_key not in captured.out
     assert secret_val not in captured.err
+
+
+def test_main_dotenv_stdin_framed_src_secret_reencrypts_without_persisting_header(app, monkeypatch, capsys):
+    """--dotenv-stdin pops __IQOQO_SRC_SECRET_KEY__= header, re-encrypts, and never stores the header."""
+    import io
+
+    from scripts.reconcile_preview_settings import main as reconcile_main
+
+    src_key = secrets.token_hex(32)
+    dst_key = app.config["SECRET_KEY"]
+    secret_val = "sk-reencrypt-via-stdin-frame"
+
+    with app.app_context():
+        row = InstanceSettings(key="GEMINI_API_KEY", value=_encrypt_with_secret(src_key, secret_val))
+        db.session.add(row)
+        db.session.commit()
+
+    stdin_payload = f"__IQOQO_SRC_SECRET_KEY__={src_key}\nGOOGLE_CLIENT_ID=new-gid\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(stdin_payload))
+    monkeypatch.setattr("scripts.reconcile_preview_settings.create_app", lambda: app)
+    monkeypatch.delenv("SRC_SECRET_KEY", raising=False)
+
+    rc = reconcile_main(["--dotenv-stdin"])
+    assert rc == 0
+
+    captured = capsys.readouterr()
+    assert "✅ Encrypted settings reconciled (re-encrypted: 1," in captured.out
+    assert src_key not in captured.out
+    assert secret_val not in captured.out
+
+    with app.app_context():
+        assert InstanceSettings.get_value("GEMINI_API_KEY") == secret_val
+        assert InstanceSettings.get_value("__IQOQO_SRC_SECRET_KEY__") is None
+        row = db.session.execute(db.select(InstanceSettings).filter_by(key="GEMINI_API_KEY")).scalar_one()
+        assert isinstance(row.value, dict)
+        assert row.value.get("_encrypted") is True
+        assert json.loads(build_fernet_cipher(dst_key).decrypt(row.value["ciphertext"].encode()).decode()) == secret_val
+
+
+def test_main_dotenv_stdin_warns_when_undecryptable_rows_preserved(app, monkeypatch, capsys):
+    """Empty framed header preserves undecryptable rows and emits partial-reconcile warning."""
+    import io
+
+    from scripts.reconcile_preview_settings import main as reconcile_main
+
+    unknown_key = secrets.token_hex(32)
+    with app.app_context():
+        row = InstanceSettings(key="TMDB_API_KEY", value=_encrypt_with_secret(unknown_key, "tmdb-val"))
+        db.session.add(row)
+        db.session.commit()
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("__IQOQO_SRC_SECRET_KEY__=\nGOOGLE_CLIENT_ID=gid\n"))
+    monkeypatch.setattr("scripts.reconcile_preview_settings.create_app", lambda: app)
+    monkeypatch.delenv("SRC_SECRET_KEY", raising=False)
+
+    rc = reconcile_main(["--dotenv-stdin"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "⚠️ Encrypted settings partially reconciled" in out
+    assert "preserved undecryptable: 1" in out
+    assert "--purge-undecryptable" in out
