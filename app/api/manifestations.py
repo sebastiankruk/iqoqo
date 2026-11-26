@@ -1074,6 +1074,134 @@ def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
     )
 
 
+def _month_bucket_expr(dialect_name: str, column: Any) -> Any:
+    """Return a dialect-portable YYYY-MM SQL expression for grouping timestamps by month."""
+    if dialect_name == "postgresql":
+        return func.to_char(column, "YYYY-MM")
+    return func.strftime("%Y-%m", column)
+
+
+_ACTIVE_READER_STATUSES = ("reading", "read", "listening", "listened", "watching", "watched", "playing", "played", "building", "built")
+_COMPLETED_STATUSES = ("read", "listened", "watched", "played", "built")
+
+
+def _compute_manifestation_stats(manifestation_id: int) -> dict[str, Any]:
+    """Compute anonymized, visibility-safe GROUP BY reading and popularity stats for a Manifestation."""
+    from app.db.core import ItemStatusLog
+
+    bind = db.session.get_bind()
+    dialect_name = bind.dialect.name if bind is not None else "sqlite"
+    public_filter = (
+        Item.manifestation_id == manifestation_id,
+        Item.is_hidden.is_(False),
+        Item.visibility == "public",
+    )
+
+    # 1. Status distribution via single GROUP BY
+    status_rows = db.session.execute(
+        select(Item.status, func.count(Item.id).label("cnt")).where(*public_filter).group_by(Item.status)  # pylint: disable=not-callable
+    ).all()
+
+    total_items = 0
+    reader_count = 0
+    completed_count = 0
+    for st, cnt in status_rows:
+        total_items += cnt
+        if st in _ACTIVE_READER_STATUSES:
+            reader_count += cnt
+        if st in _COMPLETED_STATUSES:
+            completed_count += cnt
+
+    # 2. Average session minutes across public items
+    if dialect_name == "postgresql":
+        minutes_expr = db.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
+    else:
+        minutes_expr = db.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+
+    avg_minutes_raw = db.session.execute(
+        select(func.avg(minutes_expr)).where(
+            *public_filter,
+            minutes_expr.isnot(None),
+            minutes_expr > 0,
+        )
+    ).scalar()
+    avg_session_minutes = round(float(avg_minutes_raw), 1) if avg_minutes_raw is not None else None
+
+    # 3. Average elapsed reading days via single GROUP BY over ItemStatusLog
+    log_span_rows = db.session.execute(
+        select(
+            ItemStatusLog.item_id,
+            func.min(db.case((ItemStatusLog.new_status.in_(("reading", "currently_reading")), ItemStatusLog.changed_at))).label(
+                "started_at"
+            ),
+            func.max(db.case((ItemStatusLog.new_status.in_(_COMPLETED_STATUSES), ItemStatusLog.changed_at))).label("finished_at"),
+        )
+        .join(Item, ItemStatusLog.item_id == Item.id)
+        .where(*public_filter)
+        .group_by(ItemStatusLog.item_id)
+    ).all()
+
+    elapsed_days_list = [
+        max(0, (row.finished_at - row.started_at).days)
+        for row in log_span_rows
+        if row.started_at is not None and row.finished_at is not None and row.finished_at >= row.started_at
+    ]
+    avg_reading_days = round(sum(elapsed_days_list) / len(elapsed_days_list), 1) if elapsed_days_list else None
+
+    # 4. Monthly popularity over time via GROUP BY
+    added_month_expr = _month_bucket_expr(dialect_name, Item.added_at)
+    added_rows = db.session.execute(
+        select(added_month_expr.label("month"), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
+        .where(*public_filter, Item.added_at.isnot(None))
+        .group_by(added_month_expr)
+    ).all()
+
+    completed_month_expr = _month_bucket_expr(dialect_name, ItemStatusLog.changed_at)
+    completed_rows = db.session.execute(
+        select(
+            completed_month_expr.label("month"), func.count(func.distinct(ItemStatusLog.item_id)).label("cnt")
+        )  # pylint: disable=not-callable
+        .join(Item, ItemStatusLog.item_id == Item.id)
+        .where(*public_filter, ItemStatusLog.new_status.in_(_COMPLETED_STATUSES), ItemStatusLog.changed_at.isnot(None))
+        .group_by(completed_month_expr)
+    ).all()
+
+    monthly: dict[str, dict[str, int]] = {}
+    for row in added_rows:
+        if row.month:
+            monthly.setdefault(row.month, {"added_count": 0, "completed_count": 0})["added_count"] = int(row.cnt)
+    for row in completed_rows:
+        if row.month:
+            monthly.setdefault(row.month, {"added_count": 0, "completed_count": 0})["completed_count"] = int(row.cnt)
+
+    popularity_over_time = [
+        {"month": m, "added_count": vals["added_count"], "completed_count": vals["completed_count"]}
+        for m, vals in sorted(monthly.items())[-12:]
+    ]
+
+    return {
+        "manifestation_id": manifestation_id,
+        "total_items": total_items,
+        "reader_count": reader_count,
+        "completed_count": completed_count,
+        "avg_session_minutes": avg_session_minutes,
+        "avg_reading_days": avg_reading_days,
+        "popularity_over_time": popularity_over_time,
+    }
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/stats", methods=["GET"])
+@optional_auth
+def get_manifestation_stats(manifestation_id: int) -> tuple[Response, int]:
+    """Return anonymized GROUP BY reading statistics and popularity over time for a manifestation."""
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    stats = _compute_manifestation_stats(manifestation_id)
+    return jsonify({"success": True, "data": stats, "error": None}), 200
+
+
 @api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)

@@ -211,7 +211,16 @@
     "audiobook": "Audiobook",
     "concert": "Concert",
     "seriesSuffix": "{label} (Series)",
-    "onWishlist": "On Wishlist"
+    "onWishlist": "On Wishlist",
+    "contributedCovers": "Contributed Covers",
+    "closePreview": "Close cover preview",
+    "readStatsTitle": "Reading Activity & Popularity",
+    "readStatsEmpty": "No community reading activity recorded yet.",
+    "statReaders": "Readers",
+    "statCompleted": "Completed",
+    "statAvgMinutes": "Avg. Session",
+    "statAvgDays": "Avg. Days",
+    "popularityOverTime": "Popularity Over Time"
   },
   "WorkRollup": {
     "statusRead": "Read",

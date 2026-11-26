@@ -211,7 +211,16 @@
     "audiobook": "Audiobook",
     "concert": "Koncert",
     "seriesSuffix": "{label} (seria)",
-    "onWishlist": "Na liście życzeń"
+    "onWishlist": "Na liście życzeń",
+    "contributedCovers": "Przesłane okładki",
+    "closePreview": "Zamknij podgląd okładki",
+    "readStatsTitle": "Aktywność czytelnicza i popularność",
+    "readStatsEmpty": "Brak zarejestrowanej aktywności czytelniczej społeczności.",
+    "statReaders": "Czytelnicy",
+    "statCompleted": "Ukończone",
+    "statAvgMinutes": "Śr. sesja",
+    "statAvgDays": "Śr. dni",
+    "popularityOverTime": "Popularność w czasie"
   },
   "WorkRollup": {
     "statusRead": "Przeczytano",

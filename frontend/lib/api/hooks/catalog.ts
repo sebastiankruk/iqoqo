@@ -32,6 +32,8 @@ import type {
   CatalogGraphData,
   GraphAnchorEntityType,
   GraphRootSearchResult,
+  ManifestationImage,
+  ManifestationStats,
 } from "@/types/frbr";
 
 import { queryKeys } from "./query-keys";
@@ -409,6 +411,40 @@ export function useManifestation(id: number, initialData?: CatalogEntry | null) 
     // SSR initialData is fetched unauthenticated, so mark it stale immediately
     // to trigger an authenticated client fetch for user_owns / wishlist_item_id.
     initialDataUpdatedAt: initialData ? 0 : undefined,
+  });
+}
+
+/**
+ * Fetch community-contributed cover and edition scan images for a Manifestation.
+ *
+ * @param id - The Manifestation ID
+ * @returns Query result containing ManifestationImage array
+ */
+export function useManifestationImages(id: number) {
+  return useQuery({
+    queryKey: ["manifestation-images", id],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ManifestationImage[]>>(`/manifestations/${id}/images`);
+      return res.data?.data ?? [];
+    },
+    enabled: id > 0,
+  });
+}
+
+/**
+ * Fetch anonymized reading statistics and monthly popularity over time for a Manifestation.
+ *
+ * @param id - The Manifestation ID
+ * @returns Query result containing ManifestationStats
+ */
+export function useManifestationStats(id: number) {
+  return useQuery({
+    queryKey: ["manifestation-stats", id],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ManifestationStats>>(`/manifestations/${id}/stats`);
+      return res.data?.data ?? null;
+    },
+    enabled: id > 0,
   });
 }
 

@@ -49,6 +49,8 @@ import { useRouter } from "next/navigation";
 import { FRBRFeedback } from "@/components/social/frbr-feedback";
 import { ExtendedMetadata } from "@/components/item/extended-metadata";
 import { CoverProvenance } from "@/components/cover/cover-provenance";
+import { ManifestationCoversGallery } from "@/components/manifestation/manifestation-covers-gallery";
+import { ManifestationStatsCard } from "@/components/manifestation/manifestation-stats-card";
 import { SemanticLinks } from "@/components/manifestation/semantic-links";
 import { TagCloud } from "@/components/ui/tag-cloud";
 import { WorkRollupBadge } from "@/components/work/work-rollup-badge";
@@ -323,6 +325,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             <div className="mt-2.5 flex justify-center">
               <CoverProvenance source={manifestation.meta?.["cover_source"] as string | undefined} />
             </div>
+            <ManifestationCoversGallery manifestationId={manifestation.id} primaryCoverUrl={coverUrl} />
             {!coverUrl && (
               <div className="mt-4">
                 <CoverUploadPicker
@@ -743,6 +746,9 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             />
           </div>
         </div>
+
+        {/* Reading Activity & Popularity */}
+        <ManifestationStatsCard manifestationId={manifestation.id} />
 
         {/* Reviews Section */}
         <ManifestationReviews manifestation={manifestation} />

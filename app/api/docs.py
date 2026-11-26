@@ -714,6 +714,50 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                     op_params = operation.setdefault("parameters", [])
                     if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
                         op_params.append(expr_kind_param)
+                elif (
+                    openapi_path in ("/api/manifestations/{manifestation_id}/stats", "/api/v1/manifestations/{manifestation_id}/stats")
+                    and method == "get"
+                ):
+                    operation.setdefault("responses", {}).setdefault(
+                        "200",
+                        {
+                            "description": "Anonymized manifestation reading statistics and monthly popularity buckets.",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "manifestation_id": {"type": "integer"},
+                                            "total_items": {"type": "integer"},
+                                            "reader_count": {"type": "integer"},
+                                            "completed_count": {"type": "integer"},
+                                            "avg_reading_days": {"type": ["number", "null"]},
+                                            "avg_session_minutes": {"type": ["number", "null"]},
+                                            "popularity_over_time": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "month": {"type": "string"},
+                                                        "added_count": {"type": "integer"},
+                                                        "completed_count": {"type": "integer"},
+                                                    },
+                                                    "required": ["month", "added_count", "completed_count"],
+                                                },
+                                            },
+                                        },
+                                        "required": [
+                                            "manifestation_id",
+                                            "total_items",
+                                            "reader_count",
+                                            "completed_count",
+                                            "popularity_over_time",
+                                        ],
+                                    }
+                                }
+                            },
+                        },
+                    )
                 elif openapi_path in ("/api/items/bulk-location", "/api/v1/items/bulk-location") and method == "patch":
                     if not operation.get("requestBody"):
                         operation["requestBody"] = {

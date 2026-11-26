@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Manifestation Contributed Covers Gallery, Anonymized Read Stats & Popularity Timeline (C158)**:
+  - Added dialect-aware `GROUP BY` analytics helper `_compute_manifestation_stats()` and `GET /api/manifestations/<id>/stats` (with OpenAPI 3.1 contract in `app/api/docs.py`), returning `total_items`, `reader_count`, `completed_count`, `avg_reading_days`, `avg_session_minutes`, and monthly `popularity_over_time` buckets with zero PII or private `Item`/session note exposure.
+  - Added `useManifestationImages` / `useManifestationStats` hooks (`ManifestationImage`, `ManifestationStats`), `ManifestationCoversGallery` (primary cover deduplication, provenance badges, lightbox preview), and `ManifestationStatsCard` (KPI summary + responsive popularity timeline + graceful empty state) to `ManifestationDetailClient` with `en.json` and `pl.json` translations.
 - **Physical Item Location Tagging, Bulk Update & Filtering (C157)**:
   - Added `Item.physical_location` (`inventory.items`, linear Alembic migration `v1_2_0_item_physical_location`), owner/admin-gated API serialization, `PATCH /api/items/<id>` & `PATCH /api/items/bulk-location` (`WRITE_ITEM`, `FEDERATION_HEAD_MODE`, strict ownership `403` check), SQL-paginated `?location=...` filtering across `GET /api/items` & `SearchService`, owner-scoped `location_counts` in `GET /api/stats/facets`, and owner-authorized `iqoqo:physicalLocation` / `schema:location` RDF/JSON-LD triples (`enrichment_profile="full"`).
   - Added structured Physical Location editing & one-click folksonomy tag promotion in `TaxonomyEditor`, `EditItemDialog` field, `BulkItemVisibilityToolbar` bulk location popover, and `/collection` `location` facet filtering.

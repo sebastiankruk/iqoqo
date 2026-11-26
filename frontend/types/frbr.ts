@@ -542,6 +542,33 @@ export type FacetStatsResponse = {
   borrowed_count?: number;
 };
 
+/** Community-contributed cover or supplementary image attached to a Manifestation (F3). */
+export type ManifestationImage = {
+  id: number;
+  url: string;
+  label: string;
+  source?: string | null;
+  added_at: string | null;
+};
+
+/** Monthly anonymized popularity bucket for a Manifestation (F3). */
+export type ManifestationPopularityBucket = {
+  month: string;
+  added_count: number;
+  completed_count: number;
+};
+
+/** Anonymized reading statistics and popularity timeline for a Manifestation (F3). */
+export type ManifestationStats = {
+  manifestation_id: number;
+  total_items: number;
+  reader_count: number;
+  completed_count: number;
+  avg_reading_days: number | null;
+  avg_session_minutes: number | null;
+  popularity_over_time: ManifestationPopularityBucket[];
+};
+
 export type { BoardgameMechanic } from "./boardgame";
 
 /** Enriched target entity details returned with escalation requests. */
