@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Physical Item Location Tagging, Bulk Update & Filtering (C157)**:
+  - Added `Item.physical_location` (`inventory.items`, linear Alembic migration `v1_2_0_item_physical_location`), owner/admin-gated API serialization, `PATCH /api/items/<id>` & `PATCH /api/items/bulk-location` (`WRITE_ITEM`, `FEDERATION_HEAD_MODE`, strict ownership `403` check), SQL-paginated `?location=...` filtering across `GET /api/items` & `SearchService`, owner-scoped `location_counts` in `GET /api/stats/facets`, and owner-authorized `iqoqo:physicalLocation` / `schema:location` RDF/JSON-LD triples (`enrichment_profile="full"`).
+  - Added structured Physical Location editing & one-click folksonomy tag promotion in `TaxonomyEditor`, `EditItemDialog` field, `BulkItemVisibilityToolbar` bulk location popover, and `/collection` `location` facet filtering.
 - **Mobile Multi-Server Registry & Isolated Switching (C156)**:
   - Added `ServerProfile[]` multi-server storage (`iqoqo_servers_v1`, `iqoqo_active_server_id`) with automatic legacy single-server migration, per-server isolated `SecureStoragePlugin` auth tokens, and `serverId`-namespaced `offline-cache.ts` snapshots/queues.
   - Upgraded `ServerSelector` and `ServerSelectorModal` with saved-server switching, inline rename, and isolated removal, and wired the native mobile `Footer` connected-server indicator to open the quick switcher.

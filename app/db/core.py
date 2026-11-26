@@ -735,6 +735,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
     local_barcode = db.Column(db.String(64), nullable=True, index=True)
+    physical_location = db.Column(db.String(255), nullable=True, index=True)
 
     lent_to_user_id = db.Column(
         UUID(as_uuid=True),
@@ -814,10 +815,10 @@ class Item(db.Model):  # type: ignore[name-defined]
         self.is_hidden = not value
         self.visibility = "public" if value else "private"
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, include_location: bool = False) -> dict:
         """Serialize Item entity to dictionary."""
         effective_visibility = self.visibility or ("private" if self.is_hidden else "public")
-        return {
+        data = {
             "id": self.id,
             "manifestation_id": self.manifestation_id,
             "owner_id": str(self.owner_id) if self.owner_id else None,
@@ -834,6 +835,9 @@ class Item(db.Model):  # type: ignore[name-defined]
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "meta": self.meta or {},
         }
+        if include_location:
+            data["physical_location"] = self.physical_location
+        return data
 
 
 class UserWorkIntent(db.Model):  # type: ignore[name-defined]

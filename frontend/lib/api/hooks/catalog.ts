@@ -174,7 +174,8 @@ export function useInfiniteItems(
   scope?: "personal" | "friends" | "global",
   hasMap?: boolean,
   visibility?: string[],
-  expressionKind?: string
+  expressionKind?: string,
+  locations?: string[]
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -202,6 +203,7 @@ export function useInfiniteItems(
       hasMap,
       visibility,
       expressionKind,
+      locations,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -225,6 +227,7 @@ export function useInfiniteItems(
       if (lodStatus) params.lod_status = lodStatus;
       if (scope) params.scope = scope;
       if (visibility && visibility.length > 0) params.visibility = visibility.join(",");
+      if (locations && locations.length > 0) params.location = locations.join(",");
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },

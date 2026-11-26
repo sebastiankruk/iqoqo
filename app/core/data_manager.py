@@ -1246,6 +1246,7 @@ class DataManager:
         lod_authority: str | None = None,
         lod_status: str | None = None,
         has_map: bool = False,
+        locations: list[str] | None = None,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
@@ -1290,6 +1291,8 @@ class DataManager:
             cache_params["expression_kind"] = expression_kind
         if has_map:
             cache_params["has_map"] = True
+        if locations:
+            cache_params["locations"] = sorted(locations)
         if scope != "own":
             cache_params["scope"] = scope
         cache_key = normalize_facet_cache_key(cache_params, owner_id)
@@ -1326,6 +1329,7 @@ class DataManager:
             lod_authority=lod_authority,
             lod_status=lod_status,
             has_map=has_map,
+            locations=locations,
             scope=scope,
             friend_ids=friend_ids,
         )
@@ -1352,6 +1356,7 @@ class DataManager:
         lod_authority: str | None = None,
         lod_status: str | None = None,
         has_map: bool = False,
+        locations: list[str] | None = None,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
@@ -1719,6 +1724,24 @@ class DataManager:
             tag_rows = db.session.execute(tag_query).all()
             tag_counts = {t: cnt for t, cnt in tag_rows if t}
 
+        # ── Physical location counts (owner-scoped only) ──────────────────
+        location_counts: dict[str, int] = {}
+        if owner_id and scope != "friends":
+            loc_query = (
+                select(Item.physical_location, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(
+                    Item.owner_id == owner_id,
+                    Item.physical_location.isnot(None),
+                    Item.physical_location != "",
+                    subq_filter_col.in_(select(tag_subq.c.id)),
+                )
+                .group_by(Item.physical_location)
+            )
+            loc_query = _join_full_chain(loc_query)
+            loc_rows = db.session.execute(loc_query).all()
+            location_counts = {loc: cnt for loc, cnt in loc_rows if loc}
+
         # ── Genre counts ──────────────────────────────────────────────────
         genre_counts: dict[str, int] = {}
         _is_pg = db.engine.dialect.name == "postgresql"
@@ -2019,6 +2042,7 @@ class DataManager:
             "status_counts": db_statuses,
             "collection_counts": collection_counts,
             "tag_counts": tag_counts,
+            "location_counts": location_counts,
             "genre_counts": genre_counts,
             "publisher_counts": publisher_counts,
             "lod_counts": lod_counts,

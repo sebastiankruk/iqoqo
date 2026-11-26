@@ -204,6 +204,7 @@ class ItemSearchFilters:
     scope: str = "personal"
     friend_ids: list[Any] | None = None
     visibility: list[str] | None = None
+    locations: list[str] | None = None
     excluded_formats: tuple[str, ...] | list[str] | None = None
     expression_kind: tuple[str, ...] | list[str] | None = None
 
@@ -663,6 +664,12 @@ class SearchService:
             else:
                 extra_filters_sql += " AND 1=0"
 
+        if filters.locations:
+            loc_tuple = tuple(str(loc).strip() for loc in filters.locations if str(loc).strip())
+            if loc_tuple:
+                params["location_filter"] = loc_tuple
+                extra_filters_sql += " AND i.owner_id = :user_id AND i.physical_location IN :location_filter"
+
         count_sql = f"""
         SELECT count(i.id) FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
@@ -751,6 +758,7 @@ class SearchService:
             scope,
             friend_ids,
             visibility,
+            locations,
             excluded_formats,
             expression_kind,
         ) = dataclasses.astuple(filters)
@@ -841,6 +849,11 @@ class SearchService:
 
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
+
+        if locations:
+            loc_list = [str(loc).strip() for loc in locations if str(loc).strip()]
+            if loc_list:
+                query = query.filter(Item.owner_id == user_id, Item.physical_location.in_(loc_list))
 
         if excluded_formats:
             excl_lower = [str(f).strip().lower() for f in excluded_formats if str(f).strip()]

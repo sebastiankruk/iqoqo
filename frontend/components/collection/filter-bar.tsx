@@ -40,6 +40,7 @@ export type FilterType =
   | "expression_kind"
   | "format"
   | "tag"
+  | "location"
   | "collection"
   | "genre"
   | "publisher"
@@ -113,6 +114,7 @@ export function chipLabel(filter: ActiveFilter): string {
     return `Format: ${label ?? filter.value.replace("_", " ")}`;
   }
   if (filter.type === "tag") return `Tag: ${filter.value}`;
+  if (filter.type === "location") return `Location: ${filter.value}`;
   if (filter.type === "collection") return `Collection: ${filter.value}`;
   if (filter.type === "genre") return `Genre: ${filter.value}`;
   if (filter.type === "publisher") return `Publisher: ${filter.value}`;
@@ -147,6 +149,8 @@ function chipColor(filter: ActiveFilter): string {
   if (filter.type === "format") return "bg-secondary text-secondary-foreground border-border";
   if (filter.type === "tag")
     return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20";
+  if (filter.type === "location")
+    return "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
   if (filter.type === "collection")
     return "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-500 dark:border-green-500/20";
   if (filter.type === "genre")

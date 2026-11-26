@@ -714,6 +714,31 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                     op_params = operation.setdefault("parameters", [])
                     if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
                         op_params.append(expr_kind_param)
+                elif openapi_path in ("/api/items/bulk-location", "/api/v1/items/bulk-location") and method == "patch":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "item_ids": {
+                                                "type": "array",
+                                                "items": {"type": "integer", "minimum": 1},
+                                                "minItems": 1,
+                                                "maxItems": 100,
+                                            },
+                                            "physical_location": {
+                                                "type": ["string", "null"],
+                                                "maxLength": 255,
+                                            },
+                                        },
+                                        "required": ["item_ids"],
+                                    }
+                                }
+                            },
+                        }
                 elif openapi_path in ("/api/items/bulk-visibility", "/api/v1/items/bulk-visibility") and method == "patch":
                     if not operation.get("requestBody"):
                         operation["requestBody"] = {

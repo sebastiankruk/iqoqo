@@ -269,6 +269,7 @@ export interface Item {
   collection_status: CollectionStatus;
   condition?: string | null;
   local_barcode?: string | null;
+  physical_location?: string | null;
   lent_to_user_id?: string | null;
   lent_to_name?: string | null;
   is_borrowed?: boolean;
@@ -534,6 +535,7 @@ export type FacetStatsResponse = {
   status_counts: Record<string, number>;
   collection_counts: Record<string, number>;
   tag_counts: Record<string, number>;
+  location_counts?: Record<string, number>;
   genre_counts: Record<string, number>;
   publisher_counts: Record<string, number>;
   lod_counts?: Record<string, number>;

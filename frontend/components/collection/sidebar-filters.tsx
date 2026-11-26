@@ -50,6 +50,7 @@ interface SidebarFiltersProps {
   missingId?: boolean;
   onChangeMissingId?: (checked: boolean) => void;
   tagCounts?: Record<string, number>;
+  locationCounts?: Record<string, number>;
   collectionCounts?: Record<string, number>;
   genreCounts?: Record<string, number>;
   publisherCounts?: Record<string, number>;
@@ -268,6 +269,7 @@ export function SidebarFilters({
   onChangeMissingId,
   missingId = false,
   tagCounts,
+  locationCounts,
   collectionCounts: collCountsFromProps,
   genreCounts,
   publisherCounts,
@@ -597,6 +599,19 @@ export function SidebarFilters({
           })()}
         </div>
       </AccordionSection>
+
+      {isLoggedIn && viewMode === "items" && Object.keys(locationCounts ?? {}).length > 0 && (
+        <AccordionSection title={t("secLocation") || "Physical Location"} defaultOpen={false}>
+          <SearchableFacet
+            options={Object.keys(locationCounts ?? {})}
+            activeFilters={activeFilters}
+            type="location"
+            onToggle={val => onToggleFilter({ type: "location", value: val })}
+            placeholder={t("searchLocations") || "Filter locations..."}
+            counts={locationCounts}
+          />
+        </AccordionSection>
+      )}
 
       {isLoggedIn && viewMode === "items" && (
         <AccordionSection title={t("secVisibility")}>

@@ -37,6 +37,7 @@ from app.api.federation_guard import reject_if_federation_head_item_write
 from app.api.filters import CatalogFilterBuilder, normalize_visibility_filter, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import (
+    BulkItemLocationSchema,
     BulkItemVisibilitySchema,
     ItemBulkCreateSchema,
     ItemCollectionLinkSchema,
@@ -288,6 +289,7 @@ def get_items():
     lod_authority = (request.args.get("lod_authority") or "").strip().lower()
     lod_status = (request.args.get("lod_status") or "").strip().lower()
     visibility_list = normalize_visibility_filter(parse_csv_param(request.args.get("visibility")))
+    location_list = parse_csv_param(request.args.get("location"))
 
     tags_list = parse_csv_param(tags_filter)
     collections_list = parse_csv_param(collections_filter)
@@ -335,6 +337,7 @@ def get_items():
             scope=scope,
             friend_ids=friend_ids_list,
             visibility=visibility_list,
+            locations=location_list,
         )
 
         for row in results:
@@ -425,6 +428,9 @@ def get_items():
             else:
                 stmt = stmt.where(Item.visibility.in_(visibility_list))
 
+        if location_list:
+            stmt = stmt.where(Item.owner_id == user_id, Item.physical_location.in_(location_list))
+
         needs_mfn_join = bool(
             category_list or expression_kind_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status
         )
@@ -514,6 +520,7 @@ def get_items():
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
                     "local_barcode": item.local_barcode,
+                    "physical_location": item.physical_location if is_owner else None,
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
                     "manifestation_id": item.manifestation_id,
@@ -617,6 +624,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "collection_status": item.collection_status,
         "condition": item.condition,
         "local_barcode": item.local_barcode,
+        "physical_location": item.physical_location if (is_owner or is_admin) else None,
         "visibility": item.visibility,
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
@@ -882,6 +890,10 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         item.lent_to_name = payload.lent_to_name
     if "local_barcode" in payload.model_fields_set:
         item.local_barcode = payload.local_barcode.strip() if (payload.local_barcode and payload.local_barcode.strip()) else None
+    if "physical_location" in payload.model_fields_set:
+        item.physical_location = (
+            payload.physical_location.strip() if (payload.physical_location and payload.physical_location.strip()) else None
+        )
     if "condition" in payload.model_fields_set:
         item.condition = payload.condition.strip() if (payload.condition and payload.condition.strip()) else None
     if payload.visibility is not None:
@@ -960,6 +972,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
                 "data": {
                     "id": item.id,
                     "local_barcode": item.local_barcode,
+                    "physical_location": item.physical_location,
                     "condition": item.condition,
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
@@ -2108,6 +2121,61 @@ def bulk_update_item_visibility() -> Response | tuple[Response, int]:
                 "data": {
                     "updated_count": len(items),
                     "visibility": payload.visibility,
+                    "item_ids": unique_ids,
+                },
+            }
+        ),
+        200,
+    )
+
+
+@api_bp.route("/items/bulk-location", methods=["PATCH"])
+@limiter.limit("30 per minute", override_defaults=True)
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+def bulk_update_item_location() -> Response | tuple[Response, int]:
+    """Update physical_location across a bounded batch of owned physical items (FRBR F5)."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    hub_guard = reject_if_federation_head_item_write()
+    if hub_guard is not None:
+        return hub_guard
+
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = BulkItemLocationSchema(**payload_json)
+    except ValidationError as exc:
+        return jsonify({"success": False, "data": None, "error": "Invalid payload", "details": str(exc)}), 400
+
+    unique_ids = list(dict.fromkeys(payload.item_ids))
+    all_found = db.session.execute(select(Item).where(Item.id.in_(unique_ids))).scalars().all()
+    if len(all_found) != len(unique_ids):
+        return jsonify({"success": False, "data": None, "error": "One or more items not found"}), 404
+
+    if any(str(item.owner_id) != str(user_id) for item in all_found):
+        return jsonify({"success": False, "data": None, "error": "Forbidden: you do not own all selected items"}), 403
+
+    for item in all_found:
+        item.physical_location = payload.physical_location
+
+    db.session.commit()
+    invalidate_facets_cache(user_id)
+
+    for item in all_found:
+        enqueue_fts_reindex("item", item.id)
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "updated_count": len(all_found),
+                    "physical_location": payload.physical_location,
                     "item_ids": unique_ids,
                 },
             }

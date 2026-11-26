@@ -16,7 +16,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Users, X, Loader2, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, Users, X, Loader2, ChevronDown, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -48,6 +48,8 @@ export function BulkItemVisibilityToolbar({
   const queryClient = useQueryClient();
   const [isUpdating, setIsUpdating] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationInput, setLocationInput] = useState("");
   const menuContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -96,6 +98,27 @@ export function BulkItemVisibilityToolbar({
       onSuccess?.();
     } catch {
       toast.error(t("bulkVisibilityError"));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleApplyLocation = async (nextLoc: string | null) => {
+    setLocationOpen(false);
+    setIsUpdating(true);
+    try {
+      await apiClient.patch("/items/bulk-location", {
+        item_ids: selectedItemIds,
+        physical_location: nextLoc,
+      });
+      toast.success(t("bulkLocationSuccess", { count: selectedItemIds.length }));
+      setLocationInput("");
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["facetStats"] });
+      onSuccess?.();
+    } catch {
+      toast.error(t("bulkLocationError"));
     } finally {
       setIsUpdating(false);
     }
@@ -155,6 +178,54 @@ export function BulkItemVisibilityToolbar({
                 <span>{label}</span>
               </button>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <button
+          type="button"
+          disabled={isUpdating}
+          onClick={() => {
+            setDropdownOpen(false);
+            setLocationOpen(prev => !prev);
+          }}
+          data-testid="bulk-location-trigger"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm hover:bg-muted disabled:opacity-60 transition-colors cursor-pointer whitespace-nowrap"
+        >
+          <MapPin className="h-3.5 w-3.5" />
+          <span>{t("bulkLocationLabel")}</span>
+        </button>
+
+        {locationOpen && !isUpdating && (
+          <div
+            data-testid="bulk-location-popover"
+            className="absolute bottom-full mb-2 left-0 w-64 rounded-xl border border-border bg-card p-3 shadow-xl z-50 space-y-2"
+          >
+            <input
+              type="text"
+              value={locationInput}
+              onChange={e => setLocationInput(e.target.value)}
+              placeholder={t("bulkLocationPlaceholder")}
+              className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs"
+            />
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleApplyLocation(null)}
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+              >
+                {t("bulkLocationClear")}
+              </button>
+              <button
+                type="button"
+                disabled={!locationInput.trim()}
+                onClick={() => handleApplyLocation(locationInput.trim())}
+                className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {t("bulkLocationApply")}
+              </button>
+            </div>
           </div>
         )}
       </div>

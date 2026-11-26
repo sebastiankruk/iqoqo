@@ -3313,6 +3313,7 @@ def build_collection_rdf_graph(
             collection_status = item.get("collection_status")
             condition = item.get("condition")
             local_barcode = item.get("local_barcode")
+            physical_location = item.get("physical_location") if enrichment_profile == "full" else None
             work_id = item.get("work_id", manifestation_id)
             content_type = item.get("content_type")
             expression_kind = item.get("expression_kind")
@@ -3336,6 +3337,7 @@ def build_collection_rdf_graph(
                 collection_status = getattr(item, "collection_status", None)
                 condition = getattr(item, "condition", None)
                 local_barcode = getattr(item, "local_barcode", None)
+                physical_location = getattr(item, "physical_location", None) if enrichment_profile == "full" else None
                 content_type = None
                 expression_kind = None
                 expression_meta: dict[str, Any] = {}
@@ -3499,6 +3501,7 @@ def build_collection_rdf_graph(
                 collection_status = getattr(item, "collection_status", None)
                 condition = getattr(item, "condition", None)
                 local_barcode = getattr(item, "local_barcode", None)
+                physical_location = getattr(item, "physical_location", None) if enrichment_profile == "full" else None
                 content_type = None
                 expression_kind = None
                 expression_meta = {}
@@ -3693,6 +3696,9 @@ def build_collection_rdf_graph(
                 g.add((i_uri, IQOQO.condition, Literal(condition)))
             if local_barcode:
                 g.add((i_uri, IQOQO.local_barcode, Literal(local_barcode)))
+            if physical_location:
+                g.add((i_uri, IQOQO.physicalLocation, Literal(physical_location)))
+                g.add((i_uri, SCHEMA.location, Literal(physical_location)))
 
             # LEGO Item attributes (F5)
             i_meta_dict: dict[str, Any] = {}

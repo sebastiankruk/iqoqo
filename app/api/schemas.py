@@ -160,6 +160,7 @@ class ItemUpdateSchema(BaseModel):
     collection_status: str | None = None
     condition: str | None = None
     local_barcode: str | None = Field(default=None, max_length=64, description="Local barcode or inventory asset tag")
+    physical_location: str | None = Field(default=None, max_length=255, description="Physical storage location (e.g. 'Study / Shelf 2')")
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
     visibility: str | None = None
@@ -241,6 +242,36 @@ class BulkItemVisibilitySchema(BaseModel):
         if normalized not in ("public", "friends_only", "private"):
             raise ValueError("Invalid visibility. Must be one of ('public', 'friends_only', 'private')")
         return normalized
+
+
+class BulkItemLocationSchema(BaseModel):
+    """Request body for updating physical_location across multiple owned physical items."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_ids: list[int] = Field(min_length=1, max_length=100, description="List of owned physical item IDs (1..100)")
+    physical_location: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Physical storage location (e.g. 'Living Room / Shelf B3'), or null to clear",
+    )
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_item_ids(cls, v: list[int]) -> list[int]:
+        """Ensure all item identifiers are positive integers."""
+        if any(item_id <= 0 for item_id in v):
+            raise ValueError("All item_ids must be positive integers.")
+        return v
+
+    @field_validator("physical_location")
+    @classmethod
+    def normalize_location(cls, v: str | None) -> str | None:
+        """Strip whitespace and convert empty string to None."""
+        if v is None:
+            return None
+        cleaned = v.strip()
+        return cleaned or None
 
 
 class ItemManualCreateSchema(BaseModel):
