@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ISBN Lookup Wall-Clock Budget & Scanner Timeout Parity (C154)**:
+  - Added configurable `max_retries` to `_make_session()` and provider outcome helpers in `app/utils/isbn.py`, enforced `max_retries=0` and minimum viable budget checks (`_MIN_ENRICHMENT_BUDGET = 1.0s`) for optional secondary gap-filling, and reserved viable read timeout budget (`>= 1.5s`) for Biblioteka Narodowa on Polish ISBNs.
+  - Exported `API_TIMEOUT_MS = 15_000` from `frontend/lib/api/client.ts` and aligned `BottomSheet` and `/scan` quick-lookup `Promise.race` timeouts with `AbortController` cancellation so valid in-flight lookups are not dropped at 10s.
+
 ## [1.1.2] - 2026-11-25
 
 ### Added

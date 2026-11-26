@@ -177,17 +177,25 @@ export function BottomSheet({
       setIsSearching(true);
       setError(null);
       try {
-        const { apiFetch } = await import("@/lib/api/client");
+        const { apiFetch, API_TIMEOUT_MS } = await import("@/lib/api/client");
+        const timeoutMs = API_TIMEOUT_MS ?? 15_000;
         const formatParam = formatToApiParam(format);
         const encodedQuery = encodeURIComponent(query);
         const url = formatParam ? `/lookup/${encodedQuery}?format=${formatParam}` : `/lookup/${encodedQuery}`;
 
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : undefined;
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error(t("bottomSheet.lookupTimedOut"))), 10000);
+          timeoutId = setTimeout(() => {
+            controller?.abort();
+            reject(new Error(t("bottomSheet.lookupTimedOut")));
+          }, timeoutMs);
         });
 
-        const data = await Promise.race([apiFetch<IsbnMeta>(url), timeoutPromise]).finally(() => {
+        const data = await Promise.race([
+          apiFetch<IsbnMeta>(url, undefined, controller ? { signal: controller.signal } : undefined),
+          timeoutPromise,
+        ]).finally(() => {
           if (timeoutId) clearTimeout(timeoutId);
         });
 

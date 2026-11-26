@@ -28,6 +28,7 @@ vi.mock("@/lib/api/escalations", () => ({
 }));
 
 vi.mock("@/lib/api/client", () => ({
+  API_TIMEOUT_MS: 15_000,
   apiFetch: vi.fn(),
 }));
 
@@ -255,7 +256,11 @@ describe("ScanPage", () => {
     fireEvent.click(screen.getByTestId("unified-lookup-submit"));
 
     await waitFor(() => {
-      expect(apiClient.apiFetch).toHaveBeenCalledWith("/lookup/5702018068229?format=lego");
+      expect(apiClient.apiFetch).toHaveBeenCalledWith(
+        "/lookup/5702018068229?format=lego",
+        undefined,
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
     });
   });
 

@@ -67,6 +67,7 @@ vi.mock("@/components/scanner/camera-capture", () => ({
 }));
 
 vi.mock("@/lib/api/client", () => ({
+  API_TIMEOUT_MS: 15_000,
   apiFetch: vi.fn(),
   apiClient: {
     get: vi.fn(),
@@ -148,5 +149,31 @@ describe("BottomSheet", () => {
         })
       );
     });
+  });
+
+  it("uses API_TIMEOUT_MS (15000ms) for lookup timeout parity and triggers manual fallback on timeout", async () => {
+    vi.useFakeTimers();
+    const clientMod = await import("@/lib/api/client");
+    vi.mocked(clientMod.apiFetch).mockImplementation(
+      () => new Promise(() => {}) // never resolves
+    );
+
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
+
+    // Enter a valid ISBN-13 in the manual barcode input if present or trigger via lookup
+    const input = screen.queryByRole("textbox");
+    if (input) {
+      fireEvent.change(input, { target: { value: "9788329120463" } });
+      fireEvent.submit(input.closest("form")!);
+
+      // At 10_000ms, lookup must NOT have timed out yet
+      await vi.advanceTimersByTimeAsync(10_500);
+      expect(onShowManualForm).not.toHaveBeenCalled();
+
+      // At 15_000ms, timeout triggers manual fallback
+      await vi.advanceTimersByTimeAsync(4_600);
+      expect(onShowManualForm).toHaveBeenCalledWith("9788329120463");
+    }
+    vi.useRealTimers();
   });
 });
