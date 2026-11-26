@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mobile Multi-Server Registry & Isolated Switching (C156)**:
+  - Added `ServerProfile[]` multi-server storage (`iqoqo_servers_v1`, `iqoqo_active_server_id`) with automatic legacy single-server migration, per-server isolated `SecureStoragePlugin` auth tokens, and `serverId`-namespaced `offline-cache.ts` snapshots/queues.
+  - Upgraded `ServerSelector` and `ServerSelectorModal` with saved-server switching, inline rename, and isolated removal, and wired the native mobile `Footer` connected-server indicator to open the quick switcher.
+
 ### Changed
 
 ### Fixed

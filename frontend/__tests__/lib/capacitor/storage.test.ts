@@ -28,6 +28,13 @@ import {
   setAuthToken,
   removeAuthToken,
   clearAllMobileStorage,
+  getSavedServers,
+  saveServerProfile,
+  switchActiveServer,
+  updateServerProfile,
+  removeServerProfile,
+  getActiveServerId,
+  getSyncActiveServerId,
   AUTH_TOKEN_KEY,
   INSTANCE_URL_KEY,
   INSTANCE_NAME_KEY,
@@ -147,6 +154,44 @@ describe("Capacitor Split Storage Utility", () => {
 
       await removeAuthToken();
       expect(await getAuthToken()).toBeNull();
+    });
+
+    it("migrates legacy single-server keys and isolates tokens across multiple servers", async () => {
+      await setInstanceUrl("https://prod.iqoqo.cc");
+      await setInstanceName("Prod Library");
+      await setAuthToken("prod-token-123");
+
+      const migrated = await getSavedServers();
+      expect(migrated).toHaveLength(1);
+      expect(migrated[0].url).toBe("https://prod.iqoqo.cc");
+      expect(migrated[0].name).toBe("Prod Library");
+      const prodId = migrated[0].id;
+      expect(getSyncActiveServerId()).toBe(prodId);
+      expect(await getAuthToken(prodId)).toBe("prod-token-123");
+
+      // Add second server and store isolated token
+      const preview = await saveServerProfile({ url: "https://pre.iqoqo.cc", name: "Preview" }, true);
+      await setAuthToken("preview-token-456");
+
+      expect(await getActiveServerId()).toBe(preview.id);
+      expect(await getAuthToken()).toBe("preview-token-456");
+      expect(await getAuthToken(prodId)).toBe("prod-token-123");
+
+      // Switch back to prod without losing preview token
+      await switchActiveServer(prodId);
+      expect(await getInstanceUrl()).toBe("https://prod.iqoqo.cc");
+      expect(await getAuthToken()).toBe("prod-token-123");
+      expect(await getAuthToken(preview.id)).toBe("preview-token-456");
+
+      // Rename preview server
+      const renamed = await updateServerProfile(preview.id, { name: "Staging" });
+      expect(renamed?.name).toBe("Staging");
+
+      // Remove preview server; prod remains intact
+      await removeServerProfile(preview.id);
+      expect(await getSavedServers()).toHaveLength(1);
+      expect(await getAuthToken(preview.id)).toBeNull();
+      expect(await getAuthToken(prodId)).toBe("prod-token-123");
     });
   });
 });
