@@ -38,6 +38,10 @@ def _inventory_schema() -> str | None:
     return None
 
 
+def _index_name() -> str:
+    return "ix_inventory_items_physical_location" if _inventory_schema() else "ix_items_physical_location"
+
+
 def upgrade() -> None:
     """Add physical_location column and index on inventory.items."""
     schema = _inventory_schema()
@@ -47,7 +51,7 @@ def upgrade() -> None:
         schema=schema,
     )
     op.create_index(
-        "ix_items_physical_location",
+        _index_name(),
         "items",
         ["physical_location"],
         unique=False,
@@ -58,5 +62,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Drop physical_location index and column from inventory.items."""
     schema = _inventory_schema()
-    op.drop_index("ix_items_physical_location", table_name="items", schema=schema)
+    op.drop_index(_index_name(), table_name="items", schema=schema)
     op.drop_column("items", "physical_location", schema=schema)
