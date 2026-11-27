@@ -179,3 +179,21 @@
   run grep -E '^preview-reconcile:' Makefile
   [ "$status" -eq 0 ]
 }
+
+@test "Makefile preview-reconcile defaults SKIP_CLONE to 0, frames stdin, runs RUM in container, and preserves running tag" {
+  run make -n preview-reconcile DEPLOY_DIR="${BATS_TEST_TMPDIR}/nonexistent-deploy"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'SKIP_CLONE:-0'* ]]
+  [[ "$output" == *"__IQOQO_SRC_SECRET_KEY__="* ]]
+  [[ "$output" == *"reconcile_preview_settings.py --dotenv-stdin"* ]]
+  [[ "$output" == *"exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/provision_rum_token.py --mgmt-host openobserve"* ]]
+  [[ "$output" != *'APP_VERSION=${APP_VERSION:-preview}'* ]]
+  [[ "$output" == *'eff_app_ver="${eff_app_ver:-'* ]]
+}
+
+@test "Makefile monitoring-reset-auth resolves running web image APP_VERSION before recreate" {
+  run make -n monitoring-reset-auth MODE=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'eff_app_ver="${eff_app_ver:-'* ]]
+  [[ "$output" == *'APP_VERSION="$eff_app_ver" docker compose'* ]]
+}

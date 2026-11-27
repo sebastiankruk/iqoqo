@@ -61,7 +61,7 @@ The scanner preview SHALL return title, author, and source metadata from the pro
 
 ### Requirement: Multi-Provider Metadata and Cover Gap Filling
 
-The system SHALL query secondary configured metadata providers using the canonical item identifier to populate missing cover images and bibliographic fields when the primary provider result contains gaps.
+The system SHALL query secondary configured metadata providers using the canonical item identifier to populate missing cover images and bibliographic fields when the primary provider result contains gaps. Optional secondary gap-filling requests SHALL execute without HTTP retries (`max_retries=0`) and SHALL be skipped when remaining wall-clock budget is below the minimum viable threshold.
 
 #### Scenario: Primary provider returns metadata without cover art
 
@@ -80,8 +80,8 @@ The system SHALL query secondary configured metadata providers using the canonic
 #### Scenario: Overall lookup timeout ceiling respected
 
 - **WHEN** secondary provider queries are initiated to fill missing metadata fields
-- **AND** the combined lookup duration reaches the global timeout threshold (6.0 seconds)
-- **THEN** the system SHALL abort pending secondary provider queries and return the primary metadata result without failing the lookup.
+- **AND** the combined lookup duration reaches the global timeout threshold (6.0 seconds) or remaining budget is below the minimum viable threshold
+- **THEN** the system SHALL skip or abort pending secondary provider queries without HTTP retries and return the primary metadata result without failing the lookup.
 
 ### Requirement: Biblioteka Narodowa Fallback for Polish Publications
 When an ISBN lookup corresponds to a Polish publication (ISBN-13 prefix 978-83 or 979-83) and primary providers yield no metadata or fail transiently, the system SHALL query the National Library of Poland (Biblioteka Narodowa) open REST API before declaring the lookup failed.
@@ -103,3 +103,19 @@ When performing Google Books volume lookups or candidate searches, the system SH
 - **AND** a valid Google Books API key exists in encrypted instance settings
 - **THEN** all outbound Google Books requests SHALL attach the key as a parameter
 - **AND** logs SHALL redact the key parameter value in error and telemetry reporting.
+
+### Requirement: Minimum Viable Timeout Floor and Polish BN Budget Reservation
+
+The ISBN lookup orchestrator SHALL enforce a minimum viable per-request timeout floor so external providers are never queried with sub-viable read timeouts (such as 0.2s), and SHALL reserve viable budget for Biblioteka Narodowa when resolving Polish ISBNs (`97883` or `97983`) after primary provider failure or no-result.
+
+#### Scenario: Sub-viable remaining budget skips optional enrichment
+
+- **WHEN** a primary provider already resolved metadata for an ISBN
+- **AND** remaining wall-clock budget is insufficient for a minimum viable secondary request
+- **THEN** the system SHALL return the primary metadata immediately instead of issuing a guaranteed-to-timeout enrichment request.
+
+#### Scenario: Polish ISBN fallback reserves viable budget for Biblioteka Narodowa
+
+- **WHEN** a Polish ISBN (`97883...` or `97983...`) receives no result or a transient failure from Google Books
+- **THEN** Open Library fallback SHALL NOT exhaust the entire wall-clock budget across multi-attempt HTTP retries
+- **AND** Biblioteka Narodowa (`data.bn.org.pl` / `katalogi.bn.org.pl`) SHALL receive a viable read timeout floor of at least 1.5 seconds.

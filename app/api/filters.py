@@ -20,14 +20,17 @@ from sqlalchemy.dialects.postgresql import JSONB
 from app.db import db
 from app.db.models import (
     Expression,
+    ExpressionContribution,
     Item,
     ItemTag,
     Manifestation,
+    ManifestationContribution,
     SemanticLink,
     Tag,
     UserCollection,
     UserCollectionItem,
     Work,
+    WorkContribution,
 )
 
 
@@ -458,57 +461,42 @@ class CatalogFilterBuilder:
         self._ensure_item_join(owner_scoped=True)
         self.query = apply_statuses_filter(self.query, statuses, user_id=self.user_id, borrowed_only=self.borrowed_only)
 
+    @staticmethod
+    def _lod_entity_clauses(authority: str | None = None) -> list:
+        """Build SQL predicates matching accepted SemanticLinks across FRBR and Contributor tiers."""
+
+        def _link_ids(entity_type: str):
+            stmt = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == entity_type,
+                SemanticLink.status == "accepted",
+            )
+            if authority:
+                stmt = stmt.where(db.func.lower(SemanticLink.authority) == authority.lower())
+            return stmt
+
+        contrib_ids = _link_ids("contributor")
+        return [
+            Manifestation.id.in_(_link_ids("manifestation")),
+            Expression.id.in_(_link_ids("expression")),
+            Work.id.in_(_link_ids("work")),
+            Work.id.in_(db.select(WorkContribution.work_id).where(WorkContribution.contributor_id.in_(contrib_ids))),
+            Expression.id.in_(
+                db.select(ExpressionContribution.expression_id).where(ExpressionContribution.contributor_id.in_(contrib_ids))
+            ),
+            Manifestation.id.in_(
+                db.select(ManifestationContribution.manifestation_id).where(ManifestationContribution.contributor_id.in_(contrib_ids))
+            ),
+        ]
+
     def _apply_lod(self, lod_authority: str | None, lod_status: str | None) -> None:
-        """Apply LOD authority / linkage filters across Manifestation and Work."""
+        """Apply LOD authority / linkage filters across Manifestation, Expression, Work, and Contributor."""
         if lod_authority:
-            authority = lod_authority.lower()
-            manif_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                db.func.lower(SemanticLink.authority) == authority,
-                SemanticLink.status == "accepted",
-            )
-            work_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                db.func.lower(SemanticLink.authority) == authority,
-                SemanticLink.status == "accepted",
-            )
-            self.query = self.query.filter(
-                db.or_(
-                    Manifestation.id.in_(manif_auth_subq),
-                    Work.id.in_(work_auth_subq),
-                )
-            )
+            self.query = self.query.filter(db.or_(*self._lod_entity_clauses(authority=lod_authority)))
 
         if lod_status == "linked":
-            manif_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                SemanticLink.status == "accepted",
-            )
-            work_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                SemanticLink.status == "accepted",
-            )
-            self.query = self.query.filter(
-                db.or_(
-                    Manifestation.id.in_(manif_subq),
-                    Work.id.in_(work_subq),
-                )
-            )
+            self.query = self.query.filter(db.or_(*self._lod_entity_clauses()))
         elif lod_status == "unlinked":
-            manif_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                SemanticLink.status == "accepted",
-            )
-            work_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                SemanticLink.status == "accepted",
-            )
-            self.query = self.query.filter(
-                db.and_(
-                    ~Manifestation.id.in_(manif_subq),
-                    ~Work.id.in_(work_subq),
-                )
-            )
+            self.query = self.query.filter(db.and_(*(~clause for clause in self._lod_entity_clauses())))
 
     # ── entry point ─────────────────────────────────────────────────────
 

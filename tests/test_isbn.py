@@ -628,3 +628,89 @@ def test_merge_metadata_normalizes_open_library_cover_dict_to_string():
     merged = _merge_metadata_gaps(gb, ol, "google_books", "open_library")
     assert isinstance(merged["cover_url"], str)
     assert merged["cover_url"] == "https://covers.openlibrary.org/b/id/15223041-L.jpg"
+
+
+def test_make_session_zero_retries_disables_urllib3_retry():
+    """Passing max_retries=0 mounts HTTPAdapter with max_retries.total == 0."""
+    from app.utils.isbn import _make_session
+
+    sess = _make_session(max_retries=0)
+    adapter = sess.get_adapter("https://openlibrary.org")
+    assert adapter.max_retries.total == 0
+
+
+def test_optional_gap_fill_uses_zero_retries_and_skips_when_budget_low():
+    """Optional Open Library gap-filling uses max_retries=0 and skips when remaining budget < 1.0s."""
+    gb_partial = ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata={"Title": "Partial Book", "Authors": ["Author A"]},
+        provider="google_books",
+    )
+    ol_timeout = ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+        provider="open_library",
+        error_detail="ReadTimeoutError",
+    )
+
+    with (
+        patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_partial),
+        patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_timeout) as mock_ol,
+    ):
+        result = fetch_isbn_metadata("9780553380163", max_duration=6.0)
+
+    assert result is not None
+    assert result["Title"] == "Partial Book"
+    mock_ol.assert_called_once()
+    assert mock_ol.call_args.kwargs.get("max_retries") == 0
+
+    # When remaining budget is below _MIN_ENRICHMENT_BUDGET (1.0s), skip enrichment completely
+    with (
+        patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_partial),
+        patch("app.utils.isbn._lookup_open_library_outcome") as mock_ol_skipped,
+    ):
+        result_fast = fetch_isbn_metadata("9780553380163", max_duration=0.5)
+
+    assert result_fast is not None
+    mock_ol_skipped.assert_not_called()
+
+
+def test_polish_isbn_reserves_viable_bn_read_timeout():
+    """Polish ISBN fallbacks cap Open Library and reserve >= 1.5s read timeout for Biblioteka Narodowa."""
+    gb_none = ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="google_books")
+    ol_none = ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="open_library")
+    bn_ok = ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata={"Title": "Cięcie", "Authors": ["Jo Nesbø"], "Source": "Biblioteka Narodowa"},
+        provider="biblioteka_narodowa",
+    )
+
+    with (
+        patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_none),
+        patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_none) as mock_ol,
+        patch("app.utils.isbn._lookup_biblioteka_narodowa_outcome", return_value=bn_ok) as mock_bn,
+    ):
+        result = fetch_isbn_metadata("9788327170255", max_duration=6.0)
+
+    assert result is not None
+    assert result["Title"] == "Cięcie"
+    assert mock_ol.call_args.kwargs.get("max_retries") == 0
+    bn_timeout = mock_bn.call_args.kwargs.get("timeout")
+    assert isinstance(bn_timeout, tuple)
+    assert bn_timeout[1] >= 1.5
+
+
+def test_fetch_isbn_metadata_respects_monotonic_clock_budget_exhaustion():
+    """Advancing monotonic clock exhausts remaining budget cleanly and prevents runaway Open Library retries."""
+    gb_none = ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE, provider="google_books", error_detail="timeout")
+    # Simulated monotonic clock: 0.0 on deadline init, then 6.5 after Google Books (exceeds 6.0s deadline)
+    clock_ticks = iter([0.0, 6.5, 6.6, 6.7, 6.8])
+
+    with (
+        patch("app.utils.isbn.time.monotonic", side_effect=lambda: next(clock_ticks, 7.0)),
+        patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_none),
+        patch("app.utils.isbn._lookup_open_library_outcome") as mock_ol,
+    ):
+        result = fetch_isbn_metadata("9780553380163", max_duration=6.0)
+
+    assert result is None
+    mock_ol.assert_not_called()

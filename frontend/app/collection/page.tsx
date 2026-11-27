@@ -297,6 +297,10 @@ function CollectionContent() {
     () => activeFilters.filter(f => f.type === "visibility").map(f => f.value),
     [activeFilters]
   );
+  const locationFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "location").map(f => f.value),
+    [activeFilters]
+  );
   const hasMapActive = useMemo(() => activeFilters.some(f => f.type === "has_map"), [activeFilters]);
 
   const {
@@ -327,7 +331,8 @@ function CollectionContent() {
     currentScope,
     hasMapActive,
     visibilityFilters.length > 0 ? visibilityFilters : undefined,
-    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined
+    expressionKindFilters.length > 0 ? expressionKindFilters.join(",") : undefined,
+    locationFilters.length > 0 ? locationFilters : undefined
   );
 
   const {
@@ -408,6 +413,7 @@ function CollectionContent() {
     if (ownershipFilters.length > 0) f.ownership = ownershipFilters.join(",");
     if (statusFilters.length > 0) f.statuses = statusFilters.join(",");
     if (visibilityFilters.length > 0) f.visibility = visibilityFilters.join(",");
+    if (locationFilters.length > 0) f.location = locationFilters.join(",");
     if (lodAuthorityFilter) f.lod_authority = lodAuthorityFilter;
     if (lodStatusFilter) f.lod_status = lodStatusFilter;
     if (isBorrowedFilterActive) f.borrowed = "true";
@@ -434,6 +440,7 @@ function CollectionContent() {
     ownershipFilters,
     statusFilters,
     visibilityFilters,
+    locationFilters,
     lodAuthorityFilter,
     lodStatusFilter,
     isBorrowedFilterActive,
@@ -1079,6 +1086,7 @@ function CollectionContent() {
                 missingId={missingIdOnly}
                 onChangeMissingId={setMissingIdOnly}
                 tagCounts={facetStatsData?.tag_counts}
+                locationCounts={facetStatsData?.location_counts}
                 collectionCounts={facetStatsData?.collection_counts}
                 genreCounts={facetStatsData?.genre_counts}
                 publisherCounts={facetStatsData?.publisher_counts}
@@ -1452,6 +1460,7 @@ function CollectionContent() {
         missingId={missingIdOnly}
         onChangeMissingId={setMissingIdOnly}
         tagCounts={facetStatsData?.tag_counts}
+        locationCounts={facetStatsData?.location_counts}
         collectionCounts={facetStatsData?.collection_counts}
         genreCounts={facetStatsData?.genre_counts}
         publisherCounts={facetStatsData?.publisher_counts}

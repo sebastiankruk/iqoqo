@@ -145,7 +145,9 @@ def test_catalog_graph_traverses_relations_and_enforces_visibility(app, client):
     assert f"work:{main_work_id}" in node_ids
     assert f"manifestation:{man_id}" in node_ids
     assert {"realizes", "embodies", "in_series", "has_part", "is_expansion_of", "contributed_by", "same_as"} <= relations
-    assert f"lod:{accepted_lod.id}" in node_ids
+    lod_uris = {n.get("external_uri") for n in body["nodes"] if n["entity_type"] == "lod"}
+    assert "https://dbpedia.org/resource/The_Fellowship_of_the_Ring" in lod_uris
+    assert all(n["id"].startswith("lod:") for n in body["nodes"] if n["entity_type"] == "lod")
     # Pending SemanticLink must never leak
     assert all(n.get("label") != "Unapproved Guess" for n in body["nodes"])
 
@@ -367,7 +369,6 @@ def test_catalog_graph_person_contributor_and_organization_roots(app, client):
         db.session.add_all([accepted_lod, pending_lod])
         db.session.commit()
         person_id, org_id, w1_id, w2_id, e1_id, m1_id = person.id, org.id, w1.id, w2.id, e1.id, m1.id
-        acc_lod_id, pend_lod_id = accepted_lod.id, pending_lod.id
 
     # 1. Anchor on person alias -> resolves to contributor:<id>
     res = client.get(f"/api/catalog/graph?entity_type=person&entity_id={person_id}&depth=1")
@@ -380,8 +381,9 @@ def test_catalog_graph_person_contributor_and_organization_roots(app, client):
     assert f"work:{w1_id}" in nodes_by_id
     assert f"work:{w2_id}" in nodes_by_id
     assert f"expression:{e1_id}" in nodes_by_id
-    assert f"lod:{acc_lod_id}" in nodes_by_id
-    assert f"lod:{pend_lod_id}" not in nodes_by_id
+    person_lod_uris = {n.get("external_uri") for n in data["nodes"] if n["entity_type"] == "lod"}
+    assert "https://www.wikidata.org/wiki/Q230741" in person_lod_uris
+    assert "https://viaf.org/viaf/56612733" not in person_lod_uris
 
     # 2. Organization contributor root
     org_res = client.get(f"/api/catalog/graph?entity_type=contributor&entity_id={org_id}&depth=1")
@@ -489,3 +491,109 @@ def test_catalog_graph_search_diacritics_visibility_limits_and_federation_head(a
         assert fed_res.status_code == 200
     finally:
         app.config["FEDERATION_HEAD_MODE"] = False
+
+
+def test_catalog_graph_person_deduplicates_lod_nodes_by_canonical_uri(app, client):
+    """Person graphs collapse duplicate/shared author LOD SemanticLinks into one canonical LOD node."""
+    with app.app_context():
+        king = Contributor(name="Stephen King", type="person")
+        db.session.add(king)
+        db.session.flush()
+
+        w_it = Work(title="It")
+        w_shining = Work(title="The Shining")
+        db.session.add_all([w_it, w_shining])
+        db.session.flush()
+
+        db.session.add(WorkContribution(work_id=w_it.id, contributor_id=king.id, role="author", sequence=0))
+        db.session.add(WorkContribution(work_id=w_shining.id, contributor_id=king.id, role="author", sequence=0))
+
+        # Multiple SemanticLink rows referencing the same canonical external URI across http/https/trailing-slash
+        # plus Work-attached author LOD rows from DBpedia reconciliation.
+        db.session.add_all(
+            [
+                SemanticLink(
+                    entity_type="contributor",
+                    entity_id=king.id,
+                    authority="dbpedia",
+                    external_uri="http://dbpedia.org/resource/Stephen_King",
+                    pref_label="",
+                    status="accepted",
+                ),
+                SemanticLink(
+                    entity_type="contributor",
+                    entity_id=king.id,
+                    authority="dbpedia",
+                    external_uri="https://dbpedia.org/resource/Stephen_King/",
+                    pref_label="Stephen King",
+                    status="accepted",
+                ),
+                SemanticLink(
+                    entity_type="work",
+                    entity_id=w_it.id,
+                    authority="dbpedia",
+                    external_uri="https://DBpedia.org/resource/Stephen_King",
+                    pref_label="Stephen King",
+                    status="accepted",
+                ),
+                SemanticLink(
+                    entity_type="work",
+                    entity_id=w_shining.id,
+                    authority="dbpedia",
+                    external_uri="http://dbpedia.org/resource/Stephen_King/",
+                    pref_label="Stephen King",
+                    status="accepted",
+                ),
+            ]
+        )
+        db.session.commit()
+        king_id, it_id, shining_id = king.id, w_it.id, w_shining.id
+
+    # 1. Bounded person graph (depth=2) must emit exactly ONE canonical LOD node for Stephen King
+    res = client.get(f"/api/catalog/graph?entity_type=person&entity_id={king_id}&depth=2")
+    assert res.status_code == 200
+    data = res.get_json()["data"]
+    lod_nodes = [n for n in data["nodes"] if n["entity_type"] == "lod"]
+    assert len(lod_nodes) == 1
+    assert lod_nodes[0]["label"] == "Stephen King"
+    assert lod_nodes[0]["canonical_uri"] == "https://dbpedia.org/resource/Stephen_King"
+
+    lod_id = lod_nodes[0]["id"]
+    same_as_edges = [e for e in data["edges"] if e["relation"] == "same_as" and e["target"] == lod_id]
+    # One deduplicated same_as edge per unique source entity (contributor + both works = 3)
+    assert {(e["source"], e["target"]) for e in same_as_edges} == {
+        (f"contributor:{king_id}", lod_id),
+        (f"work:{it_id}", lod_id),
+        (f"work:{shining_id}", lod_id),
+    }
+    assert len(same_as_edges) == 3
+
+    # 2. Full-library mode anchors contributor LOD links too and deduplicates to 1 node
+    lib_res = client.get("/api/catalog/graph?mode=library&entity_types=work,contributor,lod&edge_types=contributors,lod")
+    assert lib_res.status_code == 200
+    lib_data = lib_res.get_json()["data"]
+    lib_king_lods = [
+        n for n in lib_data["nodes"] if n["entity_type"] == "lod" and n.get("canonical_uri") == "https://dbpedia.org/resource/Stephen_King"
+    ]
+    assert len(lib_king_lods) == 1
+    assert any(
+        e["source"] == f"contributor:{king_id}" and e["target"] == lib_king_lods[0]["id"] and e["relation"] == "same_as"
+        for e in lib_data["edges"]
+    )
+
+    # 3. _merge_lod_node keeps lowest hop & upgrades fallback slug, and empty external_uri falls back safely
+    from app.core.graph_service import _canonical_lod_node_key, _merge_lod_node
+
+    existing_lod = {
+        "id": "lod:abc",
+        "hop": 2,
+        "label": "Stephen_King",
+        "authority": "dbpedia",
+        "external_uri": "https://dbpedia.org/resource/Stephen_King",
+    }
+    _merge_lod_node(existing_lod, {"hop": 1, "label": "Stephen King", "external_uri": "https://dbpedia.org/resource/Stephen_King"})
+    assert existing_lod["hop"] == 1
+    assert existing_lod["label"] == "Stephen King"
+
+    blank_link = SemanticLink(id=777, entity_type="contributor", entity_id=1, authority="dbpedia", external_uri="", status="accepted")
+    assert _canonical_lod_node_key(blank_link) == "lod:777"

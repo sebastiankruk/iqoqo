@@ -1,5 +1,8 @@
 # PostgreSQL 16 → 18 and Redis 7 → 8 Upgrade Guide
 
+> [!NOTE]
+> **Historical Document (`[Archived]`):** This runbook covers the one-time PostgreSQL 16 → 18 migration. Modern `v1.2.0` stacks run PostgreSQL 18 and **Valkey 8** (`valkey/valkey:8-alpine`) in place of Redis 8.
+
 > [!CAUTION]
 > **This is a major database version upgrade.** PostgreSQL's data directory is
 > incompatible between major versions. You **must** run the migration script

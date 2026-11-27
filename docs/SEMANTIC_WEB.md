@@ -1,6 +1,6 @@
 # 🌐 Semantic Web & Linked Open Data Guide
 
-iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
+iqoqo provides a W3C Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
 
 ![Semantic Web, Isolated SPARQL Runner, and AI-Fetchable Share Feeds](images/architecture/07-semantic-web-sparql-feeds.svg)
 
@@ -29,17 +29,21 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
 
 ### Query Examples
 
-#### List All Works and Authors
+#### List All Works and Contributors
 
 ```sparql
-PREFIX dc: <http://purl.org/dc/terms/>
+PREFIX schema: <https://schema.org/>
 PREFIX frbr: <http://purl.org/vocab/frbr/core#>
+PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT ?title ?author
+SELECT ?title ?authorName ?authorUri
 WHERE {
   ?work a frbr:Work ;
-        dc:title ?title ;
-        dc:creator ?author .
+        schema:name ?title ;
+        frbrer:creator ?contributor .
+  ?contributor schema:name ?authorName .
+  OPTIONAL { ?contributor owl:sameAs ?authorUri }
 }
 ORDER BY ?title
 LIMIT 20
@@ -47,42 +51,43 @@ LIMIT 20
 
 ```bash
 curl -G "http://localhost:8000/api/sparql" \
-  --data-urlencode 'query=PREFIX dc: <http://purl.org/dc/terms/> PREFIX frbr: <http://purl.org/vocab/frbr/core#> SELECT ?title ?author WHERE { ?work a frbr:Work ; dc:title ?title ; dc:creator ?author . } ORDER BY ?title LIMIT 20' \
+  --data-urlencode 'query=PREFIX schema: <https://schema.org/> PREFIX frbr: <http://purl.org/vocab/frbr/core#> PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/> SELECT ?title ?authorName WHERE { ?work a frbr:Work ; schema:name ?title ; frbrer:creator ?c . ?c schema:name ?authorName . } ORDER BY ?title LIMIT 20' \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/sparql-results+json"
 ```
 
-#### Count Items by Format
+#### Count Items by Schema Type
 
 ```sparql
 PREFIX schema: <https://schema.org/>
 PREFIX frbr: <http://purl.org/vocab/frbr/core#>
+PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/>
 
-SELECT ?format (COUNT(?item) AS ?count)
+SELECT ?type (COUNT(?item) AS ?count)
 WHERE {
   ?item a frbr:Item ;
-        frbr:exemplarOf ?manifestation .
-  ?manifestation schema:bookFormat ?format .
+        frbrer:exemplarOf ?manifestation .
+  ?manifestation a ?type .
 }
-GROUP BY ?format
+GROUP BY ?type
 ORDER BY DESC(?count)
 ```
 
 #### Find Books by Publisher
 
 ```sparql
-PREFIX dc: <http://purl.org/dc/terms/>
 PREFIX schema: <https://schema.org/>
 PREFIX frbr: <http://purl.org/vocab/frbr/core#>
+PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/>
 
 SELECT ?title ?publisher ?isbn
 WHERE {
   ?manifestation a frbr:Manifestation ;
         schema:publisher ?publisher ;
-        schema:isbn ?isbn .
-  ?manifestation frbr:embodimentOf ?expression .
-  ?expression frbr:expressionOf ?work .
-  ?work dc:title ?title .
+        schema:isbn ?isbn ;
+        frbrer:embodimentOf ?expression .
+  ?expression frbrer:expressionOf ?work .
+  ?work schema:name ?title .
   FILTER(CONTAINS(LCASE(?publisher), "penguin"))
 }
 ```
@@ -90,17 +95,20 @@ WHERE {
 #### CONSTRUCT a Sub-Graph
 
 ```sparql
-PREFIX dc: <http://purl.org/dc/terms/>
+PREFIX schema: <https://schema.org/>
 PREFIX frbr: <http://purl.org/vocab/frbr/core#>
+PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/>
 
 CONSTRUCT {
-  ?work dc:title ?title ;
-        dc:creator ?author .
+  ?work schema:name ?title ;
+        frbrer:creator ?contributor .
+  ?contributor schema:name ?authorName .
 }
 WHERE {
   ?work a frbr:Work ;
-        dc:title ?title ;
-        dc:creator ?author .
+        schema:name ?title ;
+        frbrer:creator ?contributor .
+  ?contributor schema:name ?authorName .
   FILTER(CONTAINS(LCASE(?title), "hobbit"))
 }
 ```
@@ -295,22 +303,26 @@ iqoqo automatically embeds Schema.org structured data in RDF serializations, ena
 
 ### Type Mappings
 
-| Content Type | Schema.org Type                                 |
-| ------------ | ----------------------------------------------- |
-| `text`       | `schema:Book` (or `schema:Map` for maps)        |
-| `serial`     | `schema:Periodical` + `schema:PublicationIssue` |
-| `audiobook`  | `schema:Audiobook`                              |
-| `music`      | `schema:MusicAlbum` + `schema:MusicRelease`     |
-| `movie`      | `schema:Movie`                                  |
-| `board_game` | `schema:Game`                                   |
-| `puzzle`     | `schema:Product`                                |
-| `lego`       | `schema:Product`                                |
-| `concert`    | `schema:MusicEvent`                             |
+| Content Type   | Schema.org Type                                                    |
+| -------------- | ------------------------------------------------------------------ |
+| `text`         | `schema:Book` (or `schema:Map` for maps)                           |
+| `serial`       | `schema:Periodical` + `schema:PublicationIssue`                    |
+| `audiobook`    | `schema:Audiobook`                                                 |
+| `music`        | `schema:MusicAlbum` + `schema:MusicRelease`                        |
+| `movie`        | `schema:Movie` (includes `vcd`)                                    |
+| `board_game`   | `schema:Game`                                                      |
+| `puzzle`       | `schema:Product`                                                   |
+| `lego`         | `schema:Product`                                                   |
+| `concert`      | `schema:MusicEvent`                                                |
+| `cd_dvd_combo` | `schema:MusicAlbum` + `schema:Movie` (hybrid audio/video carrier)  |
 
-### Audio Pressing & Serial Issue Extensions (`v1.0.3`–`v1.1.0`)
+### Audio Pressing, Serial Issue & Cross-Media Extensions (`v1.0.3`–`v1.2.0`)
 
 - **Audio Pressing RDF Triples (`_emit_audio_rdf_triples()`):** Audio Manifestations emit paired `schema:MusicAlbum` / `schema:MusicRelease` descriptions carrying `schema:recordLabel`, `schema:catalogNumber`, `schema:gtin13`, `iqoqo:matrixRunout` (wax matrix etching), and `owl:sameAs` links to Discogs / MusicBrainz.
-- **FRBRoo Serials (`F18_Serial_Work` & `PublicationIssue`):** Serial Works (`work_kind = "serial"`) emit `frbroo:F18_Serial_Work` and `schema:Periodical` alongside `schema:issn`, while each issue Manifestation emits `schema:PublicationIssue`, `schema:issueNumber`, `schema:volumeNumber`, and `schema:datePublished`.
+- **FRBRoo Serials (`F18_Serial_Work`, `iqoqo:SerialWork` & `iqoqo:PublicationIssue`):** Serial Works (`work_kind = "serial"`) emit `frbroo:F18_Serial_Work`, `iqoqo:SerialWork`, and `schema:Periodical` alongside `schema:issn`/`iqoqo:issn`, while each issue Manifestation emits `schema:PublicationIssue`, `iqoqo:PublicationIssue`, `iqoqo:issueNumber`, `iqoqo:volume`, and `schema:datePublished` (validated actively by `SerialWorkShape` and `PublicationIssueShape`).
+- **Contributor LOD & Reified Container/Image Nodes (`C169`):** Author `SemanticLink`s attach strictly to `Contributor` (`<BASE_URL>/contributors/<id>`) rather than `Work` so `owl:sameAs` never collapses shared authors' Works; `ContainerAggregation` and owner-profile `ImageScan` records emit reified `iqoqo:ContainerAggregation` and `iqoqo:ImageScan` nodes validated against `docs/ontology/iqoqo-shapes.ttl`.
+- **Cross-Media Derivatives (`WorkRelation`):** Linked derivative Works emit `frbroo:R2_is_derivative_of` and `schema:isBasedOn` between canonical Work IRIs.
+- **Owner-Authorized Physical Locations (`Item.physical_location`):** Under `enrichment_profile="full"` when requested by the authorized owner, physical copies emit `iqoqo:physicalLocation` and `schema:location` (forbidden on `Work`/`Manifestation` by SHACL); public and anonymous serializations redact shelf locations.
 - **OpenCollections.org LOD Bridge:** `OpenCollectionsLookupStrategy` reconciles records and emits `owl:sameAs`, `schema:sameAs`, and `rdfs:seeAlso` triples referencing canonical OpenCollections URIs.
 
 ### Properties Mapped
@@ -358,8 +370,8 @@ Set the `BASE_URL` environment variable in your `.env` file:
 # Production
 BASE_URL=https://iqoqo.cc
 
-# Local development
-BASE_URL=http://localhost:5000
+# Local development (via Nginx gateway)
+BASE_URL=http://localhost:8000
 
 # Custom domain
 BASE_URL=https://library.example.com
@@ -375,6 +387,7 @@ If not set, the default is `https://iqoqo.cc`.
 | Expression    | `{BASE_URL}/expressions/{id}`    | `https://iqoqo.cc/expressions/17`    |
 | Manifestation | `{BASE_URL}/manifestations/{id}` | `https://iqoqo.cc/manifestations/99` |
 | Item          | `{BASE_URL}/items/{id}`          | `https://iqoqo.cc/items/256`         |
+| Contributor   | `{BASE_URL}/contributors/{id}`   | `https://iqoqo.cc/contributors/12`   |
 
 ### Usage in RDF
 
@@ -382,11 +395,18 @@ IRIs are used as subject URIs in all RDF serializations:
 
 ```turtle
 @prefix frbr: <http://purl.org/vocab/frbr/core#> .
-@prefix dc: <http://purl.org/dc/terms/> .
+@prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
+@prefix iqoqo: <https://iqoqo.org/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix schema: <https://schema.org/> .
 
-<https://iqoqo.cc/works/42> a frbr:Work ;
-    dc:title "The Hobbit" ;
-    dc:creator "J.R.R. Tolkien" .
+<https://iqoqo.cc/contributors/12> a iqoqo:Contributor, schema:Person ;
+    schema:name "J.R.R. Tolkien" ;
+    owl:sameAs <http://dbpedia.org/resource/J._R._R._Tolkien> .
+
+<https://iqoqo.cc/works/42> a frbr:Work, iqoqo:Work ;
+    schema:name "The Hobbit" ;
+    frbrer:creator <https://iqoqo.cc/contributors/12> .
 ```
 
 ### Fallback Chain
@@ -467,16 +487,19 @@ AI agents can use SPARQL to ask structured questions about collections:
 # "What board games does this collection have?"
 PREFIX schema: <https://schema.org/>
 PREFIX frbr: <http://purl.org/vocab/frbr/core#>
-PREFIX dc: <http://purl.org/dc/terms/>
+PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/>
 
-SELECT ?title ?author
+SELECT ?title ?authorName
 WHERE {
   ?work a frbr:Work ;
-        dc:title ?title .
-  ?expression frbr:expressionOf ?work .
-  ?manifestation frbr:embodimentOf ?expression ;
-        schema:bookFormat schema:Game .
-  OPTIONAL { ?work dc:creator ?author }
+        schema:name ?title .
+  ?expression frbrer:expressionOf ?work .
+  ?manifestation frbrer:embodimentOf ?expression ;
+        a schema:Game .
+  OPTIONAL {
+    ?work frbrer:creator ?c .
+    ?c schema:name ?authorName .
+  }
 }
 ```
 
@@ -538,6 +561,6 @@ Collectors can pair public `/share/<token>` links with **Gemini Gems**, **ChatGP
 - **[API Reference](API.md)** — Complete endpoint documentation
 - **[Architecture Guide](ARCHITECTURE.md)** — Semantic Web layer architecture
 - **[Operations Runbook](OPERATIONS.md)** — FRBR ETL and ontology sync scripts
-- **[Upgrade Guide](UPGRADE_0.8.0.md)** — Migration instructions for v0.8.0
+- **[Upgrade Guide](archive/UPGRADE_0.8.0.md)** — Historical v0.8.0 migration notes
 - **[SPARQL Tutorial](tutorials/sparql-queries.md)** — Step-by-step SPARQL tutorial
 - **[Linked Data Tutorial](tutorials/linked-data-integration.md)** — Integration examples

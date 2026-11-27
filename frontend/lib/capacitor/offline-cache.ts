@@ -22,6 +22,33 @@ export const OFFLINE_WISHLIST_CACHE_KEY = "iqoqo_offline_wishlist_snapshot";
 export const OFFLINE_PROFILE_CACHE_KEY = "iqoqo_offline_profile_snapshot";
 export const OFFLINE_MANUAL_QUEUE_KEY = "iqoqo_offline_manual_queue";
 
+const ACTIVE_SERVER_ID_KEY = "iqoqo_active_server_id";
+
+/**
+ * Resolve a server-scoped offline cache key so multi-server profiles never
+ * collide or overwrite each other's cached library snapshots.
+ *
+ * @param baseKey - Unscoped cache key constant
+ * @param serverId - Optional explicit server profile ID
+ * @returns Scoped key when a server ID is active, or `baseKey` otherwise
+ */
+export function scopedCacheKey(baseKey: string, serverId?: string): string {
+  if (serverId) {
+    return `${baseKey}_${serverId}`;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const activeId = window.localStorage.getItem(ACTIVE_SERVER_ID_KEY);
+      if (activeId) {
+        return `${baseKey}_${activeId}`;
+      }
+    } catch {
+      // Ignore storage access failures
+    }
+  }
+  return baseKey;
+}
+
 export interface OfflineCollectionSnapshot {
   timestamp: number;
   items: Item[];
@@ -55,7 +82,8 @@ export interface OfflineManualEntry {
  *
  * @param profile - Active user profile
  */
-export async function saveProfileSnapshot(profile: UserProfile): Promise<void> {
+export async function saveProfileSnapshot(profile: UserProfile, serverId?: string): Promise<void> {
+  const key = scopedCacheKey(OFFLINE_PROFILE_CACHE_KEY, serverId);
   const payload: OfflineProfileSnapshot = {
     timestamp: Date.now(),
     profile,
@@ -64,7 +92,7 @@ export async function saveProfileSnapshot(profile: UserProfile): Promise<void> {
 
   if (isNativeApp()) {
     try {
-      await Preferences.set({ key: OFFLINE_PROFILE_CACHE_KEY, value: serialized });
+      await Preferences.set({ key, value: serialized });
     } catch {
       // Ignore preferences write failure
     }
@@ -72,7 +100,7 @@ export async function saveProfileSnapshot(profile: UserProfile): Promise<void> {
 
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      window.localStorage.setItem(OFFLINE_PROFILE_CACHE_KEY, serialized);
+      window.localStorage.setItem(key, serialized);
     } catch {
       // Ignore localStorage quotas
     }
@@ -82,14 +110,16 @@ export async function saveProfileSnapshot(profile: UserProfile): Promise<void> {
 /**
  * Retrieve cached user profile snapshot if available.
  *
+ * @param serverId - Optional target server ID
  * @returns Cached UserProfile or null
  */
-export async function getCachedProfileSnapshot(): Promise<UserProfile | null> {
+export async function getCachedProfileSnapshot(serverId?: string): Promise<UserProfile | null> {
+  const key = scopedCacheKey(OFFLINE_PROFILE_CACHE_KEY, serverId);
   let serialized: string | null = null;
 
   if (isNativeApp()) {
     try {
-      const res = await Preferences.get({ key: OFFLINE_PROFILE_CACHE_KEY });
+      const res = await Preferences.get({ key });
       serialized = res.value;
     } catch {
       serialized = null;
@@ -98,7 +128,7 @@ export async function getCachedProfileSnapshot(): Promise<UserProfile | null> {
 
   if (!serialized && typeof window !== "undefined" && window.localStorage) {
     try {
-      serialized = window.localStorage.getItem(OFFLINE_PROFILE_CACHE_KEY);
+      serialized = window.localStorage.getItem(key);
     } catch {
       serialized = null;
     }
@@ -124,7 +154,8 @@ export async function getCachedProfileSnapshot(): Promise<UserProfile | null> {
  *
  * @param items - Array of physical collection items
  */
-export async function saveCollectionSnapshot(items: Item[]): Promise<void> {
+export async function saveCollectionSnapshot(items: Item[], serverId?: string): Promise<void> {
+  const key = scopedCacheKey(OFFLINE_COLLECTION_CACHE_KEY, serverId);
   const payload: OfflineCollectionSnapshot = {
     timestamp: Date.now(),
     items,
@@ -133,7 +164,7 @@ export async function saveCollectionSnapshot(items: Item[]): Promise<void> {
 
   if (isNativeApp()) {
     try {
-      await Preferences.set({ key: OFFLINE_COLLECTION_CACHE_KEY, value: serialized });
+      await Preferences.set({ key, value: serialized });
     } catch {
       // Ignore preferences write failure
     }
@@ -141,7 +172,7 @@ export async function saveCollectionSnapshot(items: Item[]): Promise<void> {
 
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      window.localStorage.setItem(OFFLINE_COLLECTION_CACHE_KEY, serialized);
+      window.localStorage.setItem(key, serialized);
     } catch {
       // Ignore localStorage quotas / private browsing errors
     }
@@ -151,14 +182,16 @@ export async function saveCollectionSnapshot(items: Item[]): Promise<void> {
 /**
  * Retrieve cached collection snapshot if available.
  *
+ * @param serverId - Optional target server ID
  * @returns Offline collection snapshot or null
  */
-export async function getCachedCollectionSnapshot(): Promise<OfflineCollectionSnapshot | null> {
+export async function getCachedCollectionSnapshot(serverId?: string): Promise<OfflineCollectionSnapshot | null> {
+  const key = scopedCacheKey(OFFLINE_COLLECTION_CACHE_KEY, serverId);
   let serialized: string | null = null;
 
   if (isNativeApp()) {
     try {
-      const res = await Preferences.get({ key: OFFLINE_COLLECTION_CACHE_KEY });
+      const res = await Preferences.get({ key });
       serialized = res.value;
     } catch {
       serialized = null;
@@ -167,7 +200,7 @@ export async function getCachedCollectionSnapshot(): Promise<OfflineCollectionSn
 
   if (!serialized && typeof window !== "undefined" && window.localStorage) {
     try {
-      serialized = window.localStorage.getItem(OFFLINE_COLLECTION_CACHE_KEY);
+      serialized = window.localStorage.getItem(key);
     } catch {
       serialized = null;
     }
@@ -193,7 +226,8 @@ export async function getCachedCollectionSnapshot(): Promise<OfflineCollectionSn
  *
  * @param items - Array of wishlist items
  */
-export async function saveWishlistSnapshot(items: WishlistItem[]): Promise<void> {
+export async function saveWishlistSnapshot(items: WishlistItem[], serverId?: string): Promise<void> {
+  const key = scopedCacheKey(OFFLINE_WISHLIST_CACHE_KEY, serverId);
   const payload: OfflineWishlistSnapshot = {
     timestamp: Date.now(),
     items,
@@ -202,7 +236,7 @@ export async function saveWishlistSnapshot(items: WishlistItem[]): Promise<void>
 
   if (isNativeApp()) {
     try {
-      await Preferences.set({ key: OFFLINE_WISHLIST_CACHE_KEY, value: serialized });
+      await Preferences.set({ key, value: serialized });
     } catch {
       // Ignore preferences write failure
     }
@@ -210,7 +244,7 @@ export async function saveWishlistSnapshot(items: WishlistItem[]): Promise<void>
 
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      window.localStorage.setItem(OFFLINE_WISHLIST_CACHE_KEY, serialized);
+      window.localStorage.setItem(key, serialized);
     } catch {
       // Ignore localStorage quotas
     }
@@ -220,14 +254,16 @@ export async function saveWishlistSnapshot(items: WishlistItem[]): Promise<void>
 /**
  * Retrieve cached wishlist snapshot if available.
  *
+ * @param serverId - Optional target server ID
  * @returns Offline wishlist snapshot or null
  */
-export async function getCachedWishlistSnapshot(): Promise<OfflineWishlistSnapshot | null> {
+export async function getCachedWishlistSnapshot(serverId?: string): Promise<OfflineWishlistSnapshot | null> {
+  const key = scopedCacheKey(OFFLINE_WISHLIST_CACHE_KEY, serverId);
   let serialized: string | null = null;
 
   if (isNativeApp()) {
     try {
-      const res = await Preferences.get({ key: OFFLINE_WISHLIST_CACHE_KEY });
+      const res = await Preferences.get({ key });
       serialized = res.value;
     } catch {
       serialized = null;
@@ -236,7 +272,7 @@ export async function getCachedWishlistSnapshot(): Promise<OfflineWishlistSnapsh
 
   if (!serialized && typeof window !== "undefined" && window.localStorage) {
     try {
-      serialized = window.localStorage.getItem(OFFLINE_WISHLIST_CACHE_KEY);
+      serialized = window.localStorage.getItem(key);
     } catch {
       serialized = null;
     }
@@ -305,12 +341,13 @@ export async function findOfflineDuplicate(
  *
  * @returns Array of queued offline manual scan entries
  */
-export async function getOfflineManualQueue(): Promise<OfflineManualEntry[]> {
+export async function getOfflineManualQueue(serverId?: string): Promise<OfflineManualEntry[]> {
+  const key = scopedCacheKey(OFFLINE_MANUAL_QUEUE_KEY, serverId);
   let serialized: string | null = null;
 
   if (isNativeApp()) {
     try {
-      const res = await Preferences.get({ key: OFFLINE_MANUAL_QUEUE_KEY });
+      const res = await Preferences.get({ key });
       serialized = res.value;
     } catch {
       serialized = null;
@@ -319,7 +356,7 @@ export async function getOfflineManualQueue(): Promise<OfflineManualEntry[]> {
 
   if (!serialized && typeof window !== "undefined" && window.localStorage) {
     try {
-      serialized = window.localStorage.getItem(OFFLINE_MANUAL_QUEUE_KEY);
+      serialized = window.localStorage.getItem(key);
     } catch {
       serialized = null;
     }
@@ -355,9 +392,10 @@ export async function enqueueOfflineManualEntry(payload: OfflineManualEntry["pay
   queue.push(entry);
   const serialized = JSON.stringify(queue);
 
+  const queueKey = scopedCacheKey(OFFLINE_MANUAL_QUEUE_KEY);
   if (isNativeApp()) {
     try {
-      await Preferences.set({ key: OFFLINE_MANUAL_QUEUE_KEY, value: serialized });
+      await Preferences.set({ key: queueKey, value: serialized });
     } catch {
       // Ignore
     }
@@ -365,7 +403,7 @@ export async function enqueueOfflineManualEntry(payload: OfflineManualEntry["pay
 
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      window.localStorage.setItem(OFFLINE_MANUAL_QUEUE_KEY, serialized);
+      window.localStorage.setItem(queueKey, serialized);
     } catch {
       // Ignore
     }
@@ -425,9 +463,10 @@ async function _performFlushOfflineManualQueue(
   }
 
   const serialized = JSON.stringify(remaining);
+  const queueKey = scopedCacheKey(OFFLINE_MANUAL_QUEUE_KEY);
   if (isNativeApp()) {
     try {
-      await Preferences.set({ key: OFFLINE_MANUAL_QUEUE_KEY, value: serialized });
+      await Preferences.set({ key: queueKey, value: serialized });
     } catch {
       // Ignore
     }
@@ -435,7 +474,7 @@ async function _performFlushOfflineManualQueue(
 
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      window.localStorage.setItem(OFFLINE_MANUAL_QUEUE_KEY, serialized);
+      window.localStorage.setItem(queueKey, serialized);
     } catch {
       // Ignore
     }
@@ -487,15 +526,23 @@ export function flushOfflineManualQueue(
 
 /**
  * Purge all cached collection, wishlist, profile, and manual queue offline records.
- * Called on logout, server switch, or explicit cache clearance.
+ * Called on logout, server removal, or explicit cache clearance.
+ *
+ * @param serverId - Optional target server ID to scope clearance
  */
-export async function clearOfflineCache(): Promise<void> {
+export async function clearOfflineCache(serverId?: string): Promise<void> {
+  const keys = [
+    scopedCacheKey(OFFLINE_COLLECTION_CACHE_KEY, serverId),
+    scopedCacheKey(OFFLINE_WISHLIST_CACHE_KEY, serverId),
+    scopedCacheKey(OFFLINE_PROFILE_CACHE_KEY, serverId),
+    scopedCacheKey(OFFLINE_MANUAL_QUEUE_KEY, serverId),
+  ];
+
   if (isNativeApp()) {
     try {
-      await Preferences.remove({ key: OFFLINE_COLLECTION_CACHE_KEY });
-      await Preferences.remove({ key: OFFLINE_WISHLIST_CACHE_KEY });
-      await Preferences.remove({ key: OFFLINE_PROFILE_CACHE_KEY });
-      await Preferences.remove({ key: OFFLINE_MANUAL_QUEUE_KEY });
+      for (const key of keys) {
+        await Preferences.remove({ key });
+      }
     } catch {
       // Ignore removal errors
     }
@@ -503,10 +550,9 @@ export async function clearOfflineCache(): Promise<void> {
 
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      window.localStorage.removeItem(OFFLINE_COLLECTION_CACHE_KEY);
-      window.localStorage.removeItem(OFFLINE_WISHLIST_CACHE_KEY);
-      window.localStorage.removeItem(OFFLINE_PROFILE_CACHE_KEY);
-      window.localStorage.removeItem(OFFLINE_MANUAL_QUEUE_KEY);
+      for (const key of keys) {
+        window.localStorage.removeItem(key);
+      }
     } catch {
       // Ignore
     }

@@ -464,10 +464,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
     bind = db.session.get_bind()
     dialect_name = bind.dialect.name if bind is not None else "sqlite"
-    if dialect_name == "postgresql":
-        minutes_expr = db.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
-    else:
-        minutes_expr = db.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+    minutes_expr = _safe_total_reading_minutes_expr(dialect_name)
 
     avg_reading_raw = db.session.execute(
         select(func.avg(minutes_expr)).filter(
@@ -1072,6 +1069,160 @@ def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
         ),
         200,
     )
+
+
+def _month_bucket_expr(dialect_name: str, column: Any) -> Any:
+    """Return a dialect-portable YYYY-MM SQL expression for grouping timestamps by month."""
+    if dialect_name == "postgresql":
+        return func.to_char(column, "YYYY-MM")
+    return func.strftime("%Y-%m", column)
+
+
+_ACTIVE_READER_STATUSES = ("reading", "read", "listening", "listened", "watching", "watched", "playing", "played", "building", "built")
+_STARTED_READER_STATUSES = ("reading", "currently_reading", "listening", "watching", "playing", "building")
+_COMPLETED_STATUSES = ("read", "listened", "watched", "played", "built")
+
+
+def _safe_total_reading_minutes_expr(dialect_name: str) -> Any:
+    """Return a dialect-safe integer expression for ``Item.meta['total_reading_minutes']``.
+
+    Non-numeric strings, decimals, negatives, and overlong integers yield ``NULL``
+    so malformed metadata never triggers PostgreSQL ``DataError`` HTTP 500s.
+    """
+    if dialect_name == "postgresql":
+        raw_val = Item.meta["total_reading_minutes"].as_string()
+        return db.case(
+            (db.and_(raw_val.isnot(None), raw_val.op("~")(r"^[0-9]{1,9}$")), db.cast(raw_val, db.Integer)),
+            else_=None,
+        )
+
+    raw_val = func.json_extract(Item.meta, "$.total_reading_minutes")
+    val_type = func.typeof(raw_val)
+    return db.case(
+        (val_type == "integer", db.cast(raw_val, db.Integer)),
+        (
+            db.and_(
+                val_type == "text",
+                raw_val != "",
+                func.length(raw_val) <= 9,
+                db.not_(raw_val.op("GLOB")("*[^0-9]*")),
+            ),
+            db.cast(raw_val, db.Integer),
+        ),
+        else_=None,
+    )
+
+
+def _compute_manifestation_stats(manifestation_id: int) -> dict[str, Any]:
+    """Compute anonymized, visibility-safe GROUP BY reading and popularity stats for a Manifestation."""
+    from app.db.core import ItemStatusLog
+
+    bind = db.session.get_bind()
+    dialect_name = bind.dialect.name if bind is not None else "sqlite"
+    public_filter = (
+        Item.manifestation_id == manifestation_id,
+        Item.is_hidden.is_(False),
+        Item.visibility == "public",
+    )
+
+    # 1. Status distribution via single GROUP BY
+    status_rows = db.session.execute(
+        select(Item.status, func.count(Item.id).label("cnt")).where(*public_filter).group_by(Item.status)  # pylint: disable=not-callable
+    ).all()
+
+    total_items = 0
+    reader_count = 0
+    completed_count = 0
+    for st, cnt in status_rows:
+        total_items += cnt
+        if st in _ACTIVE_READER_STATUSES:
+            reader_count += cnt
+        if st in _COMPLETED_STATUSES:
+            completed_count += cnt
+
+    # 2. Average session minutes across public items
+    minutes_expr = _safe_total_reading_minutes_expr(dialect_name)
+
+    avg_minutes_raw = db.session.execute(
+        select(func.avg(minutes_expr)).where(
+            *public_filter,
+            minutes_expr.isnot(None),
+            minutes_expr > 0,
+        )
+    ).scalar()
+    avg_session_minutes = round(float(avg_minutes_raw), 1) if avg_minutes_raw is not None else None
+
+    # 3. Average elapsed reading days via single GROUP BY over ItemStatusLog
+    log_span_rows = db.session.execute(
+        select(
+            ItemStatusLog.item_id,
+            func.min(db.case((ItemStatusLog.new_status.in_(_STARTED_READER_STATUSES), ItemStatusLog.changed_at))).label("started_at"),
+            func.max(db.case((ItemStatusLog.new_status.in_(_COMPLETED_STATUSES), ItemStatusLog.changed_at))).label("finished_at"),
+        )
+        .join(Item, ItemStatusLog.item_id == Item.id)
+        .where(*public_filter)
+        .group_by(ItemStatusLog.item_id)
+    ).all()
+
+    elapsed_days_list = [
+        max(0, (row.finished_at - row.started_at).days)
+        for row in log_span_rows
+        if row.started_at is not None and row.finished_at is not None and row.finished_at >= row.started_at
+    ]
+    avg_reading_days = round(sum(elapsed_days_list) / len(elapsed_days_list), 1) if elapsed_days_list else None
+
+    # 4. Monthly popularity over time via GROUP BY
+    added_month_expr = _month_bucket_expr(dialect_name, Item.added_at)
+    added_rows = db.session.execute(
+        select(added_month_expr.label("month"), func.count(Item.id).label("cnt"))  # pylint: disable=not-callable
+        .where(*public_filter, Item.added_at.isnot(None))
+        .group_by(added_month_expr)
+    ).all()
+
+    completed_month_expr = _month_bucket_expr(dialect_name, ItemStatusLog.changed_at)
+    completed_rows = db.session.execute(
+        select(
+            completed_month_expr.label("month"), func.count(func.distinct(ItemStatusLog.item_id)).label("cnt")
+        )  # pylint: disable=not-callable
+        .join(Item, ItemStatusLog.item_id == Item.id)
+        .where(*public_filter, ItemStatusLog.new_status.in_(_COMPLETED_STATUSES), ItemStatusLog.changed_at.isnot(None))
+        .group_by(completed_month_expr)
+    ).all()
+
+    monthly: dict[str, dict[str, int]] = {}
+    for row in added_rows:
+        if row.month:
+            monthly.setdefault(row.month, {"added_count": 0, "completed_count": 0})["added_count"] = int(row.cnt)
+    for row in completed_rows:
+        if row.month:
+            monthly.setdefault(row.month, {"added_count": 0, "completed_count": 0})["completed_count"] = int(row.cnt)
+
+    popularity_over_time = [
+        {"month": m, "added_count": vals["added_count"], "completed_count": vals["completed_count"]}
+        for m, vals in sorted(monthly.items())[-12:]
+    ]
+
+    return {
+        "manifestation_id": manifestation_id,
+        "total_items": total_items,
+        "reader_count": reader_count,
+        "completed_count": completed_count,
+        "avg_session_minutes": avg_session_minutes,
+        "avg_reading_days": avg_reading_days,
+        "popularity_over_time": popularity_over_time,
+    }
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/stats", methods=["GET"])
+@optional_auth
+def get_manifestation_stats(manifestation_id: int) -> tuple[Response, int]:
+    """Return anonymized GROUP BY reading statistics and popularity over time for a manifestation."""
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    stats = _compute_manifestation_stats(manifestation_id)
+    return jsonify({"success": True, "data": stats, "error": None}), 200
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/images", methods=["POST"])
@@ -1689,11 +1840,30 @@ def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Respon
     )
 
 
+def _is_valid_manifestation_semantic_link(manif: Any, link: Any) -> bool:
+    """Return True when ``link`` belongs to ``manif`` or its FRBR/Contributor graph."""
+    if link.entity_type == "manifestation":
+        return bool(link.entity_id == manif.id)
+    if link.entity_type == "expression":
+        return bool(manif.expression_id is not None and link.entity_id == manif.expression_id)
+    work_id = manif.expression.work_id if manif.expression else None
+    if link.entity_type == "work":
+        return bool(work_id is not None and link.entity_id == work_id)
+    if link.entity_type == "contributor":
+        contributor_ids: set[int] = {mc.contributor_id for mc in (manif.contributions or []) if mc.contributor_id}
+        if manif.expression:
+            contributor_ids.update(ec.contributor_id for ec in (manif.expression.contributions or []) if ec.contributor_id)
+            if manif.expression.work:
+                contributor_ids.update(wc.contributor_id for wc in (manif.expression.work.contributions or []) if wc.contributor_id)
+        return link.entity_id in contributor_ids
+    return False
+
+
 @api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["PATCH"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response, int]:
-    """Accept or reject a suggested semantic link associated with a manifestation or its work.
+    """Accept or reject a suggested semantic link associated with a manifestation hierarchy.
 
     Requires `write:metadata`. Payload must specify `status: 'accepted' | 'rejected'`.
     """
@@ -1707,12 +1877,7 @@ def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
     if not link:
         return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
 
-    work_id = manif.expression.work_id if manif.expression else None
-    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
-        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
-    )
-
-    if not is_valid_assoc:
+    if not _is_valid_manifestation_semantic_link(manif, link):
         return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
 
     payload = request.get_json(silent=True) or {}
@@ -1749,7 +1914,7 @@ def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
-    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+    """Dismiss or delete an incorrect semantic link associated with a manifestation hierarchy.
 
     Requires `write:metadata`: this is a catalog mutation, and a standard user
     who can reach it can remove links the reconciler established from any
@@ -1765,12 +1930,7 @@ def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
     if not link:
         return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
 
-    work_id = manif.expression.work_id if manif.expression else None
-    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
-        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
-    )
-
-    if not is_valid_assoc:
+    if not _is_valid_manifestation_semantic_link(manif, link):
         return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
 
     actor_id = getattr(g, "current_user", None).id if hasattr(g, "current_user") and g.current_user else None

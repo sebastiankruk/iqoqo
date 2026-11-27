@@ -211,7 +211,16 @@
     "audiobook": "Audiobook",
     "concert": "Koncert",
     "seriesSuffix": "{label} (seria)",
-    "onWishlist": "Na liście życzeń"
+    "onWishlist": "Na liście życzeń",
+    "contributedCovers": "Przesłane okładki",
+    "closePreview": "Zamknij podgląd okładki",
+    "readStatsTitle": "Aktywność czytelnicza i popularność",
+    "readStatsEmpty": "Brak zarejestrowanej aktywności czytelniczej społeczności.",
+    "statReaders": "Czytelnicy",
+    "statCompleted": "Ukończone",
+    "statAvgMinutes": "Śr. sesja",
+    "statAvgDays": "Śr. dni",
+    "popularityOverTime": "Popularność w czasie"
   },
   "WorkRollup": {
     "statusRead": "Przeczytano",
@@ -329,6 +338,14 @@
     "bulkVisibilitySuccess": "Zaktualizowano widoczność dla {count} egzemplarzy",
     "bulkVisibilityError": "Nie udało się zaktualizować widoczności",
     "bulkVisibilityClear": "Wyczyść",
+    "secLocation": "Lokalizacja fizyczna",
+    "searchLocations": "Filtruj lokalizacje...",
+    "bulkLocationLabel": "Ustaw lokalizację",
+    "bulkLocationPlaceholder": "np. Gabinet / Półka 2",
+    "bulkLocationApply": "Zastosuj",
+    "bulkLocationClear": "Wyczyść",
+    "bulkLocationSuccess": "Zaktualizowano lokalizację fizyczną dla {count} pozycji",
+    "bulkLocationError": "Nie udało się zaktualizować lokalizacji fizycznej",
     "secCuration": "Zadania kustosza",
     "statusHelp": "Filtry statusu dotyczą wyłącznie egzemplarzy fizycznych. Przełącz się na widok „Moje egzemplarze”, aby filtrować po statusie.",
     "notApplicable": "Nie dotyczy w tym miejscu.",
@@ -697,7 +714,9 @@
     },
     "levels": {
       "work": "Poziom dzieła",
-      "manifestation": "Poziom wydania"
+      "expression": "Poziom ekspresji",
+      "manifestation": "Poziom wydania",
+      "contributor": "Poziom twórcy"
     }
   },
   "LodReconciliation": {
@@ -865,6 +884,8 @@
     "localBarcodePlaceholder": "np. POLKA-01-A, INV-12345",
     "condition": "Stan zachowania",
     "conditionPlaceholder": "np. Jak nowy, Dobry, Zadowalający",
+    "physicalLocation": "Lokalizacja fizyczna",
+    "physicalLocationPlaceholder": "np. Salon / Regał B3",
     "visibility": "Poziom widoczności",
     "visibilityHint": "Określa, kto może zobaczyć ten fizyczny egzemplarz w Twojej bibliotece.",
     "visibilityPrivate": "Prywatny",
@@ -1057,6 +1078,14 @@
     "invalidUrl": "Wprowadź poprawny adres URL HTTP lub HTTPS.",
     "switchServer": "Zmień serwer",
     "currentServer": "Połączony serwer",
+    "savedServers": "Zapisane serwery",
+    "activeServer": "Aktywny",
+    "switchToServer": "Przełącz",
+    "renameServer": "Zmień nazwę serwera",
+    "removeServer": "Usuń serwer",
+    "saveName": "Zapisz nazwę",
+    "serverNameLabel": "Nazwa wyświetlana (opcjonalnie)",
+    "serverNamePlaceholder": "Domowa biblioteka",
     "continue": "Przejdź do logowania",
     "cancel": "Anuluj",
     "version": "Wersja: {version}"

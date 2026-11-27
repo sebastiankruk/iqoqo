@@ -4,6 +4,7 @@
 
 | Version | Supported          |
 |---------|--------------------|
+| 1.2.x   | :white_check_mark: |
 | 1.1.x   | :white_check_mark: |
 | 1.0.x   | :white_check_mark: |
 | 0.9.x   | :white_check_mark: |
@@ -16,14 +17,14 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
-### Hardening Across Visual Graph, Bulk Visibility, Serial Ingestion & Share Scopes (Releases 1.0.x – 1.1.0 - November 2026)
+### Hardening Across Visual Graph, Bulk Visibility & Location, Serial Ingestion & Share Scopes (Releases 1.0.x – 1.2.0)
 
 ![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](images/architecture/06-privacy-bulk-share-matrix.svg)
 
 ![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](images/architecture/08-frbr-visual-relation-graph.svg)
 
-- **Visibility-Scoped Visual Relation Graph (`GET /api/catalog/graph`):** Rejects hidden/unauthorized anchor `Item` nodes (`404 Not Found`), filters every traversed 1-hop/2-hop neighbor `Item` through `is_item_visible_to_viewer()` (three-tier owner/friend/public rules), and caps traversal depth at `2` and node count at `150`.
-- **Owner-Scoped Bulk Visibility Mutations (`PATCH /api/items/bulk-visibility`):** Enforces `@require_auth`, `PermissionName.WRITE_ITEM`, `FEDERATION_HEAD_MODE` read-only hub guards, Pydantic `max_length=100` batch bounds, and atomic owner ownership verification (`404 Not Found` if any item does not belong to the caller).
+- **Visibility-Scoped Visual Relation Graph (`GET /api/catalog/graph`):** Rejects hidden/unauthorized anchor `Item` nodes (`404 Not Found`), filters every traversed neighbor `Item` through `is_item_visible_to_viewer()` (three-tier owner/friend/public rules) plus `FederationConsent.federated_collection` checks, and caps traversal depth at `MAX_GRAPH_DEPTH = 4` (`?mode=library` & 7 edge categories including `derivatives`, with `max_nodes <= 150` / `max_edges <= 400`).
+- **Owner-Scoped Bulk Visibility & Physical Location Mutations (`PATCH /api/items/bulk-visibility`, `PATCH /api/items/bulk-location`):** Both enforce `@require_auth`, `PermissionName.WRITE_ITEM`, `FEDERATION_HEAD_MODE` read-only hub guards, Pydantic `max_length=100` batch bounds, and atomic ownership verification (`403`/`404` on unowned items). `Item.physical_location` is owner-redacted on all non-owner responses, search results (`?q=`), and public RDF exports (`enrichment_profile="public"`).
 - **Configurable Shared Collection `visibility_scope` & Private Cache Headers:** Enforces explicit `public_only` (with authenticated **Friend Bonus**), `friends_and_public`, and `all` filters across HTML, JSON, RSS, RDF, and `/share/<token>/jsonld/1..N` routes, emits private cache headers for non-public responses, and strips acquisition prices and private `reading_sessions` notes.
 - **Reading Session Authorization & Note Redaction:** Gates `POST /api/items/<id>/reading-sessions` with `PermissionName.WRITE_ITEM`, item ownership check, and `FEDERATION_HEAD_MODE` guard, and redacts private `reading_sessions` notes from non-owner `GET /api/items/<id>` payloads.
 - **100MP Decompression Bomb & SSRF Hardening on Cover Vision/OCR:** Enforces `Image.MAX_IMAGE_PIXELS = 100_000_000` (`app/utils/images.py`, `app/utils/vision.py`) before Pillow decoding, bounded upload sizes (`413`), and strict `validate_ollama_url()` scheme/credential/cloud-metadata validation on `OLLAMA_URL`.
@@ -79,7 +80,7 @@ If you discover a security vulnerability in this project, please email the maint
 
 #### Server-Sent Events (SSE) Multi-Tenant Stream Isolation
 
-- **Per-User Event Stream Scoping**: The real-time transition stream (`GET /api/v1/events/stream`) strictly scopes Redis event fan-out to the authenticated `g.user_id`. Private catalog transitions, lending events, and custody changes are never broadcast across tenants.
+- **Per-User Event Stream Scoping**: The real-time transition stream (`GET /api/v1/events/stream`) strictly scopes Valkey pub/sub event fan-out to the authenticated `g.user_id`. Private catalog transitions, lending events, and custody changes are never broadcast across tenants.
 
 #### Supply Chain & Dependency Hardening
 

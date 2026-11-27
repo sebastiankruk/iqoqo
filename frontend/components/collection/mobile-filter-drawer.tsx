@@ -41,6 +41,7 @@ interface MobileFilterDrawerProps {
   missingId?: boolean;
   onChangeMissingId?: (checked: boolean) => void;
   tagCounts?: Record<string, number>;
+  locationCounts?: Record<string, number>;
   collectionCounts?: Record<string, number>;
   genreCounts?: Record<string, number>;
   publisherCounts?: Record<string, number>;
@@ -89,6 +90,7 @@ export function MobileFilterDrawer({
   onChangeMissingId,
   missingId = false,
   tagCounts,
+  locationCounts,
   collectionCounts: collCounts,
   genreCounts,
   publisherCounts,
@@ -127,6 +129,7 @@ export function MobileFilterDrawer({
             missingId={missingId}
             onChangeMissingId={onChangeMissingId}
             tagCounts={tagCounts}
+            locationCounts={locationCounts}
             collectionCounts={collCounts}
             genreCounts={genreCounts}
             publisherCounts={publisherCounts}

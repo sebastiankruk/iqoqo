@@ -549,6 +549,7 @@ def cleanup_lod_links_task(dry_run: bool = True, batch_size: int = 100) -> dict[
     from app.core.config_service import ConfigService
     from app.core.lod_linking_service import compute_composite_score, is_disambiguation
     from app.db import db
+    from app.db.contributions import Contributor
     from app.db.core import EntityAuditLog, Manifestation, SemanticLink, Work
 
     auto_threshold = ConfigService.get_float("LOD_AUTO_APPLY_THRESHOLD", 0.82)
@@ -582,6 +583,11 @@ def cleanup_lod_links_task(dry_run: bool = True, batch_size: int = 100) -> dict[
                 author = manif.author
                 if manif.publication_date:
                     year = manif.publication_date.year
+        elif link.entity_type == "contributor":
+            contributor = db.session.get(Contributor, link.entity_id)
+            if contributor:
+                target_title = contributor.name or ""
+                author = contributor.name
 
         cand_comment = (link.attributes or {}).get("comment", "")
         cand_label = link.pref_label or ""

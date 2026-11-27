@@ -293,5 +293,9 @@ chmod -R a+rwX "${DST_DIR}/app/static" "${DST_DIR}/exports" 2>/dev/null || true
 
 echo "🎉 Data clone complete from '$SRC_NAME' to '$DST_NAME'!"
 if [ "$DST_NAME" = "preview" ]; then
-    echo "ℹ️  Next step for preview: run 'make preview-reconcile DEPLOY_DIR=\"$DST_DIR\"' (or 'make start preview prebuilt DEPLOY_DIR=\"$DST_DIR\"') to reconcile InstanceSettings, OpenObserve auth, and Browser RUM."
+    SRC_HINT="SRC_LOC=\"$SRC_DIR\" SRC_NAME=\"$SRC_NAME\" SKIP_CLONE=0"
+    if [ -n "${SRC_HOST:-}" ]; then
+        SRC_HINT="SRC_HOST=\"$SRC_HOST\" $SRC_HINT"
+    fi
+    echo "ℹ️  Next step for preview: run '$SRC_HINT make preview-reconcile DEPLOY_DIR=\"$DST_DIR\"' (or '$SRC_HINT make start preview prebuilt DEPLOY_DIR=\"$DST_DIR\"') to reconcile InstanceSettings, OpenObserve auth, and Browser RUM."
 fi

@@ -7,7 +7,7 @@ Provide read-only offline collection and wishlist caching for zero-signal mobile
 
 ### Requirement: Offline Read-Only Collection & Wishlist Cache
 
-The mobile app SHALL cache the authenticated user's collection and wishlist locally when online, serve read-only search and ISBN/UPC ownership checks from the cache when offline, and purge the cache upon logout or server switch.
+The mobile app SHALL cache the authenticated user's collection and wishlist locally when online, serve read-only search and ISBN/UPC ownership checks from the cache when offline, and purge the active server's cache upon logout or server removal while preserving sibling server caches across server switches.
 
 #### Scenario: Collector searches collection while offline
 
@@ -17,7 +17,7 @@ The mobile app SHALL cache the authenticated user's collection and wishlist loca
 
 ### Requirement: Offline Profile, Collection & Wishlist Cache
 
-The mobile app SHALL cache the authenticated user's profile, full unfiltered personal collection, and wishlist locally when online, preserve authenticated session state on network failures, serve local search, facet filtering, and ISBN/UPC ownership checks from the cache when offline, and purge the cache upon logout or server switch.
+The mobile app SHALL cache the authenticated user's profile, full unfiltered personal collection, and wishlist locally when online, preserve authenticated session state on network failures, serve local search, facet filtering, and ISBN/UPC ownership checks from the cache when offline, and purge the active server's cache upon logout or server removal while preserving sibling server caches across server switches.
 
 #### Scenario: Authenticated profile state preserved while offline
 
@@ -58,3 +58,11 @@ The mobile app SHALL enqueue manual scan entries locally only when offline or wh
 - **GIVEN** the device is online and the server responds with HTTP `400`, `403`, or `422` to `POST /api/items/manual`
 - **WHEN** `handleManualSubmit` receives the error response
 - **THEN** the app displays an error toast and MUST NOT enqueue the rejected payload into `iqoqo_offline_manual_queue`.
+
+### Requirement: Per-Server Offline Cache Namespacing
+Offline collection, wishlist, profile snapshots, and manual-entry queues MUST be isolated per saved `serverId` so switching servers never mixes or overwrites cached library data.
+
+#### Scenario: Offline snapshots stay isolated per server
+
+- **WHEN** a user caches collection items on Server A, switches to Server B, and enters offline mode
+- **THEN** `/collection` renders only Server B's cached snapshot (or empty offline state if Server B has not been cached) and never displays Server A's items

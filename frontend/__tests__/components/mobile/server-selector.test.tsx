@@ -13,110 +13,154 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
+import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ServerSelector } from "@/components/mobile/server-selector";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ServerSelector, ServerSelectorModal } from "@/components/mobile/server-selector";
 import * as storage from "@/lib/capacitor/storage";
+import * as offlineCache from "@/lib/capacitor/offline-cache";
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string, params?: Record<string, string>) =>
+    params ? `${key}:${JSON.stringify(params)}` : key,
+}));
 
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string, values?: Record<string, string>) => {
-    const messages: Record<string, string> = {
-      serverSelectorTitle: "Connect to your library",
-      serverSelectorDescription: "Enter the URL of your self-hosted iqoqo instance to begin.",
-      serverUrlLabel: "Server URL",
-      serverUrlPlaceholder: "https://library.example.com",
-      verifyConnection: "Verify connection",
-      verifying: "Verifying...",
-      connectionSuccess: `Connected to ${values?.name || "library"}`,
-      connectionFailed: "Unable to connect to this server.",
-      invalidUrl: "Please enter a valid HTTP or HTTPS URL.",
-      cancel: "Cancel",
-      version: `Version: ${values?.version || ""}`,
-    };
-    return messages[key] || key;
-  },
-}));
-
-describe("ServerSelector Component", () => {
+describe("ServerSelector Connection Validation & Multi-Server Switching (C156)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(storage, "getInstanceUrl").mockResolvedValue(null);
-    vi.spyOn(storage, "setInstanceUrl").mockResolvedValue();
-    vi.spyOn(storage, "setInstanceName").mockResolvedValue();
+    window.localStorage.clear();
   });
 
-  it("renders server URL input and verify button", () => {
-    render(<ServerSelector />);
+  const renderWithQuery = (ui: React.ReactElement) => {
+    const qc = new QueryClient();
+    return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+  };
 
-    expect(screen.getByText("Connect to your library")).toBeDefined();
-    expect(screen.getByPlaceholderText("https://library.example.com")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Verify connection" })).toBeDefined();
+  it("renders URL input and verify button initially", () => {
+    renderWithQuery(<ServerSelector />);
+    expect(screen.getByLabelText("serverUrlLabel")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "verifyConnection" })).toBeDisabled();
   });
 
-  it("validates empty or invalid URLs without calling fetch", async () => {
-    const fetchSpy = vi.spyOn(global, "fetch");
-    render(<ServerSelector />);
+  it("validates invalid URLs without calling fetch", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithQuery(<ServerSelector />);
 
-    const input = screen.getByPlaceholderText("https://library.example.com");
-    fireEvent.change(input, { target: { value: "invalid url with spaces" } });
-    fireEvent.click(screen.getByRole("button", { name: "Verify connection" }));
+    await user.type(screen.getByLabelText("serverUrlLabel"), "http://invalid host name");
+    await user.click(screen.getByRole("button", { name: "verifyConnection" }));
 
-    await waitFor(() => {
-      expect(screen.getByText("Please enter a valid HTTP or HTTPS URL.")).toBeDefined();
-    });
+    expect(screen.getByText("invalidUrl")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
-  it("probes /api/health and calls onConnected on successful verification", async () => {
-    vi.spyOn(global, "fetch").mockImplementation(async (url: RequestInfo | URL) => {
-      const urlStr = url.toString();
-      if (urlStr.endsWith("/api/health")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ status: "ok", service: "iqoqo-api", version: "1.0.0" }),
-        } as Response;
-      }
-      if (urlStr.endsWith("/api/config")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ data: { instance_name: "Kruk Library", version: "1.0.0" } }),
-        } as Response;
-      }
-      return { ok: false, status: 404 } as Response;
-    });
+  it("probes /api/health and /api/config and calls onConnected on success", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { instance_name: "Home Archive", version: "1.2.0" } }), { status: 200 })
+      );
 
     const onConnected = vi.fn();
-    render(<ServerSelector onConnected={onConnected} />);
+    renderWithQuery(<ServerSelector onConnected={onConnected} />);
 
-    const input = screen.getByPlaceholderText("https://library.example.com");
-    fireEvent.change(input, { target: { value: "https://iqoqo.kruk.cc" } });
-    fireEvent.click(screen.getByRole("button", { name: "Verify connection" }));
+    await user.type(screen.getByLabelText("serverUrlLabel"), "library.example.com");
+    await user.click(screen.getByRole("button", { name: "verifyConnection" }));
 
     await waitFor(() => {
-      expect(storage.setInstanceUrl).toHaveBeenCalledWith("https://iqoqo.kruk.cc");
-      expect(storage.setInstanceName).toHaveBeenCalledWith("Kruk Library");
-      expect(onConnected).toHaveBeenCalledWith("https://iqoqo.kruk.cc", "Kruk Library");
+      expect(onConnected).toHaveBeenCalledWith("https://library.example.com", "Home Archive");
     });
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, "https://library.example.com/api/health", expect.any(Object));
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, "https://library.example.com/api/config", expect.any(Object));
+    fetchSpy.mockRestore();
   });
 
-  it("displays error message when /api/health probe fails", async () => {
-    vi.spyOn(global, "fetch").mockRejectedValue(new Error("Connection refused"));
+  it("displays connectionFailed when /api/health returns non-OK status", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("Service Unavailable", { status: 503 }));
 
-    render(<ServerSelector />);
-
-    const input = screen.getByPlaceholderText("https://library.example.com");
-    fireEvent.change(input, { target: { value: "https://offline.iqoqo.local" } });
-    fireEvent.click(screen.getByRole("button", { name: "Verify connection" }));
+    renderWithQuery(<ServerSelector />);
+    await user.type(screen.getByLabelText("serverUrlLabel"), "https://down.example.com");
+    await user.click(screen.getByRole("button", { name: "verifyConnection" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Unable to connect to this server.")).toBeDefined();
+      expect(screen.getByText("connectionFailed")).toBeInTheDocument();
     });
+    fetchSpy.mockRestore();
+  });
+
+  it("renders saved servers, switches active server, renames inline, and removes active server safely", async () => {
+    const user = userEvent.setup();
+    const srvA = await storage.saveServerProfile({ url: "https://a.iqoqo.cc", name: "Server A" }, true);
+    await storage.setAuthToken("tok-a");
+    await offlineCache.saveCollectionSnapshot([{ id: 1, title: "Book A" } as never]);
+
+    const srvB = await storage.saveServerProfile({ url: "https://b.iqoqo.cc", name: "Server B" }, true);
+    await storage.setAuthToken("tok-b");
+    await offlineCache.saveCollectionSnapshot([{ id: 2, title: "Book B" } as never]);
+
+    const onConnected = vi.fn();
+    renderWithQuery(<ServerSelector onConnected={onConnected} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Server A")).toBeInTheDocument();
+      expect(screen.getByText("Server B")).toBeInTheDocument();
+    });
+
+    // Switch to Server A without wiping B's token/cache
+    await user.click(screen.getByRole("button", { name: "switchToServer" }));
+
+    await waitFor(() => {
+      expect(onConnected).toHaveBeenCalledWith("https://a.iqoqo.cc", "Server A");
+    });
+
+    expect(await storage.getAuthToken(srvA.id)).toBe("tok-a");
+    expect(await storage.getAuthToken(srvB.id)).toBe("tok-b");
+    expect((await offlineCache.getCachedCollectionSnapshot(srvA.id))?.items[0].title).toBe("Book A");
+    expect((await offlineCache.getCachedCollectionSnapshot(srvB.id))?.items[0].title).toBe("Book B");
+
+    // Rename Server B inline
+    const rowB = screen.getByTestId(`saved-server-${srvB.id}`);
+    await user.click(within(rowB).getByRole("button", { name: "renameServer" }));
+    const renameInput = within(rowB).getByLabelText("serverNameLabel");
+    await user.clear(renameInput);
+    await user.type(renameInput, "Staging B");
+    await user.click(within(rowB).getByRole("button", { name: "saveName" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Staging B")).toBeInTheDocument();
+    });
+
+    // Remove currently active Server A -> cleanly promotes Staging B
+    const rowA = screen.getByTestId(`saved-server-${srvA.id}`);
+    await user.click(within(rowA).getByRole("button", { name: "removeServer" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Server A")).not.toBeInTheDocument();
+    });
+    expect(await offlineCache.getCachedCollectionSnapshot(srvA.id)).toBeNull();
+    expect((await offlineCache.getCachedCollectionSnapshot(srvB.id))?.items[0].title).toBe("Book B");
+    expect(await storage.getActiveServerId()).toBe(srvB.id);
+  });
+
+  it("renders ServerSelectorModal when open and cancels cleanly", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithQuery(<ServerSelectorModal isOpen={true} onClose={onClose} />);
+
+    expect(screen.getByText("serverSelectorTitle")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "cancel" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

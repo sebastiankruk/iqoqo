@@ -117,8 +117,9 @@ You don't need a degree in library science to use iqoqo—when you scan a barcod
 3. **Flexible Reading & Playing Roadmaps:** In your **Roadmaps** (accessible right from your Collection view), you can plan your next reading or gaming marathon by targeting abstract Works, specific translations, or even a specific physical Item you borrowed from a friend and need to return by Friday.
 4. **Targeted Ratings & Reviews:** Leave a 5-star review on a **Work** because the story or game mechanics are brilliant, while leaving a 2-star warning on a specific **Manifestation** because the publisher used thin, flimsy cardstock in that particular printing.
 5. **User-Scoped Work Reading Status Rollup:** Own the paperback in English and also read the Polish hardcover or audiobook? On Works Shelves, Work pages, and Manifestation views, iqoqo computes a personal **Work Rollup Badge** (\`Read\`, \`Currently Reading\`, \`Planned\`, \`Did Not Finish\`) across all editions you own—marking the Work completed as soon as *any* owned copy is finished, while letting you filter by \`Completed\`, \`In Progress\`, or \`Unread\`!
-6. **Interactive FRBR Visual Relation Graph (\`/graph\`):** Click **Explore Graph** on any Work, Expression, Manifestation, or Item page to visually traverse 1-hop or 2-hop connections across the WEMI hierarchy, multi-series memberships, sub-parts, board game expansions, contributors, attached maps, and external Linked Open Data (Wikidata, DBpedia, GeoNames) authorities—all strictly filtered by your visibility permissions.
-7. **Reading Sessions & Edition Duration Insights:** Track focused reading sessions (\`Log Session\`) directly on your physical Item to record minutes read, pages covered, private session notes, and elapsed reading days—while contributing anonymously to edition-level average reading times on public Manifestations.
+6. **Interactive FRBR Visual Relation Graph (\`/graph\`):** Click **Explore Graph** on any Work, Expression, Manifestation, Item, Contributor, or Series page—or switch to **Library Mode** (\`?mode=library\`) and search roots with **GraphRootPicker**—to traverse 1–4 hop connections across the WEMI hierarchy, multi-series memberships, sub-parts, board game expansions, cross-media derivatives (\`WorkRelation\`), contributors, attached maps, and deduplicated Linked Open Data (\`lod:{digest}\`) authorities, all strictly filtered by your visibility and \`FederationConsent\` permissions.
+7. **Reading Sessions, Edition Stats & Contributed Covers:** Track focused reading sessions (\`Log Session\`) directly on your physical Item (minutes read, pages covered, private session notes, elapsed days), while contributing anonymously to edition-level readership metrics and monthly timelines (**ManifestationStatsCard**) alongside multi-image contributed cover scans (**ManifestationCoversGallery**).
+8. **Physical Shelf Locations & Multi-Server Mobile Switching:** Record where your physical copy sits (\`physical_location\`) via the Taxonomy Editor, filter \`/collection?location=...\`, or update up to \`100\` items via Bulk Actions; on mobile Capacitor Android/iOS builds, switch cleanly between saved libraries (\`ServerProfile[]\`) from the Footer switcher with isolated tokens and offline caches.
 `,
       pl: `Większość aplikacji do katalogowania powstała na prostym, płaskim założeniu: jeden kod kreskowy to jeden wiersz w bazie danych. Jeśli zeskanujesz wydanie kieszonkowe *Diuny* Franka Herberta, dostajesz wiersz w tabeli. Jeśli kupisz jubileuszowe wydanie w twardej oprawie, otrzymujesz drugi, całkowicie odrębny wpis. A gdy posiadasz jeszcze audiobook, film na Blu-ray z 2021 roku oraz grę planszową *Dune: Imperium*, tradycyjna aplikacja traktuje je jako pięć obcych sobie pozycji zaśmiecających wirtualną półkę.
 
@@ -203,8 +204,9 @@ Nie musisz mieć doktoratu z bibliotekoznawstwa, aby korzystać z iqoqo — podc
 3. **Elastyczne Plany (Roadmaps):** W Planach czytania i grania możesz układać maratony, celując w abstrakcyjne Dzieła, konkretne przekłady, a nawet w konkretny Egzemplarz pożyczony od znajomego, który musisz oddać do piątku.
 4. **Precyzyjne oceny i recenzje:** Przyznaj 5 gwiazdek **Dziełu**, bo historia lub mechanika gry są genialne, a jednocześnie wystaw 2 gwiazdki konkretnej **Manifestacji**, gdyż wydawca użył cienkiego papieru i kiepskiego kleju.
 5. **Zbiorczy status czytania Dzieła (Work Rollup):** Masz polskie wydanie kieszonkowe oraz angielskiego audiobooka? Na półce Dzieł oraz stronach Dzieła i Manifestacji iqoqo wyświetla osobistą odznakę **Zbiorczego statusu Dzieła** (\`Przeczytano\`, \`W trakcie czytania\`, \`Planowane\`, \`Porzucono\`) — oznaczając Dzieło jako ukończone, gdy przeczytasz *którykolwiek* z posiadanych egzemplarzy, oraz umożliwiając filtrowanie półki według postępu dzieła!
-6. **Interaktywny Graf Relacji FRBR (\`/graph\`):** Kliknij **Eksploruj graf** na stronie dowolnego Dzieła, Ekspresji, Manifestacji lub Egzemplarza, aby wizualnie badać powiązania (1 lub 2 skoki) między poziomami WEMI, seriami, częściami, dodatkami do gier, twórcami, załącznikami mapowymi oraz zatwierdzonymi powiązaniami LOD (Wikidane, DBpedia, GeoNames) — zawsze zgodnie z uprawnieniami widoczności.
-7. **Sesje czytania i średni czas lektury:** Rejestruj sesje czytania bezpośrednio na karcie fizycznego Egzemplarza (czas trwania, przeczytane strony, prywatne notatki oraz liczba dni czytania), automatycznie budując anonimową średnią czasu lektury widoczną na stronie Manifestacji.
+6. **Interaktywny Graf Relacji FRBR (\`/graph\`):** Kliknij **Eksploruj graf** na stronie dowolnego Dzieła, Ekspresji, Manifestacji, Egzemplarza, Twórcy lub Serii — albo włącz tryb całej biblioteki (\`?mode=library\`) z wyszukiwarką **GraphRootPicker** — aby badać powiązania (1–4 skoki) między poziomami WEMI, seriami, częściami, dodatkami do gier, relacjami między mediami (\`WorkRelation\`), twórcami, załącznikami mapowymi oraz zdeduplikowanymi powiązaniami LOD (\`lod:{digest}\`), zgodnie z uprawnieniami widoczności i \`FederationConsent\`.
+7. **Sesje czytania, statystyki wydania i galeria okładek:** Rejestruj sesje czytania na karcie fizycznego Egzemplarza (czas, strony, prywatne notatki, dni czytania), anonimowo zasilając statystyki popularności wydania (**ManifestationStatsCard**), i przeglądaj dodane skany okładek w **ManifestationCoversGallery**.
+8. **Lokalizacje na półkach i wiele serwerów w aplikacji mobilnej:** Przypisuj lokalizację fizyczną (\`physical_location\`) w Edytorze Taksonomii, filtruj \`/collection?location=...\`, i przenoś do \`100\` egzemplarzy naraz w akcjach grupowych; w aplikacji mobilnej Android/iOS przełączaj się między wieloma zapisanymi serwerami z izolacją tokenów i pamięci offline.
 `,
     },
   },
@@ -501,7 +503,7 @@ In your Profile Settings, you set your **Default Item Visibility** (which defaul
 
 * **Per-Item Override:** Open that specific Item's detail page, click **Edit Item**, and change its individual **Visibility** dropdown. Per-item visibility always overrides your account default!
 
-* **Filtering by Visibility & Bulk Actions (\`/collection\`):** In the **Collection** sidebar, expand the **Visibility** section to filter your shelf by \`Public\`, \`Friends Only\`, or \`Private / Hidden\`. When browsing **My Items**, select up to \`100\` physical items using card selection checkboxes and click **Set visibility** in the floating **Bulk Visibility Toolbar** (\`PATCH /api/items/bulk-visibility\`) to move an entire shelf batch between tiers in one step.
+* **Filtering by Visibility, Shelf Location & Bulk Actions (\`/collection\`):** In the **Collection** sidebar, expand **Visibility** (\`Public\`, \`Friends Only\`, \`Private / Hidden\`) or **Physical Location** (\`?location=...\`) to filter your shelf. When browsing **My Items**, select up to \`100\` physical items and use the floating **Bulk Toolbar** to update visibility (\`PATCH /api/items/bulk-visibility\`) or assign a physical shelf location (\`PATCH /api/items/bulk-location\`) atomically in one step. Private shelf locations stay visible only to the item owner.
 
 ![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](/images/help/06-privacy-bulk-share-matrix.svg)
 
@@ -594,7 +596,7 @@ W Ustawieniach profilu określasz **Domyślną widoczność egzemplarzy** (domy�
 
 * **Nadpisywanie dla pojedynczego egzemplarza:** Otwórz stronę danego Egzemplarza, kliknij **Edytuj egzemplarz** i zmień pole **Widoczność**. Ustawienie konkretnego egzemplarza zawsze ma pierwszeństwo przed domyślnym ustawieniem konta!
 
-* **Filtrowanie po widoczności i zmiana zbiorcza (\`/collection\`):** W panelu bocznym Kolekcji otwórz sekcję **Widoczność**, aby filtrować półkę według pozycji \`Publiczne\`, \`Tylko dla znajomych\` oraz \`Prywatne / Ukryte\`. W widoku **Moje egzemplarze** zaznacz do \`100\` egzemplarzy i użyj przycisku **Ustaw widoczność** na pływającym pasku narzędzi, aby jednym kliknięciem zmienić widoczność całej półki.
+* **Filtrowanie po widoczności, lokalizacji i akcje grupowe (\`/collection\`):** W panelu bocznym Kolekcji otwórz sekcję **Widoczność** (\`Publiczne\`, \`Tylko dla znajomych\`, \`Prywatne / Ukryte\`) lub **Lokalizacja fizyczna** (\`?location=...\`). W widoku **Moje egzemplarze** zaznacz do \`100\` egzemplarzy i użyj pływającego paska narzędzi, aby jednym krokiem zmienić widoczność (\`PATCH /api/items/bulk-visibility\`) lub ustawić wspólną lokalizację na półce (\`PATCH /api/items/bulk-location\`, widoczną wyłącznie dla właściciela).
 
 ![Trójstopniowa bramka prywatności, pasek zbiorczej widoczności i macierz dostępu do udostępnień](/images/help/06-privacy-bulk-share-matrix.svg)
 
@@ -778,13 +780,13 @@ In a decentralized graph, changing an entity's URL breaks links across the entir
 ### 5. Trust Graph & Federated Metadata Sync
 
 Instance administrators manage peer relationships in the Admin Federation Dashboard:
-* **Trust Policies:** Peers can be set to \`TRUSTED\`, \`LIMITED\`, or \`BLOCKED\` (defederated).
+* **Trust Policies:** Peers can be set to \`trusted\`, \`untrusted\`, or \`blocked\` (defederated).
 
 * **Bibliographic Sync:** Trusted instances periodically exchange public F1/F2/F3 RDF graphs. To prevent remote spoofing, incoming graphs are validated against our **SHACL shapes**, and local curator locks always take precedence over remote updates.
 
 ### 6. Access-Controlled Federated SPARQL
 
-Each instance runs an isolated **Oxigraph-powered SPARQL Execution Service**. When federated queries are executed across instances, iqoqo enforces strict **Federated Access Rights**: public queries only ever see public triples (Works, Expressions, Manifestations, and explicitly public Items), ensuring private and friends-only items are never leaked through graph traversal.
+Each instance runs an isolated **RDFLib-powered SPARQL Execution Service** (\`sparql-runner\`). When federated queries are executed across instances, iqoqo enforces strict **Federated Access Rights**: public queries only ever see public triples (Works, Expressions, Manifestations, and explicitly public Items), ensuring private items, friends-only items, and owner shelf locations (\`physical_location\`) are never leaked through graph traversal.
 
 ### 7. Unilateral Trust vs. Bilateral (Reciprocal) Peering
 
@@ -905,13 +907,13 @@ W grafie zdecentralizowanym zmiana adresu encji zrywa relacje w całej sieci.
 ### 5. Reguły zaufania i ochrona kształtów SHACL
 
 Administratorzy zarządzają partnerami w Panelu Administracyjnym Federacji:
-* Instancje mogą mieć status \`TRUSTED\` (zaufana), \`LIMITED\` (ograniczona) lub \`BLOCKED\` (zablokowana).
+* Instancje mogą mieć status \`trusted\` (zaufana), \`untrusted\` (niezaufana) lub \`blocked\` (zablokowana).
 
 * Przychodzące grafy RDF od zaufanych partnerów są walidowane pod kątem zgodności z **kształtami SHACL**, a lokalne blokady kustoszy zawsze mają pierwszeństwo przed zdalnymi aktualizacjami.
 
 ### 6. Kontrola dostępu w SPARQL
 
-Każda instancja uruchamia wyizolowany silnik SPARQL oparty o Oxigraph. Podczas zapytań federacyjnych iqoqo egzekwuje rygorystyczne **prawa dostępu federacyjnego**: zapytania publiczne widzą wyłącznie trójki jawnie publiczne, co gwarantuje, że prywatne zbiory nigdy nie wyciekną przez trawersowanie grafu.
+Każda instancja uruchamia wyizolowany silnik SPARQL oparty o **RDFLib** (\`sparql-runner\`). Podczas zapytań federacyjnych iqoqo egzekwuje rygorystyczne **prawa dostępu federacyjnego**: zapytania publiczne widzą wyłącznie trójki jawnie publiczne (bez prywatnych lokalizacji na półkach \`physical_location\`), co gwarantuje, że prywatne zbiory nigdy nie wyciekną przez trawersowanie grafu.
 
 ### 7. Zaufanie jednostronne a obustronne (wzajemne) węzły federacji
 
@@ -990,8 +992,8 @@ Collectors frequently encounter hybrid packages: a "Deluxe Edition" album that i
 
 Do **not** split a single retail box set into separate Manifestations unless the components are sold separately with their own distinct retail barcodes.
 1. **Single Manifestation (F3):** Create one Manifestation representing the retail package as released by the publisher/label (tied to the box's EAN/UPC barcode).
-2. **Dynamic Format Normalization:** In the Manifestation editor, select the primary \`Physical Kind\` (\`audio\`, \`video\`, \`book\`, \`boardgame\`) that best represents the core nature of the release, and use the **Format** and **Extended Metadata** fields to record the hybrid carriers (e.g., \`2xLP + CD + Blu-ray\`, number of discs, or accompanying booklet details).
-3. **Multi-Scan Item Gallery (F4):** At the Item or Manifestation gallery level, take advantage of iqoqo's multi-image support. You can attach separate high-resolution scans for the front box, back tracklist, Disc 1, Disc 2, and booklet so collectors can inspect every piece of the hybrid set.
+2. **Dynamic Format Normalization:** In the Manifestation editor, select the primary \`Physical Kind\` (\`audio\`, \`video\`, \`book\`, \`boardgame\`, \`cd_dvd_combo\`, \`vcd\`, \`lego\`, \`cartographic_map\`, \`serial\`) that best represents the core nature of the release, and use the **Format** and **Extended Metadata** fields to record hybrid carriers (such as \`2xLP + CD + Blu-ray\` via \`cd_dvd_combo\`, number of discs, or accompanying booklet details).
+3. **Contributed Covers Gallery & Anonymized Edition Stats:** On any Manifestation page, collectors can inspect deduplicated contributed scans (front, inlay, disc, back) in **ManifestationCoversGallery** (\`/api/manifestations/{id}/images\`) alongside anonymized \`GROUP BY\` edition readership metrics and monthly popularity timelines in **ManifestationStatsCard** (\`/api/manifestations/{id}/stats\`).
 
 ---
 
@@ -1106,10 +1108,10 @@ Release \`1.1.0\` introduces dedicated **FRBRoo \`F18_Serial_Work\`** support so
 
 ## 9. Auditing Graph Topology with the Visual Relation Graph (\`/graph\`)
 
-Before merging complex Works or untangling Series and Expansion links, click **Explore Graph** on any Work, Expression, Manifestation, or Item page to open the **FRBR Relation Graph** (\`/graph?type=<tier>&id=<id>\`, backed by \`GET /api/catalog/graph\`):
+Before merging complex Works or untangling Series and Expansion links, click **Explore Graph** on any Work, Expression, Manifestation, Item, Contributor, or Series page to open the **FRBR Relation Graph** (\`/graph\`, backed by \`GET /api/catalog/graph\` and \`GET /api/catalog/graph/search\`):
 
-* **1-Hop or 2-Hop Traversal:** Toggle between 1-hop and 2-hop neighborhood expansion (bounded at \`150\` nodes) and filter edge categories across **FRBR Hierarchy**, **Series**, **Parts & Expansions**, **Contributors**, **Maps**, and **LOD** authorities.
-* **Recenter & Verify:** Highlight nodes by label, click any node to inspect metadata or **Recenter Graph on This Node**, and verify that expansions (\`is_expansion_of\`), multi-volume parts (\`WorkPart\`), and accepted \`SemanticLink\`s point to the intended FRBR tier.
+* **1–4 Hop Traversal & Full-Library Mode:** Expand neighborhoods across \`1–4\` hops (bounded at \`150\` nodes / \`400\` edges default, \`600\` ceiling), switch to **Library Mode** (\`?mode=library\`) or search roots via **GraphRootPicker**, and filter all **7** edge categories: **FRBR Hierarchy**, **Series**, **Parts & Expansions**, **Derivatives (\`WorkRelation\`)**, **Contributors**, **Maps**, and deduplicated **LOD** (\`lod:{digest}\`) authorities (respecting \`FederationConsent\`).
+* **Recenter & Verify:** Highlight nodes by label, click any node to inspect metadata or **Recenter Graph on This Node**, and verify that expansions (\`is_expansion_of\`), cross-media adaptations (\`WorkRelation\`), multi-volume parts (\`WorkPart\`), and accepted \`SemanticLink\`s point to the intended FRBR tier.
 
 ![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](/images/help/08-frbr-visual-relation-graph.svg)
 `,
@@ -1160,8 +1162,8 @@ Kolekcjonerzy często spotykają wydania hybrydowe: album „Deluxe Edition” z
 
 **Nie rozbijaj** pojedynczego zestawu sklepowego na osobne Manifestacje, chyba że jego elementy były sprzedawane osobno z własnymi kodami kreskowymi.
 1. **Pojedyncza Manifestacja (F3):** Utwórz jedną Manifestację reprezentującą całe pudełko wydane przez wytwórnię (powiązaną z kodem kreskowym zestawu).
-2. **Normalizacja formatów:** W edytorze wybierz wiodący rodzaj nośnika (\`audio\`, \`wideo\`, \`książka\`, \`planszówka\`), a w polach formatu i metadanych rozszerzonych opisz nośniki składowe (np. \`2xLP + CD + Blu-ray\`, liczba płyt, dołączona książeczka).
-3. **Wielozdjęciowa galeria egzemplarza (F4):** Skorzystaj z galerii wielozdjęciowej w iqoqo. Możesz dołączyć osobne skany dla frontu pudełka, spisu utworów, płyty 1, płyty 2 i książeczki.
+2. **Normalizacja formatów:** W edytorze wybierz wiodący rodzaj nośnika (\`audio\`, \`wideo\`, \`książka\`, \`planszówka\`, \`cd_dvd_combo\`, \`vcd\`, \`lego\`, \`mapa_kartograficzna\`, \`czasopismo\`), a w polach formatu i metadanych rozszerzonych opisz nośniki składowe (np. \`2xLP + CD + Blu-ray\` jako \`cd_dvd_combo\`, liczba płyt, dołączona książeczka).
+3. **Galeria okładek Manifestacji i statystyki czytelnictwa:** Na stronie dowolnej Manifestacji przeglądaj zdeduplikowane skany okładek (front, wkładka, płyta, tył) w **ManifestationCoversGallery** (\`/api/manifestations/{id}/images\`) oraz zanonimizowane statystyki \`GROUP BY\` czytelnictwa i popularności w czasie w **ManifestationStatsCard** (\`/api/manifestations/{id}/stats\`).
 
 ---
 
@@ -1277,9 +1279,9 @@ Wydanie \`1.1.0\` wprowadza natywną obsługę klasy **FRBRoo \`F18_Serial_Work\
 
 ## 9. Audyt topologii grafu w Grafie Relacji FRBR (\`/graph\`)
 
-Przed scalaniem złożonych Dzieł lub porządkowaniem relacji serii i dodatków kliknij **Eksploruj graf** na stronie dowolnego Dzieła, Ekspresji, Manifestacji lub Egzemplarza (\`/graph?type=<poziom>&id=<id>\`, zasilane przez \`GET /api/catalog/graph\`):
+Przed scalaniem złożonych Dzieł lub porządkowaniem relacji serii i dodatków kliknij **Eksploruj graf** na stronie dowolnego Dzieła, Ekspresji, Manifestacji, Egzemplarza, Twórcy lub Serii (\`/graph\`, zasilane przez \`GET /api/catalog/graph\` i \`GET /api/catalog/graph/search\`):
 
-* **Trawersowanie 1 lub 2 skoków:** Przełączaj głębokość (\`1 skok\` / \`2 skoki\`, limit \`150\` węzłów) i filtruj kategorie krawędzi: **Hierarchia FRBR**, **Serie**, **Części i rozszerzenia**, **Twórcy**, **Mapy** oraz **LOD**.
+* **Trawersowanie 1–4 skoków i tryb całej biblioteki:** Przełączaj głębokość (\`1–4 skoki\`, limit \`150\` węzłów / \`400\` krawędzi domyślnie, maks. \`600\`), uruchamiaj widok całej biblioteki (\`?mode=library\`) z wyszukiwarką **GraphRootPicker** i filtruj wszystkie **7** kategorii krawędzi: **Hierarchia FRBR**, **Serie**, **Części i rozszerzenia**, **Adaptacje / relacje między mediami (\`WorkRelation\`)**, **Twórcy**, **Mapy** oraz zdeduplikowane autorytety **LOD** (\`lod:{digest}\`, z poszanowaniem \`FederationConsent\`).
 * **Wyśrodkowanie i weryfikacja:** Wyróżniaj węzły po nazwie, przełączaj centrum grafu na wybrany węzeł i sprawdzaj poprawność powiązań zanim zatwierdzisz scalenie lub edycję.
 
 ![Interaktywny Graf Relacji FRBR (/graph): silnik trawersowania BFS i kontrola widoczności](/images/help/08-frbr-visual-relation-graph.svg)

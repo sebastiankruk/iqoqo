@@ -15,308 +15,311 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp4-title bp4-desc">
-            <title id="bp4-title">iqoqo v1.1.2 — Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion Pipeline (Blueprint 4)</title>
-            <desc id="bp4-desc">Swimlane process diagram showing /scan UI controls, local barcode resolution, GS1 prefix routing, 6 multi-provider waterfalls, SerialDisambiguationModal for bare 977 scans, WEMI persistence, and async post-hooks.</desc>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later | iqoqo v1.2.0 Architecture Blueprint -->
+<svg id="svg-bp4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp4-title bp4-desc">
+            <title id="bp4-title">04 · Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion Pipeline — iqoqo v1.2.0</title>
+            <desc id="bp4-desc">7-stage swimlane ingestion flowchart for iqoqo v1.2.0 showing 8 TopBar formats, 15s AbortController client capture, local preview resolution, Prefix Router with cd_dvd_combo/vcd, 6s multi-provider waterfalls with Primo VE BN fallback, Disambiguation Gates, and WEMI persistence.</desc>
             <style>
-              .canvas-bg { fill: #FDFBF7; }
-              .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 22px; font-weight: 700; fill: #2B3D4F; }
-              .subtitle-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 500; fill: #5A6B7C; }
-              .header-pill-bg { fill: #EFE9DD; stroke: #D8CFC0; stroke-width: 1; }
-              .header-pill-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 600; fill: #2B3D4F; }
+              .bg { fill: #FDFBF7; }
+              .title { font-family: Georgia, 'Merriweather', serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
+              .sub { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.2px; font-weight: 500; fill: #5A6776; }
+              .ver-pill { fill: #2B3D4F; }
+              .ver-pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 11px; font-weight: 700; fill: #FDFBF7; }
+              .ver-dot { fill: #D15400; }
 
-              .lane-box { stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .lane-ui { fill: #EEF2F6; stroke: #9DB0C2; }
-              .lane-route { fill: #F4EFE6; stroke: #B8AD99; }
-              .lane-disambig { fill: #FCF3EC; stroke: #DF9E74; }
-              .lane-persist { fill: #EDF5F4; stroke: #85B5B0; }
+              .lane { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .lane-indigo { fill: #F1F4F7; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .lane-clay { fill: #FEF6F0; stroke: #DF9E74; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .lane-teal { fill: #EFF8F6; stroke: #76B3AC; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .lane-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
+              .lane-meta { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #5A6776; }
 
-              .badge-indigo { fill: #2B3D4F; }
-              .badge-clay { fill: #D15400; }
-              .badge-teal { fill: #0F766E; }
-              .badge-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.5px; font-weight: 600; fill: #FFFFFF; }
-              .lane-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-              .lane-meta { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #64748B; }
+              .card { fill: #FFFDF9; stroke: #E6DFD3; stroke-width: 1.5; }
+              .card-indigo { fill: #FFFDF9; stroke: #2B3D4F; stroke-width: 1.6; }
+              .card-clay { fill: #FFFDF9; stroke: #D15400; stroke-width: 1.8; }
+              .card-teal { fill: #FFFDF9; stroke: #0F766E; stroke-width: 1.6; }
+              .card-sub { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1; }
 
-              .card-bg { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.25; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.8; }
-              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.5; }
-              .card-sub { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1; }
+              .b-indigo { fill: #2B3D4F; }
+              .b-clay { fill: #D15400; }
+              .b-teal { fill: #0F766E; }
+              .b-crimson { fill: #B91C1C; }
+              .b-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.8px; font-weight: 700; fill: #FFFFFF; }
 
-              .node-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13.5px; font-weight: 700; fill: #1E293B; }
-              .node-body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.2px; font-weight: 400; fill: #475569; }
-              .node-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 500; fill: #2B3D4F; }
-              .node-clay { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 600; fill: #B84700; }
-              .node-teal { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 600; fill: #0F766E; }
+              .c-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.6px; font-weight: 700; fill: #2B3D4F; }
+              .c-body { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.4px; font-weight: 400; fill: #475569; }
+              .c-mono { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 500; fill: #2B3D4F; }
+              .c-clay { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 700; fill: #D15400; }
+              .c-teal { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #0F766E; }
+              .c-crimson { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #B91C1C; }
 
-              .pill-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-              .pill-indigo-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #2B3D4F; }
-              .pill-clay { fill: #FFF1E6; stroke: #F5B88E; stroke-width: 1; }
-              .pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
-              .pill-teal { fill: #EDF8F6; stroke: #85B5B0; stroke-width: 1; }
-              .pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #0F766E; }
+              .pill { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #2B3D4F; }
+              .pill-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-clay-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #B84700; }
+              .pill-crimson { fill: #FEF2F2; stroke: #FCA5A5; stroke-width: 1; }
+              .pill-crimson-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #B91C1C; }
 
-              .edge-main { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
-              .edge-serial { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
-              .edge-async { fill: none; stroke: #0F766E; stroke-width: 1.75; stroke-dasharray: 6 4; stroke-linejoin: round; }
-              .mk-main { fill: #2B3D4F; }
-              .mk-serial { fill: #D15400; }
-              .mk-async { fill: #0F766E; }
+              .edge-p { fill: none; stroke: #2B3D4F; stroke-width: 1.9; stroke-linejoin: round; }
+              .edge-c { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
+              .edge-t { fill: none; stroke: #0F766E; stroke-width: 1.8; stroke-dasharray: 6 4; stroke-linejoin: round; }
+              .mk-p { fill: #2B3D4F; }
+              .mk-c { fill: #D15400; }
+              .mk-t { fill: #0F766E; }
 
-              .edge-pill-bg { fill: #FDFBF7; stroke: #CBD5E1; stroke-width: 1; }
-              .edge-pill-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #2B3D4F; }
-              .edge-pill-clay { fill: #FFF4EC; stroke: #E5A073; stroke-width: 1; }
-              .edge-pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
+              .ep { fill: #FDFBF7; stroke: #CBC3B7; stroke-width: 1; }
+              .ep-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
+              .ep-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
+              .ep-c-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #B84700; }
 
-              .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
-              .legend-heading { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
-              .legend-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #334155; }
+              .legend-bg { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1.4; }
+              .legend-h { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-t { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
             </style>
             <defs>
               <pattern id="b4-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
+                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD3" stroke-width="0.6" opacity="0.5"/>
               </pattern>
-              <filter id="b4-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+              <filter id="b4-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b4-mk-main" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-main"/>
-              </marker>
-              <marker id="b4-mk-serial" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-serial"/>
-              </marker>
-              <marker id="b4-mk-async" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-async"/>
-              </marker>
+              <marker id="b4-mk-p" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-p"/></marker>
+              <marker id="b4-mk-c" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-c"/></marker>
+              <marker id="b4-mk-t" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-t"/></marker>
             </defs>
 
             <!-- Background -->
-            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
-            <rect x="0" y="0" width="1440" height="980" fill="url(#b4-grid)"/>
+            <rect x="0" y="0" width="1440" height="940" class="bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b4-grid)"/>
 
             <!-- Header -->
-            <text x="32" y="38" class="title-text">iqoqo v1.1.2 — Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion</text>
-            <text x="32" y="60" class="subtitle-text">Blueprint 4 of 12  •  /scan UX Controls, Local Fast-Path, Prefix Router, Strategy Waterfalls &amp; Disambiguation</text>
-            <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
-            <text x="1280" y="39" text-anchor="middle" class="header-pill-text">Swimlane Ingestion Pipeline</text>
+            <text x="32" y="34" class="title">04 · Barcode, ISSN/977 Periodical &amp; Multi-Provider Ingestion Pipeline</text>
+            <text x="32" y="55" class="sub">Blueprint 4 of 12  •  8-Format TopBar, 15s AbortController, Primo VE BN Fallback, Disambiguation &amp; WEMI Persistence</text>
+            <rect x="1256" y="16" width="152" height="32" rx="16" class="ver-pill"/>
+            <circle cx="1276" cy="32" r="4" class="ver-dot"/>
+            <text x="1338" y="36" text-anchor="middle" class="ver-pill-txt">iqoqo v1.2.0</text>
 
-            <!-- ==================== ROW 1: CAPTURE & LOCAL FAST-PATH ==================== -->
-            <rect x="32" y="84" width="1376" height="162" rx="14" class="lane-box lane-ui"/>
-            <rect x="46" y="94" width="60" height="20" rx="5" class="badge-indigo"/>
-            <text x="76" y="108" text-anchor="middle" class="badge-text">STAGE 1–3</text>
-            <text x="114" y="108" class="lane-title">/scan CLIENT CAPTURE &amp; LOCAL DATABASE RESOLUTION</text>
-            <text x="1394" y="108" text-anchor="end" class="lane-meta">≤ 3 TAPS TO CATALOG</text>
+            <!-- ==================== ROW 1: STAGES 1–3 ==================== -->
+            <rect x="32" y="74" width="1376" height="154" rx="12" class="lane-indigo"/>
+            <rect x="46" y="84" width="64" height="18" rx="4" class="b-indigo"/>
+            <text x="78" y="96" text-anchor="middle" class="b-txt">STAGE 1–3</text>
+            <text x="118" y="97" class="lane-title">/scan CLIENT CAPTURE &amp; LOCAL DATABASE RESOLUTION</text>
+            <text x="1394" y="96" text-anchor="end" class="lane-meta">≤ 3 TAPS • ZERO-EGRESS LOCAL FAST-PATH</text>
 
             <!-- Stage 1 -->
-            <rect x="46" y="122" width="350" height="110" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="58" y="142" class="node-title">1. TopBar Controls (top-bar.tsx)</text>
-            <text x="58" y="162" class="node-mono">[Format ▾] book | magazine | music | movie | game | lego</text>
-            <text x="58" y="182" class="node-mono">[Save to ▾] Shelf (OWNED) | Wishlist | Catalog Only</text>
-            <text x="58" y="202" class="node-body">• Explicit ON/OFF BatchScanToggle + native haptics</text>
-            <text x="58" y="220" class="node-body">• Persists active format hint &amp; policy intent</text>
+            <g filter="url(#b4-sh)">
+              <rect x="46" y="110" width="380" height="106" rx="9" class="card"/>
+              <text x="58" y="129" class="c-title">1. TopBar (top-bar.tsx)</text>
+              <rect x="330" y="116" width="84" height="18" rx="4" class="pill-clay"/>
+              <text x="372" y="128" text-anchor="middle" class="pill-clay-txt">8 FORMATS</text>
+              <text x="58" y="149" class="c-clay">[Format ▾] book, magazine, audiobook, music,</text>
+              <text x="58" y="164" class="c-clay">           movie, board_game, puzzle, lego</text>
+              <text x="58" y="183" class="c-mono">[Save to ▾] Shelf | Wishlist | Catalog Only</text>
+              <text x="58" y="201" class="c-body">• [Batch ON/OFF] BatchScanToggle + haptic feedback</text>
+            </g>
 
             <!-- Stage 2 -->
-            <rect x="444" y="122" width="356" height="110" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="456" y="142" class="node-title">2. Input Capture (Unified Bar + 2-Tab Sheet)</text>
-            <text x="456" y="162" class="node-body">• 100%-width Quick Lookup OR Barcode / Snap Cover tabs</text>
-            <text x="456" y="182" class="node-body">• EAN-8/13/15/18, ISBN-10/13, ISSN (XXXX-XXXX),</text>
-            <text x="456" y="200" class="node-body">  LEGO Set ID (10318), Local QR, or Artist/Title query</text>
-            <text x="456" y="220" class="node-teal">Offline Mobile: Checks offline-cache.ts duplicate snapshot</text>
+            <g filter="url(#b4-sh)">
+              <rect x="458" y="110" width="398" height="106" rx="9" class="card"/>
+              <text x="470" y="129" class="c-title">2. Input Capture (Unified Bar / BottomSheet)</text>
+              <text x="470" y="149" class="c-body">• Barcode / Snap Cover • EAN-8/13/15/18, ISBN-10/13,</text>
+              <text x="470" y="165" class="c-body">  ISSN (XXXX-XXXX), LEGO Set ID, Local QR, Title query</text>
+              <text x="470" y="184" class="c-clay">• Timeout: API_TIMEOUT_MS = 15_000 (AbortController)</text>
+              <text x="470" y="202" class="c-teal">• Mobile Offline: checks local duplicate snapshot</text>
+            </g>
 
             <!-- Stage 3 -->
-            <rect x="848" y="122" width="546" height="110" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="860" y="142" class="node-title">3. Local Resolution</text>
-            <rect x="1142" y="128" width="238" height="20" rx="5" class="pill-indigo"/>
-            <text x="1261" y="142" text-anchor="middle" class="pill-indigo-text">GET /api/scanner/preview/&lt;code&gt;</text>
-            <text x="860" y="164" class="node-body">1. Item.local_barcode (owner-scoped) → Jump straight to /item/[id]</text>
-            <text x="860" y="184" class="node-body">2. Manifestation (isbn13, ean, upc, barcode, full_barcode) → Zero-egress fast-path</text>
-            <text x="860" y="204" class="node-body">3. Work.issn (Modulo-11) → Match existing Serial Work</text>
-            <text x="860" y="222" class="node-clay">Cache Miss / External Lookup Needed → Route to Stage 4 Prefix Router</text>
+            <g filter="url(#b4-sh)">
+              <rect x="888" y="110" width="506" height="106" rx="9" class="card-indigo"/>
+              <text x="900" y="129" class="c-title">3. Local Resolution</text>
+              <rect x="1156" y="116" width="226" height="18" rx="4" class="pill"/>
+              <text x="1269" y="128" text-anchor="middle" class="pill-txt">GET /api/scanner/preview/&lt;code&gt;</text>
+              <text x="900" y="150" class="c-body">1. Item.local_barcode (owner-scoped) → Direct jump to /item/[id]</text>
+              <text x="900" y="169" class="c-body">2. Manifestation (isbn13/ean/upc/barcode/full_barcode) → Fast-path</text>
+              <text x="900" y="188" class="c-body">3. Work.issn (Modulo-11) → Match existing Serial Work</text>
+              <text x="900" y="205" class="c-clay">Cache Miss → Route to Stage 4 Prefix &amp; Format Router</text>
+            </g>
 
-            <!-- Row 1 Edges -->
-            <path d="M 396 177 L 442 177" class="edge-main" marker-end="url(#b4-mk-main)"/>
-            <path d="M 800 177 L 846 177" class="edge-main" marker-end="url(#b4-mk-main)"/>
+            <!-- Row 1 Arrows -->
+            <path d="M 426 163 L 456 163" class="edge-p" marker-end="url(#b4-mk-p)"/>
+            <path d="M 856 163 L 886 163" class="edge-p" marker-end="url(#b4-mk-p)"/>
 
-            <!-- ==================== ROW 2: PREFIX ROUTER & WATERFALLS ==================== -->
-            <rect x="32" y="274" width="1376" height="328" rx="14" class="lane-box lane-route"/>
-            <rect x="46" y="284" width="60" height="20" rx="5" class="badge-indigo"/>
-            <text x="76" y="298" text-anchor="middle" class="badge-text">STAGE 4–5</text>
-            <text x="114" y="298" class="lane-title">GS1 PREFIX ROUTER &amp; MULTI-PROVIDER STRATEGY WATERFALLS</text>
-            <rect x="1102" y="284" width="292" height="20" rx="5" class="pill-clay"/>
-            <text x="1248" y="298" text-anchor="middle" class="pill-clay-text">ALL EGRESS: safe_get SSRF + _provenance</text>
+            <!-- ==================== ROW 2: STAGES 4–5 ==================== -->
+            <rect x="32" y="252" width="1376" height="328" rx="12" class="lane"/>
+            <rect x="46" y="262" width="64" height="18" rx="4" class="b-indigo"/>
+            <text x="78" y="274" text-anchor="middle" class="b-txt">STAGE 4–5</text>
+            <text x="118" y="275" class="lane-title">PREFIX ROUTER &amp; MULTI-PROVIDER WATERFALLS</text>
+            <rect x="852" y="261" width="542" height="19" rx="5" class="pill-crimson"/>
+            <text x="1123" y="274" text-anchor="middle" class="pill-crimson-txt">max_duration=6.0s • max_retries=0 gap-fill • safe_get SSRF • BN budget ≥ 1.5s</text>
 
-            <!-- Stage 3 -> Stage 4 routing line -->
-            <path d="M 920 232 L 920 260 L 182 260 L 182 310" class="edge-main" marker-end="url(#b4-mk-main)"/>
-            <rect x="478" y="250" width="144" height="19" rx="5" class="edge-pill-bg"/>
-            <text x="550" y="263" text-anchor="middle" class="edge-pill-text">Cache Miss → Lookup</text>
+            <!-- Stage 3 -> Stage 4 -->
+            <path d="M 940 216 L 940 240 L 194 240 L 194 288" class="edge-p" marker-end="url(#b4-mk-p)"/>
+            <rect x="492" y="231" width="144" height="18" rx="4" class="ep"/>
+            <text x="564" y="243" text-anchor="middle" class="ep-txt">Cache Miss → Lookup</text>
 
-            <!-- Stage 4: Prefix Router -->
-            <rect x="46" y="312" width="300" height="274" rx="10" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="58" y="334" class="node-title">4. Prefix &amp; Format Router</text>
-            <text x="58" y="352" class="node-mono">LookupStrategyFactory</text>
+            <!-- Stage 4: Prefix & Format Router -->
+            <g filter="url(#b4-sh)">
+              <rect x="46" y="290" width="298" height="276" rx="9" class="card-indigo"/>
+              <text x="58" y="311" class="c-title">4. Prefix &amp; Format Router</text>
+              <text x="58" y="328" class="c-mono">LookupStrategyFactory</text>
 
-            <rect x="58" y="366" width="276" height="48" rx="7" class="pill-clay"/>
-            <text x="68" y="384" class="pill-clay-text">977... (13/15/18) or Mod-11 ISSN</text>
-            <text x="68" y="402" class="node-body">→ SerialLookupStrategy (+ EAN-2/5)</text>
+              <rect x="58" y="340" width="274" height="44" rx="6" class="pill-clay"/>
+              <text x="68" y="357" class="pill-clay-txt">977... (13/15/18) or Mod-11 ISSN</text>
+              <text x="68" y="374" class="c-body">→ SerialLookupStrategy (+ EAN-2/5)</text>
 
-            <rect x="58" y="422" width="276" height="44" rx="7" class="card-sub"/>
-            <text x="68" y="440" class="node-mono">570201... or format=lego</text>
-            <text x="68" y="456" class="node-body">→ LegoLookupStrategy</text>
+              <rect x="58" y="392" width="274" height="42" rx="6" class="card-sub"/>
+              <text x="68" y="409" class="c-mono">570201... or format=lego</text>
+              <text x="68" y="425" class="c-body">→ LegoLookupStrategy</text>
 
-            <rect x="58" y="474" width="276" height="44" rx="7" class="card-sub"/>
-            <text x="68" y="492" class="node-mono">978/979... or LOOKUP_STRATEGY_MAP</text>
-            <text x="68" y="508" class="node-body">→ Book / Audio / Video / Game / Puzzle</text>
+              <rect x="58" y="442" width="274" height="58" rx="6" class="card-sub"/>
+              <text x="68" y="459" class="c-clay">v1.2.0 Carriers: cd_dvd_combo / vcd</text>
+              <text x="68" y="476" class="c-body">Defers Blu-ray live_performance</text>
+              <text x="68" y="491" class="c-body">disambiguation cleanly</text>
 
-            <text x="58" y="544" class="node-teal">Telemetry: record_outbound_telemetry()</text>
-            <text x="58" y="562" class="node-body">Normalizes responses + attaches</text>
-            <text x="58" y="576" class="node-mono">meta["_provenance"] (prov:wasDerivedFrom)</text>
+              <text x="58" y="520" class="c-teal">Attaches _provenance + telemetry:</text>
+              <text x="58" y="537" class="c-mono">record_outbound_telemetry()</text>
+              <text x="58" y="553" class="c-mono">LOOKUP_STRATEGY_MAP</text>
+            </g>
 
-            <!-- Router -> Waterfalls trunk -->
-            <path d="M 346 449 L 386 449" class="edge-main" marker-end="url(#b4-mk-main)"/>
+            <!-- Router -> Waterfalls -->
+            <path d="M 344 428 L 382 428" class="edge-p" marker-end="url(#b4-mk-p)"/>
 
-            <!-- Stage 5: 6 Domain Waterfall Cards (3x2 Grid) -->
-            <!-- 5.1 Books -->
-            <rect x="388" y="312" width="322" height="128" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="400" y="334" class="node-title">Books (BookLookupStrategy)</text>
-            <text x="400" y="356" class="node-mono">1. Google Books API</text>
-            <text x="400" y="374" class="node-mono">2. OpenLibrary Books API</text>
-            <text x="400" y="392" class="node-mono">3. Biblioteka Narodowa (PL)</text>
-            <text x="400" y="410" class="node-mono">4. OpenCollections.org → 5. Allegro</text>
-            <text x="400" y="428" class="node-body">Canonicalizes ISBN-10/13 • 3× backoff</text>
+            <!-- Stage 5: 6 Domain Waterfalls (3x2 Grid) -->
+            <g filter="url(#b4-sh)">
+              <!-- Books -->
+              <rect x="384" y="290" width="326" height="130" rx="9" class="card-clay"/>
+              <text x="396" y="310" class="c-title">Books (BookLookupStrategy)</text>
+              <text x="396" y="330" class="c-mono">1. Google Books → 2. OpenLibrary</text>
+              <text x="396" y="348" class="c-clay">3. BN (data.bn.org.pl + Primo VE</text>
+              <text x="396" y="363" class="c-clay">   katalogi.bn.org.pl fallback)</text>
+              <text x="396" y="382" class="c-mono">4. OpenCollections → 5. Allegro</text>
+              <text x="396" y="405" class="c-teal">Reserves ≥ 1.5s Polish BN budget</text>
 
-            <!-- 5.2 Serials (Clay Highlight) -->
-            <rect x="726" y="312" width="326" height="128" rx="9" class="card-clay" filter="url(#b4-shadow)"/>
-            <text x="738" y="334" class="node-title">Serials (SerialLookupStrategy)</text>
-            <text x="738" y="356" class="node-mono">1. Local Work.issn lookup</text>
-            <text x="738" y="374" class="node-mono">2. Biblioteka Narodowa (data.bn.org.pl)</text>
-            <text x="738" y="392" class="node-mono">3. Crossref (/journals/{issn})</text>
-            <text x="738" y="410" class="node-mono">4. OpenLibrary (q=issn:) → 5. Allegro</text>
-            <text x="738" y="428" class="node-clay">Bare 13-digit 977 → SerialDisambiguation</text>
+              <!-- Serials -->
+              <rect x="724" y="290" width="330" height="130" rx="9" class="card-clay"/>
+              <text x="736" y="310" class="c-title">Serials (SerialLookupStrategy)</text>
+              <text x="736" y="330" class="c-mono">1. Local Work.issn lookup</text>
+              <text x="736" y="348" class="c-clay">2. BN (data.bn.org.pl + Primo VE)</text>
+              <text x="736" y="366" class="c-mono">3. Crossref (/journals/{issn})</text>
+              <text x="736" y="384" class="c-mono">4. OpenLibrary → 5. Allegro</text>
+              <text x="736" y="405" class="c-clay">Bare 13-digit 977 → SerialDisambig</text>
 
-            <!-- 5.3 LEGO -->
-            <rect x="1068" y="312" width="326" height="128" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="1080" y="334" class="node-title">LEGO (LegoLookupStrategy)</text>
-            <text x="1080" y="356" class="node-mono">1. Rebrickable API (570201 / Set ID)</text>
-            <text x="1080" y="374" class="node-mono">2. Allegro Fallback (Kod producenta)</text>
-            <text x="1080" y="398" class="node-body">Maps set → F16_Container_Work,</text>
-            <text x="1080" y="416" class="node-body">box → F3 (piece_count, minifig_count)</text>
+              <!-- LEGO -->
+              <rect x="1068" y="290" width="326" height="130" rx="9" class="card"/>
+              <text x="1080" y="310" class="c-title">LEGO (LegoLookupStrategy)</text>
+              <text x="1080" y="332" class="c-mono">1. Rebrickable API (570201 / Set ID)</text>
+              <text x="1080" y="350" class="c-mono">2. Allegro (Kod producenta)</text>
+              <text x="1080" y="378" class="c-body">Maps set → F16_Container_Work,</text>
+              <text x="1080" y="396" class="c-body">box → F3 (piece_count, minifig_count)</text>
 
-            <!-- 5.4 Audio -->
-            <rect x="388" y="456" width="322" height="130" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="400" y="478" class="node-title">Audio / Vinyl / CD</text>
-            <text x="400" y="500" class="node-mono">1. Discogs (Label, Cat#, Matrix)</text>
-            <text x="400" y="518" class="node-mono">2. MusicBrainz (MBID / Release)</text>
-            <text x="400" y="544" class="node-body">Populates pressing_number, track_list,</text>
-            <text x="400" y="562" class="node-body">schema:MusicRelease &amp; owl:sameAs</text>
+              <!-- Audio -->
+              <rect x="384" y="434" width="326" height="132" rx="9" class="card"/>
+              <text x="396" y="454" class="c-title">Audio / Vinyl / CD</text>
+              <text x="396" y="476" class="c-mono">1. Discogs (Label, Cat#, Matrix)</text>
+              <text x="396" y="494" class="c-mono">2. MusicBrainz (MBID / Release)</text>
+              <text x="396" y="522" class="c-body">Populates pressing_number, track_list,</text>
+              <text x="396" y="540" class="c-body">schema:MusicRelease &amp; owl:sameAs</text>
 
-            <!-- 5.5 Video -->
-            <rect x="726" y="456" width="326" height="130" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="738" y="478" class="node-title">Video / Blu-ray / 4K UHD</text>
-            <text x="738" y="500" class="node-mono">1. TMDB API</text>
-            <text x="738" y="518" class="node-mono">2. UPC Lookup → 3. Allegro</text>
-            <text x="738" y="544" class="node-body">Populates resolution, aspect_ratio,</text>
-            <text x="738" y="562" class="node-body">run_time_minutes &amp; Studio credits</text>
+              <!-- Video -->
+              <rect x="724" y="434" width="330" height="132" rx="9" class="card"/>
+              <text x="736" y="454" class="c-title">Video / Blu-ray / 4K / VCD</text>
+              <text x="736" y="476" class="c-mono">1. TMDB API</text>
+              <text x="736" y="494" class="c-mono">2. UPC Lookup → 3. Allegro</text>
+              <text x="736" y="522" class="c-body">Supports vcd &amp; cd_dvd_combo carriers,</text>
+              <text x="736" y="540" class="c-body">resolution, aspect_ratio &amp; Studio credits</text>
 
-            <!-- 5.6 Games & Puzzles -->
-            <rect x="1068" y="456" width="326" height="130" rx="9" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="1080" y="478" class="node-title">Board Games, Video Games &amp; Puzzles</text>
-            <text x="1080" y="500" class="node-mono">1. BoardGameGeek (BGG2) / IGDB</text>
-            <text x="1080" y="518" class="node-mono">2. UPC Lookup → 3. Allegro</text>
-            <text x="1080" y="544" class="node-body">Populates min/max players, playtime,</text>
-            <text x="1080" y="562" class="node-body">bgg_mechanics &amp; F16 components</text>
+              <!-- Games & Puzzles -->
+              <rect x="1068" y="434" width="326" height="132" rx="9" class="card"/>
+              <text x="1080" y="454" class="c-title">Games &amp; Puzzles</text>
+              <text x="1080" y="476" class="c-mono">1. BoardGameGeek (BGG) / IGDB</text>
+              <text x="1080" y="494" class="c-mono">2. UPC Lookup → 3. Allegro</text>
+              <text x="1080" y="522" class="c-body">Populates min/max players, playtime,</text>
+              <text x="1080" y="540" class="c-body">bgg_mechanics &amp; F16 components</text>
+            </g>
 
-            <!-- ==================== ROW 3: DISAMBIGUATION & PERSISTENCE ==================== -->
+            <!-- ==================== ROW 3: STAGES 6–7 ==================== -->
             <!-- Stage 6 Zone -->
-            <rect x="32" y="636" width="706" height="268" rx="14" class="lane-box lane-disambig"/>
-            <rect x="46" y="646" width="56" height="20" rx="5" class="badge-clay"/>
-            <text x="74" y="660" text-anchor="middle" class="badge-text">STAGE 6</text>
-            <text x="110" y="660" class="lane-title">DISAMBIGUATION GATES</text>
+            <rect x="32" y="614" width="706" height="256" rx="12" class="lane-clay"/>
+            <rect x="46" y="624" width="54" height="18" rx="4" class="b-clay"/>
+            <text x="73" y="636" text-anchor="middle" class="b-txt">STAGE 6</text>
+            <text x="108" y="637" class="lane-title">DISAMBIGUATION GATES</text>
 
-            <!-- Stage 6A -->
-            <rect x="46" y="676" width="318" height="214" rx="10" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="58" y="698" class="node-title">6A. DisambiguationSheet</text>
-            <text x="58" y="718" class="node-body">Triggered when multiple editions or</text>
-            <text x="58" y="734" class="node-body">formats match a barcode/title query.</text>
-            <text x="58" y="760" class="node-body">• Side-by-side cover thumbnails</text>
-            <text x="58" y="778" class="node-body">• Publisher, year &amp; media format badges</text>
-            <text x="58" y="796" class="node-body">• Single tap selects exact Manifestation</text>
-            <text x="58" y="828" class="node-mono">Fallback if 0 hits: Snap Cover Vision</text>
-            <text x="58" y="846" class="node-mono">or Manual Entry Form</text>
+            <g filter="url(#b4-sh)">
+              <rect x="46" y="652" width="318" height="204" rx="9" class="card"/>
+              <text x="58" y="672" class="c-title">6A. DisambiguationSheet</text>
+              <text x="58" y="692" class="c-body">Multiple edition/format candidates matched:</text>
+              <text x="58" y="714" class="c-body">• Side-by-side cover thumbnails</text>
+              <text x="58" y="732" class="c-body">• Publisher, year &amp; carrier badges</text>
+              <text x="58" y="750" class="c-body">• Single tap picks exact Manifestation</text>
+              <text x="58" y="786" class="c-mono">Zero-hit fallback: Snap Cover Vision</text>
+              <text x="58" y="804" class="c-mono">or Manual Entry Form</text>
 
-            <!-- Stage 6B -->
-            <rect x="380" y="676" width="344" height="214" rx="10" class="card-clay" filter="url(#b4-shadow)"/>
-            <text x="392" y="698" class="node-title">6B. SerialDisambiguationModal</text>
-            <rect x="596" y="684" width="116" height="20" rx="5" class="pill-clay"/>
-            <text x="654" y="698" text-anchor="middle" class="pill-clay-text">BARE 13-DIGIT 977</text>
-            <text x="392" y="722" class="node-body">Triggered when GS1 977 periodical barcode</text>
-            <text x="392" y="738" class="node-body">lacks an EAN-2 / EAN-5 issue add-on.</text>
-            <text x="392" y="764" class="node-body">1. Select existing issue (issue_number, year)</text>
-            <text x="392" y="784" class="node-body">2. Add New Issue under matched Work.issn</text>
-            <text x="392" y="804" class="node-clay">3. Snap Cover to Auto-Fill Issue</text>
-            <text x="392" y="824" class="node-body">   (Hands off to Blueprint 5 Vision/OCR)</text>
-            <text x="392" y="862" class="node-teal">Prevents duplicate periodical Works</text>
+              <rect x="380" y="652" width="344" height="204" rx="9" class="card-clay"/>
+              <text x="392" y="672" class="c-title">6B. SerialDisambiguationModal</text>
+              <rect x="598" y="659" width="114" height="18" rx="4" class="pill-clay"/>
+              <text x="655" y="671" text-anchor="middle" class="pill-clay-txt">BARE 13-DIGIT 977</text>
+              <text x="392" y="696" class="c-body">Bare GS1 977 without EAN-2/5 issue add-on:</text>
+              <text x="392" y="720" class="c-body">1. Pick existing issue (issue_number, year)</text>
+              <text x="392" y="740" class="c-body">2. Add New Issue under matched Work.issn</text>
+              <text x="392" y="762" class="c-clay">3. Snap Cover to Auto-Fill Issue</text>
+              <text x="392" y="782" class="c-body">   (Hands off to Blueprint 5 Vision/OCR)</text>
+              <text x="392" y="820" class="c-teal">Prevents duplicate periodical Works</text>
+            </g>
 
             <!-- Stage 7 Zone -->
-            <rect x="768" y="636" width="640" height="268" rx="14" class="lane-box lane-persist"/>
-            <rect x="782" y="646" width="56" height="20" rx="5" class="badge-teal"/>
-            <text x="810" y="660" text-anchor="middle" class="badge-text">STAGE 7</text>
-            <text x="846" y="660" class="lane-title">WEMI PERSISTENCE &amp; ASYNC POST-HOOKS</text>
+            <rect x="768" y="614" width="640" height="256" rx="12" class="lane-teal"/>
+            <rect x="782" y="624" width="54" height="18" rx="4" class="b-teal"/>
+            <text x="809" y="636" text-anchor="middle" class="b-txt">STAGE 7</text>
+            <text x="844" y="637" class="lane-title">WEMI PERSISTENCE &amp; ASYNC POST-HOOKS</text>
 
-            <!-- Stage 7A: Persistence -->
-            <rect x="782" y="676" width="310" height="214" rx="10" class="card-bg" filter="url(#b4-shadow)"/>
-            <text x="794" y="698" class="node-title">WEMI Persistence</text>
-            <text x="794" y="718" class="node-mono">persist_isbn_manifestation()</text>
-            <text x="794" y="734" class="node-mono">_scan_to_library()</text>
-            <text x="794" y="760" class="node-body">• Policy = OWNED: Creates F1/F2/F3</text>
-            <text x="794" y="776" class="node-body">  (if missing) + F4/F5 Item; auto-fulfills</text>
-            <text x="794" y="792" class="node-body">  matching UserWorkIntent wishlist</text>
-            <text x="794" y="816" class="node-body">• Policy = WISHLIST: Creates</text>
-            <text x="794" y="832" class="node-body">  UserWorkIntent (no physical Item)</text>
-            <text x="794" y="860" class="node-teal">Applies User.default_item_visibility</text>
+            <g filter="url(#b4-sh)">
+              <rect x="782" y="652" width="310" height="204" rx="9" class="card-indigo"/>
+              <text x="794" y="672" class="c-title">WEMI Persistence</text>
+              <text x="794" y="690" class="c-mono">persist_isbn_manifestation()</text>
+              <text x="794" y="706" class="c-mono">_scan_to_library()</text>
+              <text x="794" y="730" class="c-body">• OWNED: Creates F1/F2/F3 + F4 Item &amp;</text>
+              <text x="794" y="746" class="c-body">  auto-fulfills matching UserWorkIntent</text>
+              <text x="794" y="772" class="c-body">• WISHLIST: Creates UserWorkIntent</text>
+              <text x="794" y="788" class="c-body">  (virtual item, no physical copy)</text>
+              <text x="794" y="822" class="c-teal">Applies User.default_item_visibility</text>
 
-            <!-- Stage 7B: Post-Hooks -->
-            <rect x="1108" y="676" width="286" height="214" rx="10" class="card-teal" filter="url(#b4-shadow)"/>
-            <text x="1120" y="698" class="node-title">Async Post-Hooks (Celery/SSE)</text>
-            <text x="1120" y="724" class="node-body">• Cover Download / AI Generation</text>
-            <text x="1120" y="740" class="node-mono">  (Blueprint 5 — 7-Tier Pipeline)</text>
-            <text x="1120" y="766" class="node-body">• PostgreSQL FTS Reindex</text>
-            <text x="1120" y="782" class="node-mono">  enqueue_fts_reindex()</text>
-            <text x="1120" y="808" class="node-body">• SSE Live Transition Push</text>
-            <text x="1120" y="824" class="node-mono">  /api/v1/events/stream</text>
-            <text x="1120" y="850" class="node-body">• ActivityPub Create Outbox</text>
-            <text x="1120" y="866" class="node-teal">  (only if user consented)</text>
+              <rect x="1108" y="652" width="286" height="204" rx="9" class="card-teal"/>
+              <text x="1120" y="672" class="c-title">Async Post-Hooks</text>
+              <text x="1120" y="698" class="c-body">• Celery Cover Download / AI Gen</text>
+              <text x="1120" y="714" class="c-mono">  (Blueprint 5 — 7-Tier Pipeline)</text>
+              <text x="1120" y="738" class="c-body">• PostgreSQL FTS Reindex</text>
+              <text x="1120" y="754" class="c-mono">  enqueue_fts_reindex()</text>
+              <text x="1120" y="778" class="c-body">• SSE Live Transition Event</text>
+              <text x="1120" y="794" class="c-mono">  /api/v1/events/stream</text>
+              <text x="1120" y="818" class="c-body">• ActivityPub Create Outbox</text>
+              <text x="1120" y="834" class="c-teal">  (only if user consented)</text>
+            </g>
 
-            <!-- Row 2 -> Row 3 Edges -->
-            <!-- Multi-hit -> 6A -->
-            <path d="M 550 586 L 550 618 L 205 618 L 205 674" class="edge-main" marker-end="url(#b4-mk-main)"/>
-            <rect x="292" y="608" width="136" height="19" rx="5" class="edge-pill-bg"/>
-            <text x="360" y="621" text-anchor="middle" class="edge-pill-text">Multiple Candidates</text>
+            <!-- Row 2 -> Row 3 Routing Arrows -->
+            <path d="M 547 566 L 547 596 L 205 596 L 205 650" class="edge-p" marker-end="url(#b4-mk-p)"/>
+            <rect x="292" y="587" width="132" height="18" rx="4" class="ep"/>
+            <text x="358" y="599" text-anchor="middle" class="ep-txt">Multiple Candidates</text>
 
-            <!-- Bare 977 -> 6B -->
-            <path d="M 889 440 L 889 450 L 716 450 L 716 618 L 552 618 L 552 674" class="edge-serial" marker-end="url(#b4-mk-serial)"/>
-            <rect x="572" y="608" width="126" height="19" rx="5" class="edge-pill-clay"/>
-            <text x="635" y="621" text-anchor="middle" class="edge-pill-clay-text">Bare 977 Periodical</text>
+            <path d="M 889 420 L 889 428 L 716 428 L 716 596 L 552 596 L 552 650" class="edge-c" marker-end="url(#b4-mk-c)"/>
+            <rect x="572" y="587" width="126" height="18" rx="4" class="ep-c"/>
+            <text x="635" y="599" text-anchor="middle" class="ep-c-txt">Bare 977 Periodical</text>
 
-            <!-- Single Exact Hit -> Stage 7 -->
-            <path d="M 1052 586 L 1052 618 L 937 618 L 937 674" class="edge-main" marker-end="url(#b4-mk-main)"/>
-            <rect x="946" y="608" width="102" height="19" rx="5" class="edge-pill-bg"/>
-            <text x="997" y="621" text-anchor="middle" class="edge-pill-text">Unique Hit</text>
+            <path d="M 1054 566 L 1054 596 L 937 596 L 937 650" class="edge-p" marker-end="url(#b4-mk-p)"/>
+            <rect x="948" y="587" width="96" height="18" rx="4" class="ep"/>
+            <text x="996" y="599" text-anchor="middle" class="ep-txt">Unique Hit</text>
 
-            <!-- Stage 6 -> Stage 7 -->
-            <path d="M 724 783 L 780 783" class="edge-main" marker-end="url(#b4-mk-main)"/>
+            <path d="M 724 754 L 780 754" class="edge-p" marker-end="url(#b4-mk-p)"/>
+            <path d="M 1092 754 L 1106 754" class="edge-t" marker-end="url(#b4-mk-t)"/>
 
-            <!-- Stage 7A -> Stage 7B -->
-            <path d="M 1092 783 L 1106 783" class="edge-async" marker-end="url(#b4-mk-async)"/>
-
-            <!-- Legend -->
-            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="947" class="legend-heading">LEGEND:</text>
-            <line x1="128" y1="943" x2="174" y2="943" class="edge-main" marker-end="url(#b4-mk-main)"/>
-            <text x="184" y="947" class="legend-text">Synchronous Scan &amp; Persist Path</text>
-            <line x1="436" y1="943" x2="482" y2="943" class="edge-serial" marker-end="url(#b4-mk-serial)"/>
-            <text x="492" y="947" class="legend-text">GS1 977 Periodical Disambiguation</text>
-            <line x1="758" y1="943" x2="804" y2="943" class="edge-async" marker-end="url(#b4-mk-async)"/>
-            <text x="814" y="947" class="legend-text">Async Celery / SSE / ActivityPub Hook</text>
-            <rect x="1116" y="933" width="18" height="18" rx="4" class="badge-clay"/>
-            <text x="1142" y="947" class="legend-text">SSRF / Disambiguation Gate</text>
+            <!-- Legend Bar -->
+            <rect x="32" y="886" width="1376" height="40" rx="10" class="legend-bg"/>
+            <text x="50" y="910" class="legend-h">LEGEND:</text>
+            <line x1="126" y1="906" x2="170" y2="906" class="edge-p" marker-end="url(#b4-mk-p)"/>
+            <text x="180" y="910" class="legend-t">Synchronous Scan &amp; Persist Path</text>
+            <line x1="422" y1="906" x2="466" y2="906" class="edge-c" marker-end="url(#b4-mk-c)"/>
+            <text x="476" y="910" class="legend-t">GS1 977 Periodical / v1.2.0 Update</text>
+            <line x1="734" y1="906" x2="778" y2="906" class="edge-t" marker-end="url(#b4-mk-t)"/>
+            <text x="788" y="910" class="legend-t">Async Celery / SSE / ActivityPub Hook</text>
+            <rect x="1086" y="897" width="18" height="18" rx="4" class="b-crimson"/>
+            <text x="1112" y="910" class="legend-t">SSRF &amp; 6.0s Timeout Budget</text>
           </svg>

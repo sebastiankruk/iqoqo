@@ -80,9 +80,16 @@ function getAuthorityConfig(authority: string) {
   }
 }
 
+const ENTITY_LEVEL_KEYS: Record<string, string> = {
+  work: "levels.work",
+  expression: "levels.expression",
+  manifestation: "levels.manifestation",
+  contributor: "levels.contributor",
+};
+
 /**
  * Interactive Linked Open Data panel displaying resolved external links
- * for a Manifestation and its parent Work.
+ * for a Manifestation, its parent Work, and associated Contributors.
  *
  * @param props - Component props.
  * @param props.manifestationId - The ID of the manifestation.
@@ -187,9 +194,7 @@ export function SemanticLinks({ manifestationId, canEdit = false, compact = fals
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
                   <span>{t("confidence", { score: confidencePercent })}</span>
                   <span>•</span>
-                  <span className="capitalize">
-                    {link.entity_type === "work" ? t("levels.work") : t("levels.manifestation")}
-                  </span>
+                  <span className="capitalize">{t(ENTITY_LEVEL_KEYS[link.entity_type] || "levels.manifestation")}</span>
                   {link.verified && (
                     <>
                       <span>•</span>

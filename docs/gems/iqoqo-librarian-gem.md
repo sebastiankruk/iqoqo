@@ -67,7 +67,7 @@ openapi: 3.1.0
 info:
   title: iqoqo Collector API
   description: Personal library search and inventory lookup API.
-  version: 0.9.3
+  version: 1.2.0
 servers:
   - url: https://your-instance.iqoqo.cc
     description: Your private iqoqo instance

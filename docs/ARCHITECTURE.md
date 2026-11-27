@@ -193,13 +193,16 @@ To display a book in your collection, traverse from Item to Work:
 
 ```python
 
-# Get all books in user's collection with full details
+# Get owned items in user's collection with eager FRBR context
 items = (
-    db.session.query(Item)
-    .join(Manifestation)
-    .join(Expression)
-    .join(Work)
-    .filter(Item.owner_id == current_user.id)
+    db.session.execute(
+        select(Item)
+        .join(Manifestation)
+        .join(Expression)
+        .join(Work)
+        .where(Item.owner_id == current_user.id)
+    )
+    .scalars()
     .all()
 )
 
@@ -221,14 +224,14 @@ def add_book(isbn: str, metadata: dict) -> Item:
     """Add a book to collection, respecting FRBR hierarchy."""
 
     # 1. Check if Manifestation exists (by ISBN)
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == isbn)).scalars().first()
 
     if not manifestation:
         # 2. Check if Work exists (by title)
         title = metadata["title"]
         authors = metadata["authors"]
 
-        work = Work.query.filter_by(title=title).first()
+        work = db.session.execute(select(Work).where(Work.title == title)).scalars().first()
         if not work:
             # 3. Create new Work
             work = Work(
@@ -287,8 +290,8 @@ Expression or Manifestation is consolidated" exactly once:
 
 | Tier | Real foreign keys | Plus polymorphic | Total ref-points |
 | ---- | ----------------- | --------------- | --------------- |
-| Work | 13 across 10 tables | `SemanticLink` | 14 |
-| Expression | 7 | `SemanticLink` | 8 |
+| Work | 19 across 13 tables | `SemanticLink` | 20 |
+| Expression | 7 across 7 tables | `SemanticLink` | 8 |
 | Manifestation | 9 across 9 tables | `SemanticLink` | 10 |
 
 Three consequences worth knowing before editing it:
@@ -394,7 +397,7 @@ item.title = "The Hobbit"  # Wrong!
 ✅ **Correct**: Deduplicate by title
 
 ```python
-work = Work.query.filter_by(title=title).first()
+work = db.session.execute(select(Work).where(Work.title == title)).scalars().first()
 if not work:
     work = Work(title=title, meta={"authors": authors})
 ```
@@ -454,50 +457,12 @@ def test_frbr_hierarchy():
 
 See [tests/test_book_operations.py](../tests/test_book_operations.py) for comprehensive FRBR hierarchy tests, and [tests/test_ontology.py](../tests/test_ontology.py) for the ontology mapping.
 
-## 🔍 ISBN Lookup (`app/utils/isbn.py`)
+## ⚙️ Operations, Ingestion & Maintenance
 
-External metadata is fetched via `app/utils/isbn.py`, which is the single place
-responsible for all outbound HTTP calls to book metadata providers.
-
-### Lookup pipeline
-
-1. **Canonicalize** — `canonicalize_isbn(raw)` validates and normalises any
-   ISBN-10 or ISBN-13 input (hyphens, spaces, mixed case) into a standard
-   13-digit string. Returns `None` for invalid input.
-2. **Google Books API** — queried first; fast, high availability, no API key
-   required for low-volume usage.
-3. **Open Library Books API** — fallback; broader language coverage and fully
-   open data. Same retry/timeout policy.
-
-### Retry and timeout policy
-
-Both upstream calls use a shared `requests.Session` with:
-
-- **Connect timeout**: 15 s (TCP + TLS handshake)
-- **Read timeout**: 45 s (full response body)
-- **Retries**: 3 attempts, 1.5× exponential back-off, on HTTP 429/500/502/503/504
-
-This handles cold-start DNS latency and transient upstream errors without
-blocking the caller for too long.
-
-### Response shape
-
-Both adapters normalise their response to:
-
-```python
-{"Title": str, "Authors": list[str]}
-```
-
-The route in `app/api/routes.py` stores this in the FRBR hierarchy
-(`Work.title`, `Work.meta["authors"]`, `Manifestation.meta`) so subsequent
-lookups of the same ISBN are served from the local database.
-
-### Cover Generation Pipeline
-
-- **Real-time Lookup:** Fast APIs (OpenLibrary, Google Books) run synchronously during item creation to provide immediate UI feedback.
-- **Asynchronous Generation:** If fast lookup fails, item metadata is marked `cover_status: "pending"` and a background thread orchestrates LLM generation (Local SD -> Gemini -> OpenAI).
-- **Optimization:** All generated covers are converted to `JPEG` at 85% quality to prevent storage bloat, while maintaining their 1024x1024 resolution.
-- **Maintenance:** A daily cron job (`scripts/archive_orphans.py`) sweeps `app/static/covers` and archives physical files that no longer have matching DB records.
+- **Metadata Resolution (`app/strategies/`, `app/utils/isbn.py`):** Multi-provider strategy registry routing barcodes, ISBNs, ISSNs/GS1 `977`, and LEGO set numbers across OpenLibrary, Google Books, Biblioteka Narodowa (`data.bn.org.pl` + Primo VE `katalogi.bn.org.pl` fallback), Crossref, OpenCollections.org, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, and TMDB (`requests.Session` bounded budgets + retries).
+- **Cover & Vision Pipeline (`app/utils/vision.py`):** Client-side downscaling (`3840px` Vision/OCR, `1280px` cover), 100MP safety limit, 3-tier Vision/OCR fallback (**Gemini 2.0 Flash** -> **Ollama Vision** -> **Multi-Zone Tesseract `eng+pol`**), 7-tier cover sourcing, contributed `ImageScan` gallery (`ManifestationCoversGallery`), and `make fix-ai-covers`. See **[COVERS_SETUP.md](COVERS_SETUP.md)**.
+- **Backups & Cold Archive:** Cloud backups via `scripts/cloud_backup.sh` (`pg_dumpall`, `covers/`, `gallery/`, `uploads/raw_covers/`, `data/keys/` + `data/federation_keys/`, compressed `.tar.gz`, synced via `rclone` or native boto3 `S3Service` to standard backups and S3 Glacier cold archives). See **[BACKUPS.md](BACKUPS.md)** and **[OPERATIONS.md](OPERATIONS.md)**.
+- **Scheduled Watchdogs & Format Normalization:** APScheduler jobs (`app/core/scheduler.py`) bind explicit `with scheduler.app.app_context():` blocks. Format strings normalize through `shared/format_mappings.yaml` and `make fix-physical-kinds`; see **[INSTALL.md](INSTALL.md#data-curation)**.
 
 ## Authentication and Authorization (v0.1.0)
 
@@ -750,43 +715,38 @@ enforced by `tests/test_ontology.py`.
 
 Tables are split across PostgreSQL schemas:
 
-| Schema      | Tables                                                                    |
-| ----------- | ------------------------------------------------------------------------- |
-| `auth`      | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`,        |
-|             | `token_blocklist`, `user_consents`                                        |
-| `catalog`   | `works`, `expressions`, `manifestations`, `contributors`,                 |
-|             | `work_contributions`, `expression_contributions`,                         |
-|             | `manifestation_contributions`, `work_parts`,                              |
-|             | `work_expansion_links`, `boardgame_mechanics`,                            |
-|             | `container_aggregations`, `instance_settings`                             |
-| `inventory` | `items`, `llm_telemetry`, `shared_collections`, `shared_collection_items` |
-| `social`    | `feedback_items`, `feedback_comments`, `escalation_requests`              |
-| `public`    | `alembic_version`                                                         |
+| Schema | Tables |
+| --- | --- |
+| `auth` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, `token_blocklist`, `user_consents` |
+| `catalog` | `works`, `expressions`, `manifestations`, `contributors`, `work_contributions`, `expression_contributions`, `manifestation_contributions`, `work_parts`, `work_series_memberships`, `work_expansion_links`, `work_relations`, `boardgame_mechanics`, `container_aggregations`, `image_scans`, `reading_roadmaps`, `roadmap_items`, `tags` |
+| `inventory` | `items` (includes `physical_location`), `item_custody_events`, `item_status_logs`, `entity_audit_logs`, `duplicate_candidates`, `escalation_requests`, `loan_requests`, `metadata_refetch_log`, `work_link_candidates`, `shared_collections`, `shared_collection_items`, `llm_telemetry`, `scan_telemetry` |
+| `social` | `feedback_items`, `feedback_comments`, `notifications` |
+| `federation` | `federation_instances`, `federation_actors`, `federation_followers`, `federation_activities`, `federation_consents` |
+| `config` | `instance_settings` (Fernet-encrypted external API credentials & OAuth tokens) |
+| `public` | `alembic_version` |
 
 ### Model File Structure
 
-Model classes are split into domain-focused modules under `app/db/`:
+Model classes live in domain-focused modules under `app/db/`:
 
-| File          | Contents                                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------- |
-| `auth.py`     | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord`                                           |
-| `core.py`     | `Work`, `WorkExpansionLink`, `BoardgameMechanic`, `Expression`, `Manifestation`, `Item`, `ITEM_STATUSES`  |
-| `audio.py`    | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`,                                  |
-|               | `MANIFESTATION_AUDIO_META_KEYS`                                                                           |
-| `video.py`    | `ManifestationContribution`, `MANIFESTATION_VIDEO_META_KEYS`                                              |
-| `games.py`    | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS`                                                    |
-| `social.py`   | `SharedCollection`, `FeedbackItem`, `FeedbackComment`, `EscalationRequest`                                |
-| `history.py`  | `ItemCustodyEvent` (append-only physical possession tracking),                                            |
-|               | `EntityAuditLog` (Work/Expression/Manifestation curation logs)                                            |
-| `settings.py` | `LLMTelemetry`, `InstanceSettings`                                                                        |
-| `models.py`   | Re-export shim — `from app.db.models import Work` continues to work                                       |
+| File | Contents |
+| --- | --- |
+| `auth.py` | `User`, `Role`, `Permission`, `TokenBlocklist`, `ConsentRecord` |
+| `core.py` | `Work`, `WorkRelation`, `WorkLinkCandidate`, `WorkExpansionLink`, `BoardgameMechanic`, `Expression`, `Manifestation`, `ImageScan`, `Item`, `ItemStatusLog`, `ItemCustodyEvent`, `EntityAuditLog`, `SemanticLink`, `UserWorkIntent`, `ITEM_STATUSES` |
+| `contributions.py` | `Contributor`, `WorkContribution`, `ExpressionContribution`, `WorkPart`, `WorkSeriesMembership`, `ManifestationContribution` |
+| `games.py` | `ContainerAggregation`, `MANIFESTATION_GAME_META_KEYS` |
+| `social.py` | `SharedCollection`, `SharedCollectionItem`, `FeedbackItem`, `FeedbackComment`, `EscalationRequest`, `LoanRequest`, `Notification` |
+| `federation.py` | `FederationInstance`, `FederationActor`, `FederationFollower`, `FederationActivity`, `FederationConsent` |
+| `roadmap.py` | `ReadingRoadmap`, `RoadmapItem` |
+| `settings.py` | `LLMTelemetry`, `ScanTelemetry`, `InstanceSettings` |
+| `models.py` | Re-export shim — `from app.db.models import Work` continues to work |
 
 ### Item Custody & Entity Audit Logs
 
-To maintain strict ontological separation between physical item possession and conceptual metadata changes, iqoqo implements CIDOC CRM-aligned audit tables:
+To maintain strict ontological separation between physical item possession and conceptual metadata changes, iqoqo implements CIDOC CRM-aligned audit tables in the `inventory` schema (`app/db/core.py`):
 
-- **`ItemCustodyEvent`** (`inventory` schema): Append-only audit log tracking physical Item tier transfers, location changes, lending events, and condition alterations.
-- **`EntityAuditLog`** (`catalog` schema): Tracks editorial curation, metadata updates, deduplication merges, and schema migrations at the Work, Expression, and Manifestation tiers.
+- **`ItemCustodyEvent` (`inventory.item_custody_events`):** Append-only audit log tracking physical Item tier transfers, location changes, lending events, and condition alterations.
+- **`EntityAuditLog` (`inventory.entity_audit_logs`):** Tracks editorial curation, metadata updates, deduplication merges, and provenance changes at the Work, Expression, and Manifestation tiers.
 
 ### Board Game Expansions (F15 Complex Work Decomposition)
 
@@ -838,221 +798,22 @@ Audio-specific keys that **may** be stored in `Manifestation.meta`:
 ### Local Development
 
 ```bash
-# Start everything in one command:
-./run_dev.sh
-
-# Or separately:
-docker compose up -d db                 # PostgreSQL
-flask --app run run                      # API on :5000
-cd frontend && npm run dev              # React on :3000
+# Start PostgreSQL, Flask API (:5000), and Next.js frontend (:3000):
+docker compose up -d db
+./run.sh dev
 ```
 
 See [docs/INSTALL.md](INSTALL.md) for full setup instructions.
 
-## 🌐 Semantic Web Layer (v0.8.0+)
+## 🌐 Semantic Web Layer
 
-iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms the FRBR-modeled collection into a queryable, interoperable Linked Data source.
-
-### Architecture Overview
+iqoqo transforms the FRBR-modeled collection into a queryable, interoperable Linked Data source:
 
 ![Semantic Web Layer, Isolated SPARQL Execution Service, and AI-Fetchable Share Feeds](images/architecture/07-semantic-web-sparql-feeds.svg)
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                   Semantic Web Layer                          │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │   SPARQL    │    │   Public    │    │   Export    │     │
-│  │  Endpoint   │    │ Linked Data │    │  Service    │     │
-│  │ /api/sparql │    │ /api/public │    │ /api/items/ │     │
-│  └──────┬──────┘    └──────┬──────┘    │  export     │     │
-│         │                  │           └──────┬──────┘     │
-│         │                  │                  │             │
-│         ▼                  ▼                  ▼             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │          RDF Serialization Pipeline                  │   │
-│  │  (app/core/frbr_service.py + app/core/export_service.py)│
-│  ├─────────────────────────────────────────────────────┤   │
-│  │  FRBR → RDF Graph → Content Negotiation → Response  │   │
-│  │  Namespaces: FRBR, Schema.org, Dublin Core, iqoqo   │   │
-│  └─────────────────────┬───────────────────────────────┘   │
-│                        │                                    │
-│                        ▼                                    │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │          IRI Minting (app/db/core.py)                │   │
-│  │  BASE_URL → {base}/works/{id}, /expressions/{id},   │   │
-│  │             /manifestations/{id}, /items/{id}        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### SPARQL Endpoint Architecture (`app/api/sparql.py`, `app/core/sparql_service.py`)
-
-The SPARQL endpoint provides read-only SPARQL Protocol access over user collections with strict resource isolation:
-
-**Request Lifecycle:**
-
-1. **Authentication** — `@require_auth` + `@require_permission(READ_METADATA)` validates JWT and checks `read:metadata` permission.
-2. **Rate Limiting** — `@limiter.limit("10 per minute")` prevents abuse.
-3. **Query Validation** — `validate_query()` parses the SPARQL query, rejects write operations (`INSERT`, `DELETE`, `UPDATE`), and enforces the 10KB size limit.
-4. **Graph Construction** — `_get_sparql_items()` fetches up to 5,000 items (bounded by `MAX_GRAPH_ITEMS`) with eager-loaded FRBR relationships. `build_graph()` materializes the RDF graph in memory (max 100,000 triples).
-5. **Subprocess Execution** — `execute_sparql()` runs the query in an isolated child process with a 15-second timeout (`QUERY_TIMEOUT`). This prevents runaway queries from affecting the main Flask worker.
-6. **Result Formatting** — `format_select_results()` or `format_graph_results()` serialize the output based on the `Accept` header.
-7. **Size Guard** — Final response is checked against `MAX_SERIALIZED_BYTES` (10MB) before sending.
-
-**Concurrency Control:**
-
-A `threading.Semaphore(4)` (`MAX_CONCURRENT_QUERIES`) limits simultaneous expensive queries. Additional requests receive HTTP 503 (Service Unavailable).
-
-**Security Model:**
-
-- **Read-only enforcement:** Write operations are rejected at parse time.
-- **Per-user scoping:** Authenticated users see their own items + public (non-hidden) items. Anonymous queries see only public items.
-- **Resource bounds:** Query size, graph size, result size, execution time, and concurrency are all bounded.
-- **Subprocess isolation:** Query execution runs in a separate process, preventing memory leaks or crashes from affecting the web worker.
-
-### Public API Architecture (`app/api/public.py`)
-
-Public endpoints serve FRBR/Schema.org semantic metadata without authentication:
-
-**Design Principles:**
-
-- **Open CORS:** All responses include `Access-Control-Allow-Origin: *` for AI agents and Linked Data crawlers.
-- **Content Negotiation:** `_negotiate_rdf_format()` inspects `Accept` headers and `?format=` parameters to select the output serialization.
-- **HTML Redirect:** Browser requests (`Accept: text/html`) receive a 303 redirect to the frontend page, enabling dereferenceable IRIs.
-- **Safe Bounds:** `_parse_safe_rdf_limit()` clamps collection limits to 1–1000 items, preventing memory exhaustion.
-- **Streaming:** Large collections support `?stream=true` for memory-efficient chunked responses via `stream_collection_to_rdf()`.
-
-**Endpoint Structure:**
-
-```text
-/api/public/
-├── works/<id>              → Work RDF (JSON-LD/Turtle/N-Triples)
-├── expressions/<id>        → Expression RDF
-├── manifestations/<id>     → Manifestation RDF
-├── items/<id>              → Item RDF (non-hidden only)
-├── u/<username>/items      → User collection RDF or JSON
-├── u/<username>/feed.xml   → User RSS feed
-├── share/<token>           → Shared collection RDF or JSON
-├── share/<token>/feed.xml  → Shared collection RSS feed
-├── feed.xml                → Global fresh arrivals RSS feed
-└── sitemap.xml             → XML sitemap for search engines
-```
-
-### RDF Serialization Pipeline (`app/core/frbr_service.py`, `app/core/export_service.py`)
-
-The serialization pipeline converts FRBR ORM objects into RDF graphs:
-
-**Namespace Bindings:**
-
-| Prefix    | Namespace                                       | Usage                         |
-| --------- | ----------------------------------------------- | ----------------------------- |
-| `frbr`    | `http://purl.org/vocab/frbr/core#`              | FRBR relationships            |
-| `frbrer`  | `http://iflastandards.info/ns/frbr/frbrer/`     | FRBRer structural relations   |
-| `schema`  | `https://schema.org/`                           | Schema.org types & properties |
-| `dc`      | `http://purl.org/dc/terms/`                     | Dublin Core metadata          |
-| `iqoqo`   | `https://iqoqo.org/ontology#`                   | iqoqo-specific ontology       |
-
-**FRBR → RDF Mapping:**
-
-| FRBR Entity   | RDF Type                                 | Key Properties                                                                |
-| ------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
-| Work          | `frbr:Work` + `schema:CreativeWork`      | `dc:title`, `dc:creator`, `schema:author`                                     |
-| Expression    | `frbr:Expression`                        | `dc:language`, `frbr:expressionOf`                                            |
-| Manifestation | `frbr:Manifestation` + Schema.org type   | `schema:isbn`, `schema:publisher`, `schema:datePublished`, `schema:image`     |
-| Item          | `frbr:Item`                              | `frbr:exemplarOf`, `schema:itemCondition`                                     |
-
-**Schema.org Type Mapping:**
-
-| Content Type   | Schema.org Type     |
-| -------------- | ------------------- |
-| `text`         | `schema:Book`       |
-| `audiobook`    | `schema:Audiobook`  |
-| `music`        | `schema:MusicAlbum` |
-| `movie`        | `schema:Movie`      |
-| `board_game`   | `schema:Game`       |
-| `puzzle`       | `schema:Product`    |
-| `concert`      | `schema:MusicEvent` |
-
-### Content Negotiation Architecture
-
-Content negotiation is handled by `_negotiate_rdf_format()` in `app/api/public.py`:
-
-```text
-Request → Accept Header / ?format= param
-         ↓
-    _negotiate_rdf_format()
-         ↓
-    ┌────────────────────────────────────────┐
-    │ application/ld+json → json-ld          │
-    │ text/turtle         → turtle           │
-    │ application/n-triples → nt             │
-    │ text/html           → redirect (303)   │
-    │ (default)           → json-ld          │
-    └────────────────────────────────────────┘
-         ↓
-    serialize_collection_to_rdf(items, base_url, output_format)
-         ↓
-    Response with appropriate Content-Type header
-```
-
-### IRI Minting Architecture (`app/db/core.py`)
-
-Each FRBR model has an `iri` property that mints canonical dereferenceable IRIs:
-
-```python
-def _get_lod_base_url() -> str:
-    """Return the canonical base URL for Linked Open Data entity IRIs."""
-    base = os.environ.get("BASE_URL") or \
-           os.environ.get("NEXT_PUBLIC_FRONTEND_URL") or \
-           "https://iqoqo.cc"
-    return base.rstrip("/")
-
-class Work(db.Model):
-    @property
-    def iri(self) -> str:
-        return f"{_get_lod_base_url()}/works/{self.id}"
-
-class Expression(db.Model):
-    @property
-    def iri(self) -> str:
-        return f"{_get_lod_base_url()}/expressions/{self.id}"
-
-class Manifestation(db.Model):
-    @property
-    def iri(self) -> str:
-        return f"{_get_lod_base_url()}/manifestations/{self.id}"
-
-class Item(db.Model):
-    @property
-    def iri(self) -> str:
-        return f"{_get_lod_base_url()}/items/{self.id}"
-```
-
-**Fallback Chain:** `BASE_URL` → `NEXT_PUBLIC_FRONTEND_URL` → `https://iqoqo.cc`
-
-IRIs are used as subject URIs in all RDF serializations, enabling Linked Data crawling and dereferencing.
-
-### Data Sovereignty Export Architecture (`app/core/export_service.py`)
-
-The export service provides streaming serialization of user collections:
-
-**Pipeline:**
-
-1. `ExportService.stream_user_collection()` queries the user's items with eager-loaded FRBR relationships.
-2. Items are batched into chunks for memory-efficient processing.
-3. Each batch is serialized via `build_batch_rdf_graph()` (RDF formats) or chunked JSON serialization.
-4. Results are yielded as a generator for Flask's `stream_with_context()`.
-
-**Supported Formats:**
-
-| Format    | Serializer                                | Content-Type          |
-| --------- | ----------------------------------------- | --------------------- |
-| `json-ld` | `build_batch_rdf_graph()` then serialize  | `application/ld+json` |
-| `turtle`  | `build_batch_rdf_graph()` then serialize  | `text/turtle`         |
-| `json`    | Chunked hierarchical JSON                 | `application/json`    |
+- **Isolated SPARQL Execution (`app/api/sparql.py`, `app/core/sparql_service.py`, `sparql-runner`):** Read-only `GET`/`POST /api/sparql` (`10/min`, `10 KB` max query, `15s` timeout, concurrency `4`, `5,000` items / `100,000` triples cap) executed inside the isolated Python RDFLib `sparql-runner` container over HMAC-SHA256 signed envelopes.
+- **Public Linked Data & Dereferenceable IRIs (`app/api/public_rdf.py`, `app/core/iri.py`):** Open-CORS JSON-LD, Turtle, N-Triples, RSS feeds, sitemaps, and `/share/<token>/jsonld/1..N` (`60` items/page) mini-pages resolving `{BASE_URL}/works|expressions|manifestations|items/{id}` (`BASE_URL` -> `NEXT_PUBLIC_FRONTEND_URL` -> `https://iqoqo.cc`), with HTML requests returning `303` redirects.
+- **RDF Serialization & Export (`app/core/frbr_service.py`, `app/core/export_service.py`):** Emits `frbr`, `frbroo`, `frbrer`, `schema`, `dc`, `owl`, `skos`, and `iqoqo` triples (including `frbroo:R2_is_derivative_of` for `WorkRelation`, `vcd`/`cd_dvd_combo` Schema.org types, and owner-authorized `iqoqo:physicalLocation`), plus chunked `/api/items/export` streaming. See **[Semantic Web Guide](SEMANTIC_WEB.md)** and **[API Reference](API.md)** for complete vocabulary tables, SPARQL examples, and content-negotiation headers.
 
 ## 📖 Further Reading
 
@@ -1113,7 +874,7 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 ---
 
-## 🏗️ Platform Architecture & Domain Extensions (v1.0.x – v1.1.0)
+## 🏗️ Platform Architecture & Domain Extensions (v1.0.x – v1.2.0)
 
 ### 1. System & Container Topology
 
@@ -1124,9 +885,9 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 | `nginx` (`deploy/Dockerfile.nginx`) | `${NGINX_PORT:-8000}:80` | Reverse proxy with `ngx_otel_module` (Layer 6 gRPC OTLP to `:4317`) | Serves static `/covers/` and `/gallery/` RO volumes; routes `/api/*` + `/.well-known/*` to `web:5000`, `/rum/*` to `openobserve:5080`, rest to `frontend:3000`; blocks `/metrics` (`404`) |
 | `frontend` | `127.0.0.1:${FRONTEND_PORT:-3000}:3000` | Next.js `16.4.6` App Router + React `19.2.8` (`proxy.ts` Node runtime) | BFF `/api/auth-exchange` writes `HttpOnly` cookie; SSR fetches `web:5000/api` (`proxyTimeout: 120s`, `60mb` max body); dual builds support SSR Docker or Capacitor 7 static export |
 | `web` | `127.0.0.1:${WEB_PORT:-5000}:5000` | Python `3.14+`, Flask `3.1`, Gunicorn (`gthread`, 2 workers x 8 threads) | UID `10001` (`appuser`); instrumented with OTLP `http/protobuf` (`:4318`) and `Authorization` span redaction |
-| `worker` | Internal | Celery worker (`celery`, `federation` queues, `--pool=threads`, concurrency `4`) | Handles covers, AI Vision/OCR, FTS reindex, LOD reconciliation, ActivityPub outbox delivery, scheduled cleanup |
-| `sparql-runner` | Internal `:5050` | Isolated Python SPARQL executor (`deploy/Dockerfile.sparql`) | UID `10002`, read-only rootfs, `cap_drop: ALL`, `512m` RAM, `64` PIDs, HMAC-SHA256 signed envelopes (`SPARQL_SERVICE_SECRET`) |
-| `db` | `127.0.0.1:${DB_PORT:-5432}:5432` | PostgreSQL `18-alpine` | Single source of truth across `auth`, `catalog`, `inventory`, `social`, and `public` schemas |
+| `worker` | Internal | Celery worker (`celery`, `federation` queues, `--pool=threads`, concurrency `4`) | Handles covers, AI Vision/OCR, FTS reindex, LOD & cross-media reconciliation, ActivityPub outbox delivery, scheduled cleanup |
+| `sparql-runner` | Internal `:5050` | Isolated Python RDFLib SPARQL executor (`deploy/Dockerfile.sparql`) | UID `10002`, read-only rootfs, `cap_drop: ALL`, `512m` RAM, `64` PIDs, HMAC-SHA256 signed envelopes (`SPARQL_SERVICE_SECRET`) |
+| `db` | `127.0.0.1:${DB_PORT:-5432}:5432` | PostgreSQL `18-alpine` | Single source of truth across `auth`, `catalog`, `inventory`, `social`, `federation`, `config`, and `public` schemas |
 | `redis` | `127.0.0.1:${REDIS_PORT:-6379}:6379` | **Valkey `8-alpine`** (`valkey/valkey:8-alpine`, `--maxmemory 256mb --maxmemory-policy allkeys-lru`) | Drop-in Redis-compatible broker for Celery, Flask-Limiter rate counters, facet cache, and SSE pub/sub; preserves `redis` host alias and `redis://` URIs |
 | `otel-collector` | `:4317` / `:4318` | `otel/opentelemetry-collector-contrib` | Ingests OTLP from all 8 layers + scrapes PostgreSQL, Valkey, and `:ro` Docker stats |
 | `openobserve` | `127.0.0.1:${OPENOBSERVE_HOST_PORT:-5080}:5080` | `openobserve/openobserve:v0.91.5` (Rust + Parquet) | Unified SQL store for traces, metrics, logs, and provisioned Browser RUM |
@@ -1152,8 +913,8 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 ![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](images/architecture/08-frbr-visual-relation-graph.svg)
 
-- `GraphService.build_neighborhood()` (`app/core/graph_service.py`) executes a bounded BFS traversal (`depth` `1..2`, `max_nodes` `1..150`) centered at any `work`, `expression`, `manifestation`, or `item` anchor across six edge categories (`frbr`, `series`, `parts_expansions`, `contributors`, `maps`, `lod`).
-- Every encountered `Item` node is filtered through `is_item_visible_to_viewer()` (public, viewer-owned, or accepted friend's `friends_only` item), and unauthorized `Item` anchor requests fail closed with `404`. Rendered interactively on `/graph` by `FRBRRelationGraph`.
+- `GraphService` (`app/core/graph_service.py`) provides both bounded BFS neighborhood traversal (`build_neighborhood()`, `depth` `1..4` via `MAX_GRAPH_DEPTH=4`, `max_nodes <= 150`, `max_edges` default `400` / ceiling `600`, `MAX_NEIGHBORS_PER_NODE_DEEP=25`) centered at `work`, `expression`, `manifestation`, `item`, `person`, `contributor`, or `series` anchors, and a full-library explorer (`?mode=library`, `build_library_graph()`) across `7` edge categories (`frbr`, `series`, `parts_expansions`, `derivatives`, `contributors`, `maps`, `lod`).
+- Root discovery uses `GET /api/catalog/graph/search` (`<GraphRootPicker />`), every `Item` honors `is_item_visible_to_viewer()` + `FederationConsent.federated_collection` pruning (failing closed `404` on restricted `Item` anchors), and colliding external authority URIs merge onto deterministic `lod:<digest>` nodes (`contributor` anchors included).
 
 ### 5. Scanner UX, Periodical Disambiguation & 3-Tier Vision/OCR Waterfall
 
@@ -1161,22 +922,22 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 ![50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall, and 7-Tier Cover Pipeline](images/architecture/05-vision-ocr-cover-pipeline.svg)
 
-- **Streamlined `/scan` UX:** Single-line `TopBar` (`[Format ▾]`, `[Save to ▾]`, explicit `ON`/`OFF` `BatchScanToggle`), 100%-width unified quick-lookup input, and 2-tab `BottomSheet` (`Barcode` vs. `Snap Cover`).
-- **GS1 `977` Serial Disambiguation:** `app/utils/issn.py` validates Modulo-11 ISSNs and parses 13/15/18-digit GS1 `977` barcodes (`+ EAN-2/EAN-5` add-ons). `SerialLookupStrategy` queries Biblioteka Narodowa (`data.bn.org.pl`), Crossref (`/journals/{issn}`), OpenLibrary, and Allegro. Bare 13-digit `977` scans open `SerialDisambiguationModal` to select an existing issue, add a new issue, or invoke **Snap Cover to Auto-Fill Issue**.
-- **50MP Image Scaling & 3-Tier Vision/OCR Waterfall:** `frontend/lib/image-resize.ts` downscales camera uploads before POST (`3840px` for OCR/Vision, `1280px` for saved covers), while `app/utils/images.py` enforces `MAX_IMAGE_PIXELS = 100_000_000`. `app/utils/vision.py` executes **Gemini 2.0 Flash** -> **Ollama (`OLLAMA_URL`)** -> **Offline Multi-Zone Tesseract OCR (`eng+pol`)**, recording every run in `LLMTelemetry` (`scripts/llm_usage_report.py`).
+- **Streamlined `/scan` UX:** Single-line `TopBar` across 8 formats (`book`, `magazine`, `audiobook`, `music`, `movie`, `board_game`, `puzzle`, `lego`), `[Save to ▾]`, explicit `ON`/`OFF` `BatchScanToggle`, 100%-width unified quick-lookup input (`API_TIMEOUT_MS = 15_000`), and 2-tab `BottomSheet` (`Barcode` vs. `Snap Cover`).
+- **GS1 `977` Serial Disambiguation:** `app/utils/issn.py` validates Modulo-11 ISSNs and parses 13/15/18-digit GS1 `977` barcodes (`+ EAN-2/EAN-5` add-ons). `SerialLookupStrategy` queries Biblioteka Narodowa (`data.bn.org.pl` + Primo VE `katalogi.bn.org.pl` fallback), Crossref (`/journals/{issn}`), OpenLibrary, and Allegro. Bare 13-digit `977` scans open `SerialDisambiguationModal` to select an existing issue, add a new issue, or invoke **Snap Cover to Auto-Fill Issue**.
+- **50MP Image Scaling, Vision/OCR & Contributed Gallery:** `frontend/lib/image-resize.ts` downscales camera uploads before POST (`3840px` for OCR/Vision, `1280px` for saved covers), while `app/utils/images.py` enforces `MAX_IMAGE_PIXELS = 100_000_000`. `app/utils/vision.py` executes **Gemini 2.0 Flash** -> **Ollama (`OLLAMA_URL`)** -> **Offline Multi-Zone Tesseract OCR (`eng+pol`)**, recording telemetry in `LLMTelemetry`. On `/manifestation/[id]`, `ManifestationCoversGallery` displays deduplicated contributed `ImageScan` photos and `ManifestationStatsCard` charts anonymized `GROUP BY` reading stats and monthly trends (`GET /api/manifestations/<id>/stats`).
 
-### 6. Bulk Visibility Toolbar & Shared Collection Visibility Scopes
+### 6. Bulk Visibility, Physical Shelf Locations & Shared Collection Scopes
 
 ![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](images/architecture/06-privacy-bulk-share-matrix.svg)
 
-- **Bulk Visibility (`PATCH /api/items/bulk-visibility`):** `BulkItemVisibilityToolbar` lets collectors filter **My Items** by visibility (`public`, `friends_only`, `private`), select up to `100` owned items, and transition visibility atomically across PostgreSQL, FTS workers, facet caches, SSE channels, and ActivityPub outboxes.
+- **Bulk Visibility & Shelf Locations:** `BulkItemVisibilityToolbar` lets collectors filter **My Items**, select up to `100` owned physical items, and transition three-tier visibility (`PATCH /api/items/bulk-visibility`) or assign structured shelf locations (`Item.physical_location`, `PATCH /api/items/bulk-location` with owner-gated redaction, SQL `?location=` filtering across `GET /api/items` / FTS / `location_counts` facets, and TaxonomyEditor `loc:` tag promotion).
 - **Granular Share Scopes & AI Feeds:** `SharedCollectionCreateSchema` persists `visibility_scope` (`public_only`, `friends_and_public`, `all`) on share tokens. Under `public_only`, logged-in accepted friends automatically receive the **Friend Bonus** unlocking matching `friends_only` items. Every share token also exposes query-free `/share/<token>/jsonld/1..N` (`60` items/page) mini-pages, `/share/<token>/catalog.jsonld`, and `/feed.xml` for AI Gems (`docs/gems/`).
 
-### 7. Native Capacitor 7 Dual-Build & Federation Showcase Hub
+### 7. Native Capacitor 7 Dual-Build, Multi-Server Registry & Federation Showcase Hub
 
 ![Hybrid Web SSR and Capacitor 7 Native Mobile Architecture](images/architecture/10-hybrid-web-ssr-capacitor-mobile.svg)
 
-- **Dual Build Routing:** Native Android (`MainActivity.java` `RouteProcessor`) and iOS (`AppDelegate.swift` `NextJSRouter`) apps run the `CAPACITOR_BUILD=true` static export, rewriting dynamic FRBR entity routes and Flight `.txt` requests onto `_placeholder` shells while keeping exact parity across the 5 static `/help/*` slugs, authenticating via single-use `OAuthExchangeCode` + `iqoqo://auth-exchange` and maintaining `offline-cache.ts` snapshots.
+- **Dual Build Routing & Multi-Server Registry (`C156`):** Native Android (`MainActivity.java` `RouteProcessor`) and iOS (`AppDelegate.swift` `NextJSRouter`) apps run the `CAPACITOR_BUILD=true` static export, rewriting dynamic FRBR entity routes and Flight `.txt` requests onto `_placeholder` shells while keeping parity across the 5 static `/help/*` slugs. Multi-server profiles (`ServerProfile[]` in `iqoqo_servers_v1`, active pointer `iqoqo_active_server_id`, per-server `SecureStoragePlugin` tokens `iqoqo_auth_token_<serverId>`, and `serverId`-namespaced `offline-cache.ts` snapshots/queues) let collectors switch libraries via `ServerSelectorModal` or the native mobile `Footer` without losing cached tokens or offline snapshots.
 - **Read-Only Federation Showcase Hub (`FEDERATION_HEAD_MODE`):** Enables community showcase hubs that expose federated catalogs and allow wishlists while rejecting physical `Item` writes at the API layer.
 
 ### 8. Diagram Blueprints Reference Catalog
@@ -1185,15 +946,15 @@ All 12 interactive SVG architecture diagrams live under [`docs/images/architectu
 
 | # | Blueprint Scope | SVG Diagram | Key Architecture Focus |
 | :--- | :--- | :--- | :--- |
-| **1** | System & Container Topology | [01-system-container-topology.svg](images/architecture/01-system-container-topology.svg) | Cloudflare edge, Nginx (`:8000`), Next.js (`:3000`), Flask (`:5000`), Celery, `sparql-runner:5050`, PostgreSQL 18, Valkey 8 (`:6379`), OTel + OpenObserve (`:5080`) |
-| **2** | FRBR & FRBRoo Domain Ontology | [02-frbr-domain-ontology.svg](images/architecture/02-frbr-domain-ontology.svg) | WEMI core, `F18_Serial_Work`, `F16_Container_Work`, `WorkExpansionLink`, `WorkPart`, `MapAttachment`, `UserWorkIntent`, `Work` Reading Rollup |
-| **3** | PostgreSQL 18 Multi-Schema Physical DB | [03-postgresql-multi-schema.svg](images/architecture/03-postgresql-multi-schema.svg) | `auth`, `catalog`, `inventory`, `social`, `public` schemas, GIN FTS indexes, and `frbr_merge.py` consolidation map |
-| **4** | Barcode, `977` Serial & Ingestion Pipeline | [04-barcode-serial-ingestion.svg](images/architecture/04-barcode-serial-ingestion.svg) | `/scan` TopBar/BottomSheet, GS1 prefix router, multi-provider strategy waterfalls, and `SerialDisambiguationModal` |
-| **5** | 50MP Image Resize, 3-Tier Vision & Cover Pipeline | [05-vision-ocr-cover-pipeline.svg](images/architecture/05-vision-ocr-cover-pipeline.svg) | Client `3840px`/`1280px` resize, `100MP` guard, Gemini -> Ollama -> Multi-zone Tesseract `eng+pol`, `LLMTelemetry`, and 7-tier Cover pipeline |
-| **6** | Privacy Gate, Bulk Visibility & Share Matrix | [06-privacy-bulk-share-matrix.svg](images/architecture/06-privacy-bulk-share-matrix.svg) | Per-item overrides, `PATCH /api/items/bulk-visibility` (`1..100`), and `visibility_scope` (`public_only` + Friend Bonus / `friends_and_public` / `all`) |
-| **7** | Semantic Web, Isolated SPARQL & AI Feeds | [07-semantic-web-sparql-feeds.svg](images/architecture/07-semantic-web-sparql-feeds.svg) | Content negotiation, `sparql-runner` HMAC boundary, `/share/<token>/jsonld/1..N` (`60`/page), and `ExportService` streaming |
-| **8** | Interactive Visual Relation Graph (`/graph`) | [08-frbr-visual-relation-graph.svg](images/architecture/08-frbr-visual-relation-graph.svg) | `GET /api/catalog/graph` bounded BFS (`1..2` hops, `<= 150` nodes), visibility pruning, and edge categories |
+| **1** | System & Container Topology | [01-system-container-topology.svg](images/architecture/01-system-container-topology.svg) | Cloudflare edge, Nginx (`:8000`), Next.js (`:3000`), Flask (`:5000`), Celery, RDFLib `sparql-runner:5050`, PostgreSQL 18 (7 schemas), Valkey 8 (`:6379`), boto3 `S3Service`, OTel + OpenObserve (`:5080`) |
+| **2** | FRBR & FRBRoo Domain Ontology | [02-frbr-domain-ontology.svg](images/architecture/02-frbr-domain-ontology.svg) | WEMI core, `F18_Serial_Work`, `F16_Container_Work`, `WorkRelation`, `WorkLinkCandidate`, `Item.physical_location`, `ManifestationStats`, `ImageScan` gallery, `vcd`/`cd_dvd_combo` |
+| **3** | PostgreSQL 18 Multi-Schema Physical DB | [03-postgresql-multi-schema.svg](images/architecture/03-postgresql-multi-schema.svg) | `auth`, `catalog`, `inventory`, `social`, `federation`, `config`, `public` schemas, GIN FTS indexes, and `frbr_merge.py` (`19` Work FKs across `13` tables / `20` total) |
+| **4** | Barcode, `977` Serial & Ingestion Pipeline | [04-barcode-serial-ingestion.svg](images/architecture/04-barcode-serial-ingestion.svg) | `/scan` 8-format TopBar/BottomSheet, GS1 prefix router, BN Primo VE fallback, bounded strategy waterfalls (`6.0s`/`15s`), `cd_dvd_combo`/`vcd`, and `SerialDisambiguationModal` |
+| **5** | 50MP Image Resize, 3-Tier Vision & Cover Pipeline | [05-vision-ocr-cover-pipeline.svg](images/architecture/05-vision-ocr-cover-pipeline.svg) | Client `3840px`/`1280px` resize, `100MP` guard, Gemini -> Ollama -> Multi-zone Tesseract `eng+pol`, `LLMTelemetry`, 7-tier Cover pipeline, `ManifestationCoversGallery` & `make fix-ai-covers` |
+| **6** | Privacy Gate, Bulk Visibility & Share Matrix | [06-privacy-bulk-share-matrix.svg](images/architecture/06-privacy-bulk-share-matrix.svg) | Per-item overrides, `PATCH /api/items/bulk-visibility` & `/bulk-location`, owner-gated `physical_location`, `FederationConsent`, and `visibility_scope` matrix |
+| **7** | Semantic Web, Isolated SPARQL & AI Feeds | [07-semantic-web-sparql-feeds.svg](images/architecture/07-semantic-web-sparql-feeds.svg) | Content negotiation, `sparql-runner` HMAC boundary, `frbroo:R2_is_derivative_of`, `iqoqo:physicalLocation` (`full`), `vcd`/`cd_dvd_combo`, `/share/<token>/jsonld/1..N` (`60`/page), and `ExportService` streaming |
+| **8** | Interactive Visual Relation Graph (`/graph`) | [08-frbr-visual-relation-graph.svg](images/architecture/08-frbr-visual-relation-graph.svg) | `GET /api/catalog/graph` (`depth 1..4`, `max_edges=400/600`, `?mode=library`, `7` categories incl. `derivatives`), `/catalog/graph/search` `<GraphRootPicker />`, `FederationConsent`, and `lod:<digest>` dedupe |
 | **9** | ActivityPub S2S Federation & Lending | [09-activitypub-federation-lending.svg](images/architecture/09-activitypub-federation-lending.svg) | WebFinger, NodeInfo 2.1, RSA-2048 HTTP Signatures, Valkey `federation` queue, 3-tier trust matrix, and `FEDERATION_HEAD_MODE` |
-| **10** | Hybrid Web SSR & Capacitor 7 Mobile | [10-hybrid-web-ssr-capacitor-mobile.svg](images/architecture/10-hybrid-web-ssr-capacitor-mobile.svg) | Node.js `proxy.ts` vs. `_placeholder` static export routing, native `OAuthExchangeCode` deep links, and `offline-cache.ts` |
+| **10** | Hybrid Web SSR & Capacitor 7 Mobile | [10-hybrid-web-ssr-capacitor-mobile.svg](images/architecture/10-hybrid-web-ssr-capacitor-mobile.svg) | Node.js `proxy.ts` vs. `_placeholder` static export routing, `ServerProfile[]` multi-server registry (`iqoqo_auth_token_<serverId>`), `serverId`-scoped `offline-cache.ts`, and `OAuthExchangeCode` |
 | **11** | 8-Layer OpenTelemetry & OpenObserve Stack | [11-otel-openobserve-8-layer.svg](images/architecture/11-otel-openobserve-8-layer.svg) | Nginx gRPC (`:4317`), App/Worker/SSR `http/protobuf` (`:4318`), `Authorization` redaction, RUM `/rum/*`, and `make status` diagnostics |
-| **12** | Source-Free Deployment & Multi-Tier Backup | [12-deployment-contract-backup-dr.svg](images/architecture/12-deployment-contract-backup-dr.svg) | `DEPLOY_DIR` contract, UID `10001`/`10002` mount guards, Fernet `InstanceSettings`, `cloud_backup.sh` rclone + S3 Glacier |
+| **12** | Source-Free Deployment & Multi-Tier Backup | [12-deployment-contract-backup-dr.svg](images/architecture/12-deployment-contract-backup-dr.svg) | `DEPLOY_DIR` contract, `make preview-reconcile` (`__IQOQO_SRC_SECRET_KEY__=`), Fernet `InstanceSettings`, `data/keys/` + `data/federation_keys/`, and `cloud_backup.sh` rclone + native boto3 `S3Service` Glacier |

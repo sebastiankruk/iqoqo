@@ -16,7 +16,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Tag } from "lucide-react";
+import { X, Tag, MapPin } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useUpdateItem } from "@/lib/api/hooks";
 import { toast } from "sonner";
@@ -37,11 +37,54 @@ interface TaxonomyEditorProps {
  */
 export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
   const [tagInput, setTagInput] = useState("");
+  const propLocation = item.physical_location ?? "";
+  const locationSyncKey = `${item.id}:${propLocation}`;
+  const [locationInput, setLocationInput] = useState(propLocation);
+  const [prevLocationSyncKey, setPrevLocationSyncKey] = useState(locationSyncKey);
+  if (locationSyncKey !== prevLocationSyncKey) {
+    setPrevLocationSyncKey(locationSyncKey);
+    setLocationInput(propLocation);
+  }
   const updateItem = useUpdateItem(item.id);
   const router = useRouter();
 
   // Initialize tags from item
   const currentTags = item.tags || [];
+
+  const handleSaveLocation = (nextLocation?: string) => {
+    const raw = nextLocation !== undefined ? nextLocation : locationInput;
+    const cleaned = raw.trim() || null;
+    updateItem.mutate(
+      { physical_location: cleaned },
+      {
+        onSuccess: () => {
+          setLocationInput(cleaned ?? "");
+          toast.success(cleaned ? `Physical location set to "${cleaned}"` : "Physical location cleared");
+        },
+        onError: err => {
+          toast.error(`Failed to update physical location: ${(err as Error).message}`);
+        },
+      }
+    );
+  };
+
+  const handlePromoteTagToLocation = (tagToPromote: string) => {
+    const cleanedLocation = tagToPromote.replace(/^loc:\s*/i, "").trim();
+    if (!cleanedLocation) return;
+    const remainingTags = currentTags.filter(t => t !== tagToPromote);
+    updateItem.mutate(
+      { physical_location: cleanedLocation, tags: remainingTags },
+      {
+        onSuccess: () => {
+          setLocationInput(cleanedLocation);
+          toast.success(`Moved "${tagToPromote}" to Physical Location "${cleanedLocation}"`);
+        },
+        onError: err => {
+          toast.error(`Failed to move tag to location: ${(err as Error).message}`);
+        },
+      }
+    );
+  };
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim();
@@ -88,56 +131,104 @@ export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
   };
 
   return (
-    <div className="w-full rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <Tag className="h-4 w-4 text-muted-foreground" />
-        <h3 className="font-serif font-bold text-foreground">Tags</h3>
-      </div>
-
-      <div className="flex flex-wrap gap-2 mb-3">
-        {currentTags.map(tag => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-500 ring-1 ring-blue-500/20"
+    <div className="w-full rounded-lg border border-border bg-card p-4 shadow-sm space-y-4">
+      <div>
+        <div className="mb-2 flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-serif font-bold text-foreground">Physical Location</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            aria-label="Physical Location"
+            value={locationInput}
+            onChange={e => setLocationInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSaveLocation();
+              }
+            }}
+            disabled={updateItem.isPending}
+            placeholder="e.g. Study / Bookcase A / Shelf 2"
+            className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <Button
+            type="button"
+            onClick={() => handleSaveLocation()}
+            disabled={updateItem.isPending || (locationInput.trim() || "") === (item.physical_location ?? "")}
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
           >
-            <DiscoveryPivot type="tags" value={tag} variant="link" className="hover:underline">
-              {tag}
-            </DiscoveryPivot>
-            <button
-              onClick={() => handleRemoveTag(tag)}
-              disabled={updateItem.isPending}
-              className="ml-1 rounded-full p-0.5 hover:bg-blue-500/20 disabled:opacity-50"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        {currentTags.length === 0 && <span className="text-xs text-muted-foreground italic">No tags added yet.</span>}
+            Save
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={tagInput}
-          onChange={e => setTagInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAddTag();
-            }
-          }}
-          disabled={updateItem.isPending}
-          placeholder="Add a new tag..."
-          className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        <Button
-          onClick={handleAddTag}
-          disabled={updateItem.isPending || !tagInput.trim()}
-          size="sm"
-          className="shrink-0"
-        >
-          Add
-        </Button>
+      <div className="border-t border-border pt-3">
+        <div className="mb-3 flex items-center gap-2">
+          <Tag className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-serif font-bold text-foreground">Tags</h3>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          {currentTags.map(tag => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-500 ring-1 ring-blue-500/20"
+            >
+              <DiscoveryPivot type="tags" value={tag} variant="link" className="hover:underline">
+                {tag}
+              </DiscoveryPivot>
+              <button
+                type="button"
+                title={`Move "${tag}" to Physical Location`}
+                aria-label={`Move ${tag} to Physical Location`}
+                onClick={() => handlePromoteTagToLocation(tag)}
+                disabled={updateItem.isPending}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-blue-500/20 disabled:opacity-50"
+              >
+                <MapPin className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove ${tag}`}
+                onClick={() => handleRemoveTag(tag)}
+                disabled={updateItem.isPending}
+                className="rounded-full p-0.5 hover:bg-blue-500/20 disabled:opacity-50"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {currentTags.length === 0 && <span className="text-xs text-muted-foreground italic">No tags added yet.</span>}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddTag();
+              }
+            }}
+            disabled={updateItem.isPending}
+            placeholder="Add a new tag..."
+            className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <Button
+            onClick={handleAddTag}
+            disabled={updateItem.isPending || !tagInput.trim()}
+            size="sm"
+            className="shrink-0"
+          >
+            Add
+          </Button>
+        </div>
       </div>
     </div>
   );

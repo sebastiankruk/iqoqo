@@ -182,7 +182,20 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Installing monthly 04:00 cron job (backend: rclone, remote: my-remote)" ]]
   [[ "$output" =~ "DOCKER_CALLED_WITH: run --rm -i -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine" ]]
-  grep -q "CRON_FILE_CONTENT: 0 4 1 \* \* root cd .* && ./scripts/cloud_backup.sh my-remote " <<< "$output"
+  grep -q "CRON_FILE_CONTENT: 0 4 1 \* \* root cd .* && ./scripts/cloud_backup.sh --archive my-remote " <<< "$output"
+}
+
+@test "cloud_backup_cron.sh archive-install supports S3_BUCKET_ARCHIVE under S3 backend" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  unset S3_BUCKET_BACKUP
+  export S3_BACKEND="auto"
+  export S3_BUCKET_ARCHIVE="my-archive-bucket"
+
+  run bash "${FAKE_PROJECT}/scripts/cloud_backup_cron.sh" archive-install
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Installing monthly 04:00 cron job (backend: s3, bucket: my-archive-bucket)" ]]
+  grep -q "CRON_FILE_CONTENT: 0 4 1 \* \* root cd .* && ./scripts/cloud_backup.sh --archive " <<< "$output"
+  [[ ! "$output" =~ "iqoqo-glacier" ]]
 }
 
 @test "cloud_backup_cron.sh archive-uninstall invokes docker removal" {

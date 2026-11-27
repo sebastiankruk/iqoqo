@@ -67,6 +67,7 @@ vi.mock("@/components/scanner/camera-capture", () => ({
 }));
 
 vi.mock("@/lib/api/client", () => ({
+  API_TIMEOUT_MS: 15_000,
   apiFetch: vi.fn(),
   apiClient: {
     get: vi.fn(),
@@ -148,5 +149,14 @@ describe("BottomSheet", () => {
         })
       );
     });
+  });
+
+  it("invokes onShowManualForm when Enter Manually button is clicked", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
+
+    const manualBtn = screen.getByTestId("enter-manually-link");
+    fireEvent.click(manualBtn);
+
+    expect(onShowManualForm).toHaveBeenCalledTimes(1);
   });
 });

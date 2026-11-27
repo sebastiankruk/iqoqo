@@ -352,3 +352,106 @@ class TestBatchedStreamingIteration:
             full_payload = "".join(chunks)
             parsed = json.loads(full_payload)
             assert len(parsed) == 2
+
+
+def test_multidomain_rdf_exports_and_physical_location_shacl_boundaries(app):
+    """Validate LEGO, Cartographic, Audio, Item.physical_location, ExportService custody, and negative SHACL bounds."""
+    from app.core.frbr_service import build_collection_rdf_graph
+    from app.core.shacl_service import validate_graph
+
+    with app.app_context():
+        user1 = User(email="shacl1@iqoqo.local", display_name="User One", public_username="shacl_u1", visibility="public")
+        user2 = User(email="shacl2@iqoqo.local", display_name="User Two", public_username="shacl_u2", visibility="public")
+        db.session.add_all([user1, user2])
+        db.session.flush()
+
+        # LEGO set + Cartographic map + Audio pressing
+        w_lego = Work(title="Concorde")
+        e_lego = Expression(work=w_lego, content_type="lego", language="en")
+        m_lego = Manifestation(
+            expression=e_lego,
+            format="standard_set",
+            meta={"set_number": "10318-1", "piece_count": 2083, "minifig_count": 0},
+        )
+        i_lego = Item(
+            owner_id=user1.id,
+            manifestation=m_lego,
+            status="built",
+            visibility="public",
+            physical_location="Study / Display Case",
+            meta={"build_status": "built", "missing_pieces_count": 0, "instructions_included": True},
+        )
+
+        w_map = Work(title="Tatra Topo Map")
+        e_map = Expression(work=w_map, content_type="text", language="pl")
+        m_map = Manifestation(
+            expression=e_map,
+            format="cartographic_map",
+            meta={
+                "map_scale": "1:25000",
+                "map_projection": "PUWG-1992",
+                "map_attachments": [{"id": "att1", "title": "Ridge Trail Sheet", "type": "topographic", "image_url": "/img/ridge.png"}],
+            },
+        )
+        i_map = Item(owner_id=user1.id, manifestation=m_map, status="available", visibility="public", meta={"map_insert_present": True})
+
+        w_audio = Work(title="Kind of Blue")
+        e_audio = Expression(work=w_audio, content_type="music", language="en")
+        m_audio = Manifestation(
+            expression=e_audio,
+            format="vinyl",
+            label="Columbia",
+            catalog_number="CL 1355",
+            meta={"matrix_runout": "XLP-47324-1A", "discogs_uri": "https://www.discogs.com/release/12345"},
+        )
+        i_audio = Item(owner_id=user1.id, manifestation=m_audio, status="lent", visibility="public", lent_to_user_id=user2.id)
+
+        db.session.add_all([w_lego, e_lego, m_lego, i_lego, w_map, e_map, m_map, i_map, w_audio, e_audio, m_audio, i_audio])
+        db.session.commit()
+
+        domain_graph = build_collection_rdf_graph(
+            [i_lego, i_map, i_audio],
+            base_url="https://iqoqo.test",
+            enrichment_profile="full",
+        )
+        conforms, _, report = validate_graph(domain_graph)
+        assert conforms, report
+
+        export_ttl = ExportService.export_rdf(user1.id, export_format="turtle", base_url="https://iqoqo.test")
+        export_g = Graph().parse(data=export_ttl, format="turtle")
+        conforms_exp, _, report_exp = validate_graph(export_g)
+        assert conforms_exp, report_exp
+
+        # Negative SHACL check: physicalLocation is strictly forbidden on Work and Manifestation
+        work_violation = Graph().parse(data=export_ttl, format="turtle")
+        work_uri = URIRef(f"https://iqoqo.test/works/{w_lego.id}")
+        IQOQO_NS = Namespace("https://iqoqo.org/ontology#")
+        work_violation.add((work_uri, IQOQO_NS.physicalLocation, Literal("Forbidden Work Shelf")))
+        bad_work_ok, _, _ = validate_graph(work_violation)
+        assert not bad_work_ok
+
+        manif_violation = Graph().parse(data=export_ttl, format="turtle")
+        manif_uri = URIRef(f"https://iqoqo.test/manifestations/{m_lego.id}")
+        manif_violation.add((manif_uri, IQOQO_NS.physicalLocation, Literal("Forbidden Manif Shelf")))
+        bad_manif_ok, _, _ = validate_graph(manif_violation)
+        assert not bad_manif_ok
+
+        # SPARQL CONSTRUCT graph over materialized collection passes SHACL cleanly
+        constructed = domain_graph.query("""
+            PREFIX schema: <https://schema.org/>
+            PREFIX iqoqo: <https://iqoqo.org/ontology#>
+            PREFIX frbrer: <http://iflastandards.info/ns/frbr/frbrer/>
+            CONSTRUCT {
+                ?w a iqoqo:Work ; schema:name ?title .
+                ?e a iqoqo:Expression ; frbrer:expressionOf ?w .
+                ?m a iqoqo:Manifestation ; frbrer:embodimentOf ?e ; schema:name ?title ; iqoqo:setNumber ?setNum .
+            }
+            WHERE {
+                ?w a iqoqo:Work ; schema:name ?title .
+                ?e frbrer:expressionOf ?w .
+                ?m frbrer:embodimentOf ?e ; iqoqo:setNumber ?setNum .
+            }
+        """).graph
+        assert len(constructed) > 0
+        conforms_sparql, _, report_sparql = validate_graph(constructed)
+        assert conforms_sparql, report_sparql

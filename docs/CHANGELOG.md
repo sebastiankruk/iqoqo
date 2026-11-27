@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-27
+
+### Added
+
+- **Manifestation Contributed Covers Gallery, Anonymized Read Stats & Popularity Timeline (C158)**:
+  - Added dialect-aware `GROUP BY` analytics helper `_compute_manifestation_stats()` and `GET /api/manifestations/<id>/stats` (with OpenAPI 3.1 contract in `app/api/docs.py`), returning `total_items`, `reader_count`, `completed_count`, `avg_reading_days`, `avg_session_minutes`, and monthly `popularity_over_time` buckets with zero PII or private `Item`/session note exposure.
+  - Added `useManifestationImages` / `useManifestationStats` hooks (`ManifestationImage`, `ManifestationStats`), `ManifestationCoversGallery` (primary cover deduplication, provenance badges, lightbox preview), and `ManifestationStatsCard` (KPI summary + responsive popularity timeline + graceful empty state) to `ManifestationDetailClient` with `en.json` and `pl.json` translations.
+- **Physical Item Location Tagging, Bulk Update & Filtering (C157)**:
+  - Added `Item.physical_location` (`inventory.items`, linear Alembic migration `v1_2_0_item_physical_location`), owner/admin-gated API serialization, `PATCH /api/items/<id>` & `PATCH /api/items/bulk-location` (`WRITE_ITEM`, `FEDERATION_HEAD_MODE`, strict ownership `403` check), SQL-paginated `?location=...` filtering across `GET /api/items` & `SearchService`, owner-scoped `location_counts` in `GET /api/stats/facets`, and owner-authorized `iqoqo:physicalLocation` / `schema:location` RDF/JSON-LD triples (`enrichment_profile="full"`).
+  - Added structured Physical Location editing & one-click folksonomy tag promotion in `TaxonomyEditor`, `EditItemDialog` field, `BulkItemVisibilityToolbar` bulk location popover, and `/collection` `location` facet filtering.
+- **Mobile Multi-Server Registry & Isolated Switching (C156)**:
+  - Added `ServerProfile[]` multi-server storage (`iqoqo_servers_v1`, `iqoqo_active_server_id`) with automatic legacy single-server migration, per-server isolated `SecureStoragePlugin` auth tokens, and `serverId`-namespaced `offline-cache.ts` snapshots/queues.
+  - Upgraded `ServerSelector` and `ServerSelectorModal` with saved-server switching, inline rename, and isolated removal, and wired the native mobile `Footer` connected-server indicator to open the quick switcher.
+
+### Changed
+
+- **Documentation Consolidation, Key Directory Alignment & Architecture Blueprint Sync (C168)**:
+  - Aligned key backup directories across `scripts/cloud_backup.sh`, `scripts/restore.sh`, `docs/BACKUPS.md`, and `tests/bash/cloud_backup.bats` to prioritize `data/keys/` while preserving legacy `data/federation_keys/` compatibility and `0700`/`0600` restore permissions.
+  - Archived `docs/UPGRADE_0.8.0.md` and `docs/UPGRADE_POSTGRES_18.md` under `docs/archive/`, trimmed cross-doc overlap (`ARCHITECTURE.md`, `INSTALL.md`, `API.md`, `OPERATIONS.md`, `SEMANTIC_WEB.md`, `COVERS_SETUP.md`, `AI_COVERS.md`), repaired broken Markdown escapes/tables and completed `COVERS_SETUP.md` Section 6, updated `Valkey 8`, PostgreSQL schema tables, FRBR Work merge counts (`19` FKs across `13` tables / `20` total), `v1.1.1`–`v1.2.0` endpoints/features, EN/PL `frontend/lib/help-articles.ts`, and `.context/notes/docs/docs-iqoqo-architecture-blueprints.md`, and synced all 12 regenerated `v1.2.0` architecture SVGs (`docs/images/architecture/`) and 7 shared help mirrors (`frontend/public/images/help/`) with AGPL XML headers and byte-parity.
+
+### Fixed
+
+- **Pre-Merge Security, Mobile Token Isolation, Stats & Release Polish (C171)**:
+  - Guarded PostgreSQL `Item.meta["total_reading_minutes"]` casts via `_safe_total_reading_minutes_expr()` (`^[0-9]{1,9}$`) in `app/api/manifestations.py`, excluded `_DERIVED_ITEM_META_KEYS` from client item overwrites without deleting session totals in `app/api/items.py`, and hardened integer reads in `_compute_reading_duration_summary()` / `log_reading_session()`.
+  - Expanded `_compute_manifestation_stats()` start statuses (`listening`, `watching`, `playing`, `building`) for non-book `avg_reading_days` parity.
+  - Updated `frontend/lib/capacitor/storage.ts` (`getAuthToken`, `setAuthToken`, `removeAuthToken`) to await `getActiveServerId()`, block cross-server legacy token fallback, and clean stale legacy tokens on logout.
+  - Synced `TaxonomyEditor` `locationInput` on external `item.physical_location` updates, added `Escape` lightbox dismissal in `ManifestationCoversGallery`, and updated `scripts/migrate_author_lod_to_contributors.py` to delete losing duplicates and flush before re-pointing surviving links (dropping the dead `--yes` flag).
+  - Synced and archived completed `v1.2.0` OpenSpec changes into `openspec/specs/` (keeping `C168` open for user SVG regeneration and `C170` active for `v1.3.0`).
+- **Author LOD Contributor Ownership, OWL/SHACL Synchronization & Tier Purity Guards (C169)**:
+  - Fixed `owl:sameAs` author/work identity collapse by moving author DBpedia `SemanticLink` attachment onto `Contributor` (`app/core/lod_linking_service.py`), updating retrieval, curation (`PATCH`/`DELETE /api/manifestations/<id>/semantic-links`), filters, admin stats, cleanup tasks, and frontend badges (`Contributor Level` / `Poziom twórcy`, `Expression Level` / `Poziom ekspresji`), and adding idempotent backfill script [`scripts/migrate_author_lod_to_contributors.py`](../scripts/migrate_author_lod_to_contributors.py).
+  - Updated `app/core/frbr_service.py` and `app/core/export_service.py` to emit dereferenceable `<BASE_URL>/contributors/<id>` IRIs instead of duplicate `BNode` creators, dual `FRBR.*`/`iqoqo:*` types, `iqoqo:SerialWork`/`iqoqo:PublicationIssue`, `iqoqo:User` types on custody/friend IRIs, and reified `iqoqo:ContainerAggregation` and full-profile `iqoqo:ImageScan` nodes.
+  - Synchronized `docs/ontology/iqoqo.ttl`, `docs/ontology/iqoqo-shapes.ttl` (`SerialWorkShape`, `PublicationIssueShape`, `iqoqo:physicalLocation` restrictions, `SemanticLinkShape` `"expression"`, `frbrer:` message fixes), `scripts/sync_ontology.py`, and `docs/SEMANTIC_WEB.md`.
+  - Removed carrier/type meta duplication onto `Work.meta`/`Item.meta` in `update_manifestation`, `_sync_manifestation_items_type`, and `update_frbr_entity_type`, and prevented `PUT /api/items/<id>` from mutating shared `Manifestation.meta`.
+- **Search, Facets, URL Round-Trip, OpenAPI Envelope & QA Hardening (C167)**:
+  - Fixed PostgreSQL FTS crash in `app/core/search_service.py` by binding `bindparam("location_filter", expanding=True)` and returning owner-scoped `physical_location` across FTS/ILIKE `GET /api/items?q=...` results.
+  - Fixed `app/core/data_manager.py` (`_compute_faceted_stats` -> `_build_item_ids_subq`) so `GET /api/stats/facets?location=...` honors `locations` filtering across facet groups and `location_counts` queries `loc_subq`.
+  - Fixed `frontend/lib/collection-url.ts` (`MULTI_VALUE_PARAMS`) to preserve `?location=...` on `/collection` URL serialization and hydration.
+  - Aligned `app/api/docs.py` OpenAPI 3.1 schemas (`Item.physical_location`, `?location=` on `/items` & `/stats/facets`, `PATCH /api/items/bulk-location` `200`/`403` schemas, and `{success, data, error}` response envelopes on `/api/manifestations/{id}/stats` and `/images`), and hardened backend, frontend, BATS, and Playwright E2E coverage across `v1.2.0`.
+- **Canonical Graph LOD Node Deduplication & Contributor Anchors (C164)**:
+  - Updated `GraphService` in `app/core/graph_service.py` to normalize external LOD URIs (`_canonical_lod_uri`, `_canonical_lod_node_key`) into deterministic `lod:<digest>` node IDs and merge colliding `SemanticLink` rows onto a single canonical LOD node (preventing duplicate LOD nodes when expanding a `Person` across linked `Work`s or `http`/`https`/trailing-slash variants).
+  - Updated `_build_full_library_graph` to include `SemanticLink.entity_type == "contributor"` in LOD anchor prioritization alongside works, expressions, and manifestations.
+- **AWS S3 & Glacier Cold Archive Backup Repair (C163)**:
+  - Fixed `Makefile` `archive-run` and `scripts/cloud_backup_cron.sh` (`archive-install`) to pass `--archive` without injecting `iqoqo-glacier:iqoqo-archive` when `S3_BACKEND=auto`, allowing S3-only hosts to archive cleanly without `rclone` hijacks.
+  - Updated `scripts/cloud_backup.sh` and `scripts/cloud_backup_check.sh --archive` to initialize via `S3Service.from_environment("backup")` (preserving `S3_REGION_NAME`, `S3_ENDPOINT_URL`, `S3_ADDRESSING_STYLE`, and `AWS_SESSION_TOKEN`), support `S3_BUCKET_ARCHIVE`, `S3_ARCHIVE_PREFIX` (`archives/`), and `S3_ARCHIVE_STORAGE_CLASS` (`S3Service.upload_file(..., storage_class=...)`), and fall back to `rclone lsd` when `rclone about` is unsupported.
+- **Preview Clone Re-Encryption Key Propagation & `APP_VERSION` Tag Parity (C155)**:
+  - Extended `scripts/reconcile_preview_settings.py --dotenv-stdin` to pop an optional framed `__IQOQO_SRC_SECRET_KEY__=` first-line stdin header without persisting it to disk, argv, env, or DB, and to emit a `⚠️ Encrypted settings partially reconciled (..., preserved undecryptable: N)` warning whenever undecryptable rows remain.
+  - Updated `Makefile` (`start` prebuilt preview, `preview-reconcile`, and `monitoring-reset-auth`) to default `SKIP_CLONE` to `0`, propagate optional `SRC_SECRET_KEY`/`SRC_LOC` via pure-shell `printf` stdin framing without host `python3` or `2>/dev/null`, force-recreate `web`/`worker`, and preserve running `web` container `APP_VERSION` tags.
+  - Updated `scripts/clone.sh` preview follow-up instructions to include exact `SRC_LOC`, `SRC_NAME`, optional `SRC_HOST`, and `SKIP_CLONE=0`.
+- **ISBN Lookup Wall-Clock Budget & Scanner Timeout Parity (C154)**:
+  - Added configurable `max_retries` to `_make_session()` and provider outcome helpers in `app/utils/isbn.py`, enforced `max_retries=0` and minimum viable budget checks (`_MIN_ENRICHMENT_BUDGET = 1.0s`) for optional secondary gap-filling, and reserved viable read timeout budget (`>= 1.5s`) for Biblioteka Narodowa on Polish ISBNs.
+  - Exported `API_TIMEOUT_MS = 15_000` from `frontend/lib/api/client.ts` and aligned `BottomSheet` and `/scan` quick-lookup `Promise.race` timeouts with `AbortController` cancellation so valid in-flight lookups are not dropped at 10s.
+
 ## [1.1.2] - 2026-11-25
 
 ### Added

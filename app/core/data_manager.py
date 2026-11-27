@@ -961,6 +961,7 @@ class DataManager:
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
         expression_kind: list[str] | None = None,
+        locations: list[str] | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -990,7 +991,7 @@ class DataManager:
         _has_user_filters = (
             scope != "friends"
             and owner_id is not None
-            and (tags is not None or collections is not None or statuses is not None or borrowed_only)
+            and (tags is not None or collections is not None or statuses is not None or locations is not None or borrowed_only)
         )
 
         _needs_item_join = _has_user_filters or (missing_cover is True) or (missing_id is True) or (scope == "friends")
@@ -1224,6 +1225,11 @@ class DataManager:
                 )
             base_query = base_query.where(has_map_cond)
 
+        if locations and owner_id and scope != "friends":
+            clean_locs = [str(loc).strip() for loc in locations if str(loc).strip()]
+            if clean_locs:
+                base_query = base_query.where(Item.owner_id == owner_id, Item.physical_location.in_(clean_locs))
+
         return base_query.subquery()
 
     @staticmethod
@@ -1246,6 +1252,7 @@ class DataManager:
         lod_authority: str | None = None,
         lod_status: str | None = None,
         has_map: bool = False,
+        locations: list[str] | None = None,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
@@ -1290,6 +1297,8 @@ class DataManager:
             cache_params["expression_kind"] = expression_kind
         if has_map:
             cache_params["has_map"] = True
+        if locations:
+            cache_params["locations"] = sorted(locations)
         if scope != "own":
             cache_params["scope"] = scope
         cache_key = normalize_facet_cache_key(cache_params, owner_id)
@@ -1326,6 +1335,7 @@ class DataManager:
             lod_authority=lod_authority,
             lod_status=lod_status,
             has_map=has_map,
+            locations=locations,
             scope=scope,
             friend_ids=friend_ids,
         )
@@ -1352,6 +1362,7 @@ class DataManager:
         lod_authority: str | None = None,
         lod_status: str | None = None,
         has_map: bool = False,
+        locations: list[str] | None = None,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
@@ -1423,12 +1434,14 @@ class DataManager:
             exclude_publishers: bool = False,
             exclude_statuses: bool = False,
             exclude_lod: bool = False,
+            exclude_locations: bool = False,
         ):
             """Build entity-id subquery with the specified facet groups excluded."""
             # For user-specific facets when unauthenticated, no subquery filtering is possible
             _tags = None if (exclude_tags or not owner_id) else tags
             _collections = None if (exclude_collections or not owner_id) else collections
             _statuses = None if (exclude_statuses or not owner_id) else statuses
+            _locations = None if (exclude_locations or not owner_id) else locations
             return DataManager._build_item_ids_subq(
                 owner_id=owner_id,
                 category=None if exclude_category else category,
@@ -1449,6 +1462,7 @@ class DataManager:
                 has_map=has_map,
                 scope=scope,
                 friend_ids=friend_ids,
+                locations=_locations,
             )
 
         cat_subq = _subq(exclude_category=True)
@@ -1460,6 +1474,7 @@ class DataManager:
         pub_subq = _subq(exclude_publishers=True)
         status_subq = _subq(exclude_statuses=True)
         lod_subq = _subq(exclude_lod=True)
+        loc_subq = _subq(exclude_locations=True)
 
         # ── Helpers: per-facet join paths ──────────────────────────────
         def _apply_joins(q, *join_pairs):
@@ -1718,6 +1733,24 @@ class DataManager:
             tag_query = tag_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
             tag_rows = db.session.execute(tag_query).all()
             tag_counts = {t: cnt for t, cnt in tag_rows if t}
+
+        # ── Physical location counts (owner-scoped only) ──────────────────
+        location_counts: dict[str, int] = {}
+        if owner_id and scope != "friends":
+            loc_query = (
+                select(Item.physical_location, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(
+                    Item.owner_id == owner_id,
+                    Item.physical_location.isnot(None),
+                    Item.physical_location != "",
+                    subq_filter_col.in_(select(loc_subq.c.id)),
+                )
+                .group_by(Item.physical_location)
+            )
+            loc_query = _join_full_chain(loc_query)
+            loc_rows = db.session.execute(loc_query).all()
+            location_counts = {loc: cnt for loc, cnt in loc_rows if loc}
 
         # ── Genre counts ──────────────────────────────────────────────────
         genre_counts: dict[str, int] = {}
@@ -2019,6 +2052,7 @@ class DataManager:
             "status_counts": db_statuses,
             "collection_counts": collection_counts,
             "tag_counts": tag_counts,
+            "location_counts": location_counts,
             "genre_counts": genre_counts,
             "publisher_counts": publisher_counts,
             "lod_counts": lod_counts,

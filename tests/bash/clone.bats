@@ -76,3 +76,12 @@ teardown() {
   run grep -F 'make preview-reconcile' scripts/iqopretest.sh
   [ "$status" -eq 0 ]
 }
+
+@test "clone.sh preview next-step instructions include SRC_LOC, SRC_NAME, and SKIP_CLONE=0" {
+  run grep -n 'SRC_LOC=' scripts/clone.sh
+  [ "$status" -eq 0 ]
+  run grep -n 'SRC_NAME=' scripts/clone.sh
+  [ "$status" -eq 0 ]
+  run grep -n 'SKIP_CLONE=0' scripts/clone.sh
+  [ "$status" -eq 0 ]
+}

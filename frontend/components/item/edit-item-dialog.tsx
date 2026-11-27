@@ -54,6 +54,7 @@ interface EditItemFormProps {
 function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
   const t = useTranslations("EditItemDialog");
   const [localBarcode, setLocalBarcode] = useState<string>(item.local_barcode ?? "");
+  const [physicalLocation, setPhysicalLocation] = useState<string>(item.physical_location ?? "");
   const [condition, setCondition] = useState<string>(item.condition ?? "");
   const [visibility, setVisibility] = useState<"private" | "friends_only" | "public">(
     (item as { visibility?: "private" | "friends_only" | "public" }).visibility ??
@@ -104,6 +105,9 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
         condition: condition.trim() ? condition.trim() : null,
         visibility,
       };
+      if (physicalLocation !== (item.physical_location ?? "")) {
+        payload.physical_location = physicalLocation.trim() ? physicalLocation.trim() : null;
+      }
 
       if (isLego) {
         payload.build_status = buildStatus;
@@ -157,6 +161,23 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
           value={condition}
           onChange={e => setCondition(e.target.value)}
           placeholder={t("conditionPlaceholder")}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="item-physical-location"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          {t("physicalLocation") || "Physical Location"}
+        </label>
+        <input
+          id="item-physical-location"
+          name="physical_location"
+          value={physicalLocation}
+          onChange={e => setPhysicalLocation(e.target.value)}
+          placeholder={t("physicalLocationPlaceholder") || "e.g. Living Room / Shelf B3"}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
       </div>

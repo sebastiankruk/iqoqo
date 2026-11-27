@@ -11,7 +11,7 @@ iqoqo is designed as a **Library of Everything** built on the FRBR (*Functional 
 Key properties:
 
 - **Server-to-Server (S2S) only**: No Client-to-Server (C2S) ActivityPub endpoints. Client interactions use the Next.js frontend with REST/JSON APIs.
-- **Asynchronous Delivery**: Inbound and outbound activities are queued and dispatched via Celery (`federation` queue) backed by Redis.
+- **Asynchronous Delivery**: Inbound and outbound activities are queued and dispatched via Celery (`federation` queue) backed by Valkey 8.
 - **Cryptographic Verification**: Inbound activities are verified using `draft-cavage-http-signatures-12` against public keys fetched via WebFinger and Actor dereferencing.
 
 ![ActivityPub S2S Federation, 3-Tier Trust, and Cross-Instance Lending Architecture](images/architecture/09-activitypub-federation-lending.svg)
@@ -44,7 +44,7 @@ Federated instances are classified into three distinct, non-overlapping trust le
 ### 3.2 NodeInfo 2.1
 
 - **Discovery**: `GET /.well-known/nodeinfo` returns links to supported NodeInfo schemas.
-- **Metadata**: `GET /api/federation/nodeinfo/2.1` exposes instance metadata, software version (`0.9.x`), and active protocols (`["activitypub"]`).
+- **Metadata**: `GET /api/federation/nodeinfo/2.1` exposes instance metadata, runtime `APP_VERSION` (`1.2.x`), and active protocols (`["activitypub"]`).
 
 ### 3.3 Instance Actor & Key Fingerprints
 

@@ -269,6 +269,7 @@ export interface Item {
   collection_status: CollectionStatus;
   condition?: string | null;
   local_barcode?: string | null;
+  physical_location?: string | null;
   lent_to_user_id?: string | null;
   lent_to_name?: string | null;
   is_borrowed?: boolean;
@@ -534,10 +535,38 @@ export type FacetStatsResponse = {
   status_counts: Record<string, number>;
   collection_counts: Record<string, number>;
   tag_counts: Record<string, number>;
+  location_counts?: Record<string, number>;
   genre_counts: Record<string, number>;
   publisher_counts: Record<string, number>;
   lod_counts?: Record<string, number>;
   borrowed_count?: number;
+};
+
+/** Community-contributed cover or supplementary image attached to a Manifestation (F3). */
+export type ManifestationImage = {
+  id: number;
+  url: string;
+  label: string;
+  source?: string | null;
+  added_at: string | null;
+};
+
+/** Monthly anonymized popularity bucket for a Manifestation (F3). */
+export type ManifestationPopularityBucket = {
+  month: string;
+  added_count: number;
+  completed_count: number;
+};
+
+/** Anonymized reading statistics and popularity timeline for a Manifestation (F3). */
+export type ManifestationStats = {
+  manifestation_id: number;
+  total_items: number;
+  reader_count: number;
+  completed_count: number;
+  avg_reading_days: number | null;
+  avg_session_minutes: number | null;
+  popularity_over_time: ManifestationPopularityBucket[];
 };
 
 export type { BoardgameMechanic } from "./boardgame";

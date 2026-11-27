@@ -130,3 +130,19 @@ teardown() {
   [[ "$output" == *'--user "$(id -u):$(id -g)"'* ]]
   [[ "$output" == *"/tmp/envdir"* ]]
 }
+
+@test "make preview start prebuilt frames SRC_SECRET_KEY via stdin and recreates web and worker without stderr suppression" {
+  mkdir -p "${TEST_TEMP_DIR}/src"
+  printf 'SECRET_KEY=framed-src-secret-for-test\n' > "${TEST_TEMP_DIR}/src/.env.prod"
+  printf 'BASE_URL=https://pre.iqoqo.cc\n' > "${TEST_TEMP_DIR}/.env.preview"
+
+  run env SRC_LOC="${TEST_TEMP_DIR}/src" COMPOSE_ENV_FILE="${TEST_TEMP_DIR}/.env.preview" make preview start prebuilt
+  [ "$status" -eq 0 ]
+
+  run make -n preview start prebuilt SRC_LOC="${TEST_TEMP_DIR}/src" COMPOSE_ENV_FILE="${TEST_TEMP_DIR}/.env.preview"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"__IQOQO_SRC_SECRET_KEY__="* ]]
+  [[ "$output" == *"reconcile_preview_settings.py --dotenv-stdin"* ]]
+  [[ "$output" != *"reconcile_preview_settings.py --dotenv-stdin 2>/dev/null"* ]]
+  [[ "$output" == *"up -d --force-recreate --no-deps web worker"* ]]
+}

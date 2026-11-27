@@ -15,15 +15,26 @@
 //
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, AlertCircle, Server } from "lucide-react";
-import { getInstanceUrl, setInstanceUrl, setInstanceName, removeAuthToken } from "@/lib/capacitor/storage";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, CheckCircle2, AlertCircle, Server, Trash2, Pencil, Check, X } from "lucide-react";
+import {
+  getInstanceUrl,
+  getSavedServers,
+  getActiveServerId,
+  saveServerProfile,
+  switchActiveServer,
+  updateServerProfile,
+  removeServerProfile,
+  getAuthToken,
+  type ServerProfile,
+} from "@/lib/capacitor/storage";
 
 export interface ServerSelectorProps {
   initialUrl?: string;
@@ -33,8 +44,9 @@ export interface ServerSelectorProps {
 }
 
 /**
- * Home Assistant (HASS)-style dynamic server selector for mobile devices.
- * Probes the target iqoqo instance via GET /api/health before saving.
+ * Home Assistant (HASS)-style dynamic multi-server selector for mobile devices.
+ * Probes target iqoqo instances via GET /api/health before saving and isolates
+ * auth tokens and offline caches per saved server profile.
  */
 export function ServerSelector({ initialUrl, onConnected, showCancel = false, onCancel }: ServerSelectorProps) {
   const t = useTranslations("Mobile");
@@ -42,21 +54,48 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
   const queryClient = useQueryClient();
 
   const [urlInput, setUrlInput] = useState(initialUrl || "");
+  const [nameInput, setNameInput] = useState("");
+  const [servers, setServers] = useState<ServerProfile[]>([]);
+  const [activeServerId, setActiveServerId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [verifiedInfo, setVerifiedInfo] = useState<{ name: string; version?: string } | null>(null);
 
-  useEffect(() => {
-    if (!initialUrl) {
-      getInstanceUrl().then(saved => {
-        if (saved) setUrlInput(saved);
-      });
+  const loadServers = useCallback(async () => {
+    const [list, activeId, savedUrl] = await Promise.all([
+      getSavedServers(),
+      getActiveServerId(),
+      initialUrl ? Promise.resolve(initialUrl) : getInstanceUrl(),
+    ]);
+    setServers(list);
+    setActiveServerId(activeId);
+    if (!initialUrl && savedUrl) {
+      setUrlInput(prev => prev || savedUrl);
     }
   }, [initialUrl]);
 
-  /**
-   * Normalize entered server URL.
-   */
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getSavedServers(),
+      getActiveServerId(),
+      initialUrl ? Promise.resolve(initialUrl) : getInstanceUrl(),
+    ]).then(([list, activeId, savedUrl]) => {
+      if (cancelled) return;
+      setServers(list);
+      setActiveServerId(activeId);
+      if (!initialUrl && savedUrl) {
+        setUrlInput(prev => prev || savedUrl);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialUrl]);
+
+  /** Normalize entered server URL. */
   const normalizeUrl = (raw: string): string => {
     let trimmed = raw.trim();
     if (!trimmed) return "";
@@ -66,9 +105,44 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
     return trimmed.replace(/\/+$/, "");
   };
 
-  /**
-   * Verify server health and configuration.
-   */
+  /** Switch to an already-saved server profile without wiping other servers' tokens/caches. */
+  const handleSwitchServer = async (profile: ServerProfile) => {
+    setErrorMessage(null);
+    const activated = await switchActiveServer(profile.id);
+    if (!activated) return;
+
+    setActiveServerId(activated.id);
+    queryClient.clear();
+    queryClient.invalidateQueries({ queryKey: ["auth", "providers"] });
+
+    if (onConnected) {
+      onConnected(activated.url, activated.name);
+      return;
+    }
+
+    const token = await getAuthToken(activated.id);
+    router.push(token ? "/collection" : "/login");
+  };
+
+  /** Persist inline server rename. */
+  const handleSaveRename = async (serverId: string) => {
+    if (!editingName.trim()) {
+      setEditingId(null);
+      return;
+    }
+    await updateServerProfile(serverId, { name: editingName.trim() });
+    setEditingId(null);
+    await loadServers();
+  };
+
+  /** Remove a saved server profile along with its isolated token and offline cache. */
+  const handleRemoveServer = async (serverId: string) => {
+    await removeServerProfile(serverId);
+    queryClient.clear();
+    await loadServers();
+  };
+
+  /** Verify new server health and save/activate its profile. */
   const handleVerify = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage(null);
@@ -98,6 +172,7 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
         headers: { Accept: "application/json" },
         signal: controller.signal,
       }).catch(err => {
+        clearTimeout(timeoutId);
         throw err;
       });
 
@@ -107,7 +182,7 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
         throw new Error(`HTTP ${healthRes.status}`);
       }
 
-      let detectedName = "iqoqo Library";
+      let detectedName = nameInput.trim() || "iqoqo Library";
       let detectedVersion: string | undefined;
 
       try {
@@ -118,7 +193,7 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
         if (configRes.ok) {
           const configJson = await configRes.json();
           const configData = configJson?.data || configJson;
-          if (configData?.instance_name) {
+          if (!nameInput.trim() && configData?.instance_name) {
             detectedName = configData.instance_name;
           }
           if (configData?.version) {
@@ -129,23 +204,20 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
         // Non-critical, fallback to default name
       }
 
-      const previousUrl = await getInstanceUrl();
-      if (previousUrl && previousUrl !== normalized) {
-        // Isolate credentials and cached data across different servers
-        await removeAuthToken();
-        queryClient.clear();
-      }
-
-      await setInstanceUrl(normalized);
-      await setInstanceName(detectedName);
+      const saved = await saveServerProfile({ url: normalized, name: detectedName }, true);
+      queryClient.clear();
       queryClient.invalidateQueries({ queryKey: ["auth", "providers"] });
 
+      setActiveServerId(saved.id);
+      await loadServers();
       setVerifiedInfo({ name: detectedName, version: detectedVersion });
+      setNameInput("");
 
       if (onConnected) {
         onConnected(normalized, detectedName);
       } else {
-        router.push("/login");
+        const existingToken = await getAuthToken(saved.id);
+        router.push(existingToken ? "/collection" : "/login");
       }
     } catch {
       setErrorMessage(t("connectionFailed"));
@@ -163,8 +235,131 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
         <CardTitle className="text-xl font-bold">{t("serverSelectorTitle")}</CardTitle>
         <CardDescription className="text-sm">{t("serverSelectorDescription")}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-5">
+        {servers.length > 0 && (
+          <div className="space-y-2" data-testid="saved-servers-list">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("savedServers")}</p>
+            <div className="space-y-2">
+              {servers.map(srv => {
+                const isActive = srv.id === activeServerId;
+                const isEditing = editingId === srv.id;
+                return (
+                  <div
+                    key={srv.id}
+                    data-testid={`saved-server-${srv.id}`}
+                    className={`flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm ${
+                      isActive ? "border-primary/50 bg-primary/5" : "border-border bg-background"
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={e => setEditingName(e.target.value)}
+                            aria-label={t("serverNameLabel")}
+                            className="h-7 w-full rounded border border-input bg-background px-2 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => handleSaveRename(srv.id)}
+                            aria-label={t("saveName")}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => setEditingId(null)}
+                            aria-label={t("cancel")}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium truncate">{srv.name}</span>
+                            {isActive && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                {t("activeServer")}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono truncate">{srv.url}</p>
+                        </>
+                      )}
+                    </div>
+                    {!isEditing && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!isActive && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => handleSwitchServer(srv)}
+                          >
+                            {t("switchToServer")}
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setEditingId(srv.id);
+                            setEditingName(srv.name);
+                          }}
+                          aria-label={t("renameServer")}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => handleRemoveServer(srv.id)}
+                          aria-label={t("removeServer")}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleVerify} className="space-y-4">
+          <div className="space-y-1.5">
+            <label
+              htmlFor="server-name-input"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              {t("serverNameLabel")}
+            </label>
+            <input
+              id="server-name-input"
+              type="text"
+              placeholder={t("serverNamePlaceholder")}
+              value={nameInput}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNameInput(e.target.value)}
+              disabled={isVerifying}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+
           <div className="space-y-1.5">
             <label
               htmlFor="server-url-input"
@@ -230,7 +425,7 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
 }
 
 /**
- * Modal wrapper for ServerSelector to switch servers on mobile login screens.
+ * Modal wrapper for ServerSelector to switch servers on mobile screens.
  */
 export function ServerSelectorModal({
   isOpen,
@@ -245,7 +440,7 @@ export function ServerSelectorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto">
         <ServerSelector
           showCancel
           onCancel={onClose}

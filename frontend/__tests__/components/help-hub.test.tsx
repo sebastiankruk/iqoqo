@@ -18,6 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import HelpHubPage from "@/app/help/page";
 import { HELP_ARTICLES } from "@/lib/help-articles";
+import { containsHtmlTags } from "@/components/ui/rich-text";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -76,5 +77,11 @@ describe("HelpHubPage", () => {
     expect(bySlug["federation-architecture"].content.pl).toContain("Valkey 8");
     expect(bySlug["curators-handbook"].content.en).toContain("/api/catalog/graph");
     expect(bySlug["curators-handbook"].content.pl).toContain("/api/catalog/graph");
+
+    // Ensure markdown guide content never triggers HTML-mode fallback in RichText
+    for (const article of HELP_ARTICLES) {
+      expect(containsHtmlTags(article.content.en)).toBe(false);
+      expect(containsHtmlTags(article.content.pl)).toBe(false);
+    }
   });
 });

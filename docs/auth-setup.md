@@ -40,7 +40,7 @@ Before you can log into your iqoqo instance using email and password, you must c
 To enable "Sign in with Google", you must supply your own Google Cloud credentials.
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (e.g., \`iqoqo-dev\`).
+2. Create a new project (e.g., `iqoqo-dev`).
 3. Navigate to **APIs & Services > OAuth consent screen**.
    - Choose **External** and fill in the required App Name and Support Email fields.
 4. Navigate to **Credentials > + CREATE CREDENTIALS > OAuth client ID**.

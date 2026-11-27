@@ -1,20 +1,20 @@
 # MEMORY — iqoqo Dev Server
 
-> **Last updated:** 2026-09-15  
-> **Codebase snapshot:** iqoqo-internal monorepo
+> **Last updated:** 2026-11-27  
+> **Codebase snapshot:** iqoqo v1.2.0 monorepo
 
 ---
 
 ## 1. Project Identity
 
-**iqoqo** is a self-hosted, local-first personal media catalog for physical collections (books, board games, movies, music, etc.). Built on the FRBR (Functional Requirements for Bibliographic Records) ontology, it provides:
+**iqoqo** is a self-hosted, local-first personal media catalog for physical collections (books, board games, movies, music, serials, maps, LEGO, puzzles). Built on the FRBR/FRBRoo ontology, it provides:
 
-- A Python **Flask** backend with JWT auth, RBAC, Alembic migrations, and PostgreSQL 18 support
-- A **Next.js 16.3** frontend with App Router, shadcn/ui, and Tailwind CSS v4
-- A **Celery** background worker with Redis 8 task broker
-- An **OpenObserve** unified telemetry stack (traces, metrics, logs)
-- Multi-tier **Rclone** cloud backups (Daily sync, S3 Glacier cold archiving)
-- Docker-based deployment with prebuilt GHCR images (`backend`, `frontend`, `nginx`)
+- A Python **Flask 3.1** backend with JWT/2FA/PAT auth, RBAC, Alembic migrations, ActivityPub federation, and PostgreSQL 18 multi-schema storage
+- A **Next.js 16.4** frontend (App Router, shadcn/ui, Tailwind CSS v4) plus Capacitor 7 native Android/iOS dual build
+- A **Celery** background worker with **Valkey 8** (`valkey/valkey:8-alpine`) broker/cache
+- An isolated Python RDFLib **`sparql-runner`** service and **OpenObserve** telemetry stack
+- Multi-tier **Rclone** + native boto3 `S3Service` backups (Daily sync, S3 Glacier cold archiving)
+- Docker-based deployment with prebuilt GHCR images (`backend`, `frontend`, `nginx`, `sparql`)
 
 **Owner/Context:** Sebastian Kruk, iqoqo project. Primary user is the developer building and using the system.
 
@@ -69,7 +69,7 @@ iqoqo/
 │   │   └── lookup/               # External API lookup strategies
 │   ├── utils/                    # Utility modules
 │   └── static/                   # Static assets
-├── frontend/                     # Next.js 15 frontend
+├── frontend/                     # Next.js 16 frontend (App Router + Capacitor 7)
 │   ├── app/                      # App Router pages
 │   │   ├── layout.tsx            # Root layout with providers
 │   │   ├── page.tsx              # Home (collection stats)
@@ -153,7 +153,7 @@ iqoqo/
 - **Auth:** JWT secrets (`JWT_SECRET_KEY`, `AUTH_SECRET`), Admin credentials (`ADMIN_EMAIL`, `ADMIN_PASSWORD`)
 - **RBAC:** Roles: `admin`, `custodian`, `user`, `guest`
 - **External APIs:** OpenLibrary, Google Books, MusicBrainz, Discogs, BoardGameGeek, TMDB, Allegro
-- **Worker & Queue:** Redis 8 / Celery (`REDIS_URL`)
+- **Worker & Queue:** Valkey 8 / Celery (`REDIS_URL`, preserves `redis` service alias)
 - **Frontend URL:** `NEXT_PUBLIC_FRONTEND_URL` and `NEXT_PUBLIC_API_URL`
 - **AI Covers:** Local SD, Ollama, OpenAI, Gemini
 - **Backup:** Rclone remotes (`RCLONE_REMOTE_FAST`, `RCLONE_REMOTE_ARCHIVE`, `RCLONE_COVERS_REMOTE`)
@@ -216,26 +216,21 @@ iqoqo/
 **Migrations:** Alembic  
 **Session:** `app/db/__init__.py` — `db` instance
 
-### Tables
+### Schemas & Core Tables
 
-- **users** — id, email, password_hash, is_active, role
-- **works** — id, title, abstract, entity_type, created_at, updated_at
-- **expressions** — id, work_id (FK→works), name, language, created_at, updated_at
-- **manifestations** — id, expression_id (FK→expressions), name, publisher, publication_date, media_type, meta (JSON), created_at, updated_at
-- **items** — id, manifestation_id (FK→manifestations), user_id (FK→users), barcode, status, notes, condition, meta (JSON), collection_status, available, created_at, updated_at
-- **collections** — id, user_id (FK→users), name, description, media_type, is_smart, smart_rules (JSON), created_at, updated_at
-- **item_collections** — item_id, collection_id (many-to-many join table)
-- **lending_records** — id, item_id (FK→items), user_id (FK→users), borrower_name, borrower_contact, loan_date, due_date, return_date, status, notes, created_at, updated_at
-- **cover_images** — id, item_id (FK→items), filename, original_filename, file_size, mime_type, width, height, created_at
+Multi-schema PostgreSQL 18 layout (`auth`, `catalog`, `inventory`, `social`, `federation`, `config`, `public`):
+
+- **`auth`:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, `token_blocklist`, `user_consents`
+- **`catalog`:** `works`, `expressions`, `manifestations`, `contributors`, `work_contributions`, `expression_contributions`, `manifestation_contributions`, `work_parts`, `work_series_memberships`, `work_expansion_links`, `work_relations`, `boardgame_mechanics`, `container_aggregations`, `image_scans`, `reading_roadmaps`, `roadmap_items`, `tags`
+- **`inventory`:** `items` (includes `physical_location`), `item_custody_events`, `item_status_logs`, `entity_audit_logs`, `duplicate_candidates`, `escalation_requests`, `loan_requests`, `metadata_refetch_log`, `work_link_candidates`, `shared_collections`, `shared_collection_items`, `llm_telemetry`, `scan_telemetry`
+- **`social`:** `feedback_items`, `feedback_comments`, `notifications`
+- **`federation`:** `federation_instances`, `federation_actors`, `federation_followers`, `federation_activities`, `federation_consents`
+- **`config`:** `instance_settings` (Fernet-encrypted external API secrets)
 
 ### Key Relationships
 
-- Work → Expression → Manifestation → Item (FRBR chain)
-- User → Items (ownership)
-- User → Collections (ownership)
-- Item ↔ Collections (many-to-many via item_collections)
-- Item → CoverImages (one-to-many)
-- Item → LendingRecords (one-to-many)
+- Work → Expression → Manifestation → Item (FRBR WEMI chain)
+- User → Items (`owner_id`) and User → SharedCollections / ReadingRoadmaps (`user_id`)
 
 ## 7. Testing Infrastructure
 
@@ -284,18 +279,18 @@ iqoqo/
 
 - ✅ FRBR four-tier bibliographic model (Work → Expression → Manifestation → Item)
 - ✅ Flask 3.1 REST API with Python 3.14+
-- ✅ Next.js 16.3 App Router with Tailwind CSS v4 and shadcn/ui
-- ✅ PostgreSQL 18 with GIN full-text search and JSONB metadata
-- ✅ Redis 8 + Celery background task processing
+- ✅ Next.js 16.4 App Router with Tailwind CSS v4, shadcn/ui, and Capacitor 7 multi-server mobile support
+- ✅ PostgreSQL 18 across 7 schemas with GIN full-text search, physical item locations (`physical_location`), and Manifestation stats/gallery
+- ✅ Valkey 8 (`valkey/valkey:8-alpine`) + Celery background task processing
 - ✅ Symmetric Fernet encryption at rest for `InstanceSettings` API credentials
-- ✅ Two-stage linear Alembic migration DAG (`v0_7_17_baseline` + `v0_7_18_fixes`)
+- ✅ Strictly linear Alembic migration DAG (`len(heads) == 1`) through `v1_2_0_item_physical_location`
 - ✅ SQL `LIMIT`/`OFFSET` pagination and bounded query memory across endpoints
-- ✅ Continuous hands-free batch scanning with audio feedback and toast queues
-- ✅ Nginx reverse proxy gateway routing
-- ✅ OpenObserve unified observability stack (traces, metrics, logs)
-- ✅ Multi-tier Rclone cloud backup (Daily fast sync + S3 Glacier cold archiving)
-- ✅ Scanner with multi-candidate title lookup and scan policy isolation
-- ✅ Polymorphic media badges for non-book wishlist items
+- ✅ Continuous hands-free batch scanning across 8 formats (`book`, `magazine`, `audiobook`, `music`, `movie`, `board_game`, `puzzle`, `lego`)
+- ✅ Nginx gateway routing + isolated RDFLib `sparql-runner` service
+- ✅ OpenObserve 8-layer observability stack (traces, metrics, logs, Browser RUM)
+- ✅ Multi-tier Rclone + boto3 `S3Service` cloud backups (`data/keys/` + S3 Glacier cold archiving)
+- ✅ Bounded 1–4 hop FRBR visual graph (`/graph`, `7` edge categories including cross-media `WorkRelation`, `lod:<digest>` dedup)
+- ✅ Polymorphic media support including `vcd` and `cd_dvd_combo` mixed carriers
 
 ---
 
@@ -315,23 +310,23 @@ iqoqo/
 ### Standard Services (`docker-compose.yml`)
 
 1. **db** — PostgreSQL 18 database (`5432`)
-2. **redis** — Redis 8 broker and cache (`6379`)
+2. **redis** — Valkey 8 (`valkey/valkey:8-alpine`) broker and cache (`6379`)
 3. **migration** — Dedicated one-shot Alembic schema migration runner (completes before web/worker)
 4. **web** — Flask / Gunicorn REST API (`5000`)
 5. **worker** — Celery background task processor
-6. **frontend** — Next.js 16.3 App Router (`3000`)
-7. **nginx** — Reverse proxy gateway (`8000`)
+6. **sparql-runner** — Isolated Python RDFLib SPARQL executor (`5050`)
+7. **frontend** — Next.js 16.4 App Router (`3000`)
+8. **nginx** — Reverse proxy gateway (`8000`)
 
 ### Prebuilt Deployment (`docker-compose.prebuilt.yml`)
 
-- Pulls tagged images from GHCR: `iqoqo-backend`, `iqoqo-frontend`, `iqoqo-nginx`.
+- Pulls tagged images from GHCR: `iqoqo-backend`, `iqoqo-frontend`, `iqoqo-nginx`, `iqoqo-sparql`.
 - Uses dedicated one-shot `migration` service with isolated volume bindings (`volumes: !reset []`).
 
 ---
 
 ## 12. Version & Release Context
 
-- **Latest Released Version:** `0.8.4` (2026-10-15)
-- **Active Development Version:** `0.9.0` (Federation & Decentralization)
-- **Release Branch:** `release/0.8.4`
+- **Active Release Version:** `1.2.0`
+- **Release Branch:** `release/1.2.0`
 - **Changelog:** Documented in [CHANGELOG.md](CHANGELOG.md)

@@ -447,48 +447,15 @@ does not invoke provider fallbacks or LLM generation.
 
 ---
 
-### Pre-Maintenance Backup
+### Pre-Maintenance Backup & Cold Archive
 
-Always backup before running ETL or migration operations:
+Always back up PostgreSQL and assets before running ETL or schema operations. Multi-tier daily sync (`make backup-run`), native S3 Glacier cold archive (`make archive-run`), key directory preservation (`data/keys/`), and `scripts/restore.sh` are documented canonically in **[BACKUPS.md](BACKUPS.md)**.
 
-```bash
-# 1. Full database dump
-docker compose exec db pg_dumpall -U iqoqo > backup_$(date +%Y%m%d).sql
+### Preview Reconciliation, Cross-Media Links & AI Cover Repair
 
-# 2. JSON export (portable)
-make db-export
-
-# 3. Verify backup
-wc -l backup_$(date +%Y%m%d).sql
-ls -lh exports/backup.json
-```
-
-### Recovery from Backup
-
-```bash
-# Restore from SQL dump
-docker compose exec -T db psql -U iqoqo < backup_20260921.sql
-
-# Or restore from JSON export
-docker compose exec web python scripts/init_db.py --seed-file exports/backup.json
-```
-
-### Automated Backup Schedule
-
-For production deployments, schedule regular backups:
-
-```bash
-# Install daily backup cron (03:00)
-make backup-install remote=<rclone_remote_name>
-
-# Verify backup health
-make backup-check remote=<rclone_remote_name>
-
-# Manual backup run
-make backup-run remote=<rclone_remote_name>
-```
-
-See [BACKUPS.md](BACKUPS.md) for multi-tier backup configuration (daily sync + S3 Glacier cold archiving).
+- **`make preview-reconcile`**: Safely re-encrypts cloned preview `InstanceSettings` after production DB snapshot sync using `--dotenv-stdin`, preserves `APP_VERSION`, and resets OpenObserve RUM auth.
+- **`make reconcile-cross-media`**: Reconciles cross-media `WorkRelation` candidates (`scripts/reconcile_cross_media.py`).
+- **`make fix-ai-covers`**: Verifies and repairs AI cover bindings against Manifestation rows (`scripts/verify_ai_cover_bindings.py`).
 
 ---
 
@@ -604,7 +571,7 @@ Exit codes: `0` report printed, `1` no rows in window, `2` database/container un
 - **[Deployment Directory Contract](DEPLOYMENT.md)** — Source-free deployment layout, mount guards, and Cloudflare checklist
 - **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL queries and Linked Data endpoints
 - **[Architecture Guide](ARCHITECTURE.md)** — System architecture and data model
-- **[Upgrade Guide](UPGRADE_0.8.0.md)** — Version migration procedures
+- **[Archived Upgrade Guide (v0.8.0)](archive/UPGRADE_0.8.0.md)** — Historical version migration procedures
 - **[API Reference](API.md)** — Endpoint documentation
 - **[iqoqo Ontology](ontology/iqoqo.ttl)** — OWL ontology file
 - **[SHACL Shapes](ontology/iqoqo-shapes.ttl)** — Constraint validation shapes

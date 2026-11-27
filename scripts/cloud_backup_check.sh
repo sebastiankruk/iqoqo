@@ -60,11 +60,18 @@ if [ "${IS_ARCHIVE}" = true ]; then
   JOB_TYPE="archive"
   CRON_FILE="/etc/cron.d/iqoqo-archive"
   REMOTE="${1:-${RCLONE_REMOTE_ARCHIVE:-}}"
+  TARGET_S3_BUCKET="${S3_BUCKET_ARCHIVE:-${S3_BUCKET_BACKUP:-}}"
+  EFFECTIVE_S3_PREFIX="${S3_ARCHIVE_PREFIX:-archives/}"
 else
   JOB_TYPE="backup"
   CRON_FILE="/etc/cron.d/iqoqo-backup"
   REMOTE="${1:-${RCLONE_REMOTE_FAST:-}}"
+  TARGET_S3_BUCKET="${S3_BUCKET_BACKUP:-}"
+  EFFECTIVE_S3_PREFIX="${S3_KEY_PREFIX:-backups/}"
 fi
+EFFECTIVE_S3_PREFIX="${EFFECTIVE_S3_PREFIX#/}"
+EFFECTIVE_S3_PREFIX="${EFFECTIVE_S3_PREFIX%/}"
+[ -n "${EFFECTIVE_S3_PREFIX}" ] && EFFECTIVE_S3_PREFIX="${EFFECTIVE_S3_PREFIX}/"
 
 RCLONE_CONF="${RCLONE_CONFIG:-${HOME:-/root}/.config/rclone/rclone.conf}"
 
@@ -95,7 +102,7 @@ case "${S3_BACKEND}" in
     # not hijack an S3-only deployment.
     if [ -f "${RCLONE_CONF}" ]; then
       BACKEND="rclone"
-    elif [ -n "${S3_BUCKET_BACKUP:-}" ]; then
+    elif [ -n "${TARGET_S3_BUCKET:-}" ]; then
       BACKEND="s3"
     else
       BACKEND="none"
@@ -119,7 +126,7 @@ check() {
 
 case "${BACKEND}" in
   rclone) echo "Checking iQoQo ${JOB_TYPE} configuration (backend: rclone, remote: ${REMOTE:-default})..." ;;
-  s3)     echo "Checking iQoQo ${JOB_TYPE} configuration (backend: s3, bucket: ${S3_BUCKET_BACKUP:-<unset>})..." ;;
+  s3)     echo "Checking iQoQo ${JOB_TYPE} configuration (backend: s3, bucket: ${TARGET_S3_BUCKET:-<unset>}, prefix: ${EFFECTIVE_S3_PREFIX:-<root>})..." ;;
   none)   echo "Checking iQoQo ${JOB_TYPE} configuration (backend: NONE CONFIGURED)..." ;;
 esac
 echo ""
@@ -167,8 +174,11 @@ if [ "${BACKEND}" = "rclone" ]; then
       check ok "Rclone: config present at ${RCLONE_CONF}"
     elif rclone listremotes 2>/dev/null | grep -q "^${RCLONE_REMOTE_NAME}:"; then
       check ok "Rclone remote '${RCLONE_REMOTE_NAME}': configured"
-      if rclone about "${RCLONE_REMOTE_NAME}:" >/dev/null 2>&1; then
+      about_err=""
+      if about_err=$(rclone about "${RCLONE_REMOTE_NAME}:" 2>&1); then
         check ok "Rclone remote '${RCLONE_REMOTE_NAME}': reachable"
+      elif [[ "${about_err}" =~ (doesn\'t\ support\ about|not\ supported|unsupported|unimplemented) ]] && rclone lsd "${RCLONE_REMOTE_NAME}:" >/dev/null 2>&1; then
+        check ok "Rclone remote '${RCLONE_REMOTE_NAME}': reachable (listed root)"
       else
         check warn "Rclone remote '${RCLONE_REMOTE_NAME}': configured but unreachable"
       fi
@@ -177,41 +187,39 @@ if [ "${BACKEND}" = "rclone" ]; then
     fi
   fi
 elif [ "${BACKEND}" = "s3" ]; then
-  if [ -z "${S3_BUCKET_BACKUP:-}" ]; then
-    check fail "S3: S3_BUCKET_BACKUP is not set"
+  if [ -z "${TARGET_S3_BUCKET:-}" ]; then
+    if [ "${IS_ARCHIVE}" = true ]; then
+      check fail "S3: S3_BUCKET_ARCHIVE and S3_BUCKET_BACKUP are both unset"
+    else
+      check fail "S3: S3_BUCKET_BACKUP is not set"
+    fi
   elif [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-    check fail "S3: ${S3_BUCKET_BACKUP} set but AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY missing"
+    check fail "S3: ${TARGET_S3_BUCKET} set but AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY missing"
   elif ! "${PYTHON_BIN}" -c "import boto3" >/dev/null 2>&1; then
     check fail "S3: boto3 not importable by ${PYTHON_BIN}"
   elif S3_PROBE=$(
-    BUCKET="${S3_BUCKET_BACKUP}" "${PYTHON_BIN}" - <<'PROBE' 2>&1
+    BUCKET="${TARGET_S3_BUCKET}" KEY_PREFIX="${EFFECTIVE_S3_PREFIX}" "${PYTHON_BIN}" - <<'PROBE' 2>&1
 import os
 import sys
 
 from app.core.s3_service import S3Service
 
-service = S3Service(
-    "backup",
-    endpoint_url=os.environ.get("S3_ENDPOINT_URL"),
-    region_name=os.environ.get("S3_REGION_NAME"),
-    addressing_style=os.environ.get("S3_ADDRESSING_STYLE"),
-    access_key=os.environ.get("AWS_ACCESS_KEY_ID"),
-    secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-)
+service = S3Service.from_environment("backup")
 service._bucket = os.environ["BUCKET"]  # pylint: disable=protected-access
+prefix = os.environ.get("KEY_PREFIX", "backups/")
 
 try:
-    keys = service.list_keys("backups/")
+    keys = service.list_keys(prefix)
 except Exception as exc:  # noqa: BLE001  (any failure is a reachability failure)
     print(f"unreachable: {type(exc).__name__}")
     sys.exit(1)
 
-print(f"reachable: {len(keys)} object(s) under backups/")
+print(f"reachable: {len(keys)} object(s) under {prefix}")
 PROBE
   ); then
-    check ok "S3 bucket '${S3_BUCKET_BACKUP}': ${S3_PROBE}"
+    check ok "S3 bucket '${TARGET_S3_BUCKET}': ${S3_PROBE}"
   else
-    check warn "S3 bucket '${S3_BUCKET_BACKUP}': ${S3_PROBE}"
+    check warn "S3 bucket '${TARGET_S3_BUCKET}': ${S3_PROBE}"
   fi
 else
   check fail "No backup destination configured (rclone remote or S3_BUCKET_BACKUP)"
@@ -224,33 +232,33 @@ fi
 LAST_TS=""
 if [ "${BACKEND}" = "rclone" ] && [ -n "${REMOTE%%:*}" ]; then
   RCLONE_CHECK_TARGET="${REMOTE}"
-  [[ "${REMOTE}" == *:* ]] || RCLONE_CHECK_TARGET="${REMOTE}:iqoqo_backups"
+  if [[ "${REMOTE}" != *:* ]]; then
+    if [ "${IS_ARCHIVE}" = true ]; then
+      RCLONE_CHECK_TARGET="${REMOTE}:iqoqo-archive"
+    else
+      RCLONE_CHECK_TARGET="${REMOTE}:iqoqo_backups"
+    fi
+  fi
   if command -v rclone >/dev/null 2>&1; then
     # `lsl` output is "<size> <YYYY-MM-DD HH:MM:SS> <name>".
     LAST_TS=$(rclone lsl "${RCLONE_CHECK_TARGET}" 2>/dev/null | sort -k2,3 | tail -1 | awk '{print $2, $3}')
   fi
-elif [ "${BACKEND}" = "s3" ] && [ -n "${S3_BUCKET_BACKUP:-}" ] && [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
+elif [ "${BACKEND}" = "s3" ] && [ -n "${TARGET_S3_BUCKET:-}" ] && [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
   if "${PYTHON_BIN}" -c "import boto3" >/dev/null 2>&1; then
     NEWEST_KEY=$(
-      BUCKET="${S3_BUCKET_BACKUP}" "${PYTHON_BIN}" - <<'NEWEST' 2>/dev/null || true
+      BUCKET="${TARGET_S3_BUCKET}" KEY_PREFIX="${EFFECTIVE_S3_PREFIX}" "${PYTHON_BIN}" - <<'NEWEST' 2>/dev/null || true
 import os
 
 from app.core.s3_service import S3Service
 
-service = S3Service(
-    "backup",
-    endpoint_url=os.environ.get("S3_ENDPOINT_URL"),
-    region_name=os.environ.get("S3_REGION_NAME"),
-    addressing_style=os.environ.get("S3_ADDRESSING_STYLE"),
-    access_key=os.environ.get("AWS_ACCESS_KEY_ID"),
-    secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-)
+service = S3Service.from_environment("backup")
 service._bucket = os.environ["BUCKET"]  # pylint: disable=protected-access
+prefix = os.environ.get("KEY_PREFIX", "backups/")
 
 # The key basename embeds the timestamp cloud_backup.sh generated
 # (iqoqo_backup_<YYYYmmdd_HHMMSS>.tar.gz), so the newest key by name is also
 # the newest by time -- no extra HEAD request per object needed.
-keys = [k for k in service.list_keys("backups/") if k.endswith(".tar.gz")]
+keys = [k for k in service.list_keys(prefix) if k.endswith(".tar.gz")]
 if keys:
     print(max(keys))
 NEWEST

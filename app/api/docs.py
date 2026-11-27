@@ -323,6 +323,11 @@ def create_spec() -> APISpec:
                 "manifestation_id": {"type": "integer", "description": "Linked Manifestation identifier."},
                 "owner_id": {"type": "string", "format": "uuid", "description": "User UUID identifier of the item owner."},
                 "local_barcode": {"type": ["string", "null"], "description": "Local asset tag or shelf barcode."},
+                "physical_location": {
+                    "type": ["string", "null"],
+                    "maxLength": 255,
+                    "description": "Owner-scoped physical shelf/room/box location.",
+                },
                 "status": {"type": "string", "description": "Progress consumption status (unread, reading, completed, etc.)."},
                 "collection_status": {"type": "string", "description": "Inventory status (available, lent, lost, wish_list)."},
                 "visibility": {
@@ -695,11 +700,20 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         "schema": {"type": "string"},
                         "description": "Comma-separated FRBR expression kind filter (live_performance, studio).",
                     }
+                    location_param = {
+                        "name": "location",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Comma-separated owner-scoped physical_location filter.",
+                    }
                     op_params = operation.setdefault("parameters", [])
                     if not any(isinstance(p, dict) and p.get("name") == "visibility" for p in op_params):
                         op_params.append(vis_param)
                     if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
                         op_params.append(expr_kind_param)
+                    if not any(isinstance(p, dict) and p.get("name") == "location" for p in op_params):
+                        op_params.append(location_param)
                 elif (
                     openapi_path in ("/api/manifestations", "/api/v1/manifestations", "/api/stats/facets", "/api/v1/stats/facets")
                     and method == "get"
@@ -714,6 +728,153 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                     op_params = operation.setdefault("parameters", [])
                     if not any(isinstance(p, dict) and p.get("name") == "expression_kind" for p in op_params):
                         op_params.append(expr_kind_param)
+                    if openapi_path in ("/api/stats/facets", "/api/v1/stats/facets") and not any(
+                        isinstance(p, dict) and p.get("name") == "location" for p in op_params
+                    ):
+                        op_params.append(
+                            {
+                                "name": "location",
+                                "in": "query",
+                                "required": False,
+                                "schema": {"type": "string"},
+                                "description": "Comma-separated owner-scoped physical_location filter.",
+                            }
+                        )
+                elif (
+                    openapi_path in ("/api/manifestations/{manifestation_id}/stats", "/api/v1/manifestations/{manifestation_id}/stats")
+                    and method == "get"
+                ):
+                    operation.setdefault("responses", {})["200"] = {
+                        "description": "Anonymized manifestation reading statistics and monthly popularity buckets.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean"},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "manifestation_id": {"type": "integer"},
+                                                "total_items": {"type": "integer"},
+                                                "reader_count": {"type": "integer"},
+                                                "completed_count": {"type": "integer"},
+                                                "avg_reading_days": {"type": ["number", "null"]},
+                                                "avg_session_minutes": {"type": ["number", "null"]},
+                                                "popularity_over_time": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "month": {"type": "string"},
+                                                            "added_count": {"type": "integer"},
+                                                            "completed_count": {"type": "integer"},
+                                                        },
+                                                        "required": ["month", "added_count", "completed_count"],
+                                                    },
+                                                },
+                                            },
+                                            "required": [
+                                                "manifestation_id",
+                                                "total_items",
+                                                "reader_count",
+                                                "completed_count",
+                                                "popularity_over_time",
+                                            ],
+                                        },
+                                        "error": {"type": ["string", "null"]},
+                                    },
+                                    "required": ["success", "data"],
+                                }
+                            }
+                        },
+                    }
+                elif (
+                    openapi_path in ("/api/manifestations/{manifestation_id}/images", "/api/v1/manifestations/{manifestation_id}/images")
+                    and method == "get"
+                ):
+                    operation.setdefault("responses", {})["200"] = {
+                        "description": "Community-contributed scans and cover images for a Manifestation.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean"},
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {"type": "integer"},
+                                                    "url": {"type": "string"},
+                                                    "label": {"type": "string"},
+                                                    "source": {"type": ["string", "null"]},
+                                                    "added_at": {"type": ["string", "null"]},
+                                                },
+                                                "required": ["id", "url", "label"],
+                                            },
+                                        },
+                                        "error": {"type": ["string", "null"]},
+                                    },
+                                    "required": ["success", "data"],
+                                }
+                            }
+                        },
+                    }
+                elif openapi_path in ("/api/items/bulk-location", "/api/v1/items/bulk-location") and method == "patch":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "item_ids": {
+                                                "type": "array",
+                                                "items": {"type": "integer", "minimum": 1},
+                                                "minItems": 1,
+                                                "maxItems": 100,
+                                            },
+                                            "physical_location": {
+                                                "type": ["string", "null"],
+                                                "maxLength": 255,
+                                            },
+                                        },
+                                        "required": ["item_ids"],
+                                    }
+                                }
+                            },
+                        }
+                    operation.setdefault("responses", {})["200"] = {
+                        "description": "Updated count and new physical_location across owned items.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {"type": "boolean"},
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "updated_count": {"type": "integer"},
+                                                "physical_location": {"type": ["string", "null"]},
+                                                "item_ids": {"type": "array", "items": {"type": "integer"}},
+                                            },
+                                            "required": ["updated_count", "physical_location", "item_ids"],
+                                        },
+                                        "error": {"type": ["string", "null"]},
+                                    },
+                                    "required": ["success", "data"],
+                                }
+                            }
+                        },
+                    }
+                    operation["responses"]["403"] = {
+                        "description": "Ownership violation or Federation Hub read-only rejection.",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                    }
                 elif openapi_path in ("/api/items/bulk-visibility", "/api/v1/items/bulk-visibility") and method == "patch":
                     if not operation.get("requestBody"):
                         operation["requestBody"] = {

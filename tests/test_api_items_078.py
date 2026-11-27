@@ -115,3 +115,63 @@ def test_lego_item_update_frbr_boundary(client, app, normal_user_headers):
         assert "missing_pieces_count" not in parent_man.meta
         assert "instructions_included" not in parent_man.meta
         assert "box_condition" not in parent_man.meta
+
+
+def test_put_item_does_not_mutate_manifestation_meta_or_copy_carrier_keys(client, app, normal_user_headers):
+    """PUT /api/items/<id> must never mutate shared Manifestation.meta or copy carrier keys onto Item.meta."""
+    from app.core.frbr_service import update_manifestation
+    from app.db.models import Expression, Item, Manifestation, Work
+
+    with app.app_context():
+        user = User.query.first()
+        work = Work(title="Carrier Isolation Work", meta={"authors": ["Alice Author"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work=work, language="en", content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+
+        man = Manifestation(
+            expression=expr,
+            format="hardcover",
+            format_type="hardcover",
+            publisher="Original Press",
+            meta={"format": "hardcover", "custom_edition": "First Printing"},
+        )
+        db.session.add(man)
+        db.session.flush()
+
+        item = Item(manifestation=man, owner_id=user.id, status="unread", collection_status="available", meta={})
+        db.session.add(item)
+        db.session.commit()
+        item_id, man_id, work_id = item.id, man.id, work.id
+
+    resp = client.put(
+        f"/api/items/{item_id}",
+        json={
+            "condition": "Near Fine",
+            "format": "paperback",
+            "publisher": "Hijacked Press",
+            "custom_edition": "Polluted Printing",
+            "personal_note": "Shelf B2",
+        },
+        headers=normal_user_headers,
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        refreshed_item = db.session.get(Item, item_id)
+        refreshed_man = db.session.get(Manifestation, man_id)
+        assert refreshed_item.meta.get("personal_note") == "Shelf B2"
+        for disallowed in ("format", "Format", "type", "publisher", "Publisher", "isbn", "isbn13", "format_type"):
+            assert disallowed not in refreshed_item.meta
+        assert refreshed_man.publisher == "Original Press"
+        assert refreshed_man.format == "hardcover"
+        assert refreshed_man.meta.get("custom_edition") == "First Printing"
+
+        # Updating Manifestation format must not copy carrier keys onto Work.meta
+        update_manifestation(man_id, format="vinyl", meta={"format": "vinyl"})
+        refreshed_work = db.session.get(Work, work_id)
+        for drift_key in ("type", "format", "Format"):
+            assert drift_key not in (refreshed_work.meta or {})

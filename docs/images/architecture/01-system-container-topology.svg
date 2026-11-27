@@ -15,527 +15,468 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="arch-diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="svg-title svg-desc">
-          <title id="svg-title">iqoqo v1.1.2 — System &amp; Container Topology (Blueprint 1)</title>
-          <desc id="svg-desc">C4 Container and infrastructure topology for iqoqo v1.1.2 showing 7 trust zones (Z1–Z7), 10 services (N1–N10), Docker network iqoqo_default, security boundaries, and OpenTelemetry pipelines.</desc>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later | iqoqo v1.2.0 Architecture Blueprint -->
+<svg id="svg-bp1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp1-title bp1-desc">
+            <title id="bp1-title">01 · High-Level System &amp; Container Topology — iqoqo v1.2.0</title>
+            <desc id="bp1-desc">C4 Container and infrastructure topology for iqoqo v1.2.0 showing 7 trust zones (Z1–Z7), 10 services (N1–N10), 7 PostgreSQL 18 schemas, native boto3 S3Service egress, hardened sparql-runner perimeter, and OpenTelemetry pipelines.</desc>
+            <style>
+              .bg { fill: #FDFBF7; }
+              .title { font-family: Georgia, 'Merriweather', serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
+              .sub { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.2px; font-weight: 500; fill: #5A6776; }
+              .ver-pill { fill: #2B3D4F; }
+              .ver-pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 11px; font-weight: 700; fill: #FDFBF7; }
+              .ver-dot { fill: #D15400; }
 
-          <!-- Dynamic self-contained style block updated by JS presets -->
-          <style id="svg-theme-style">
-          .canvas-bg { fill: #FDFBF7; }
-          .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 22px; font-weight: 700; fill: #2B3D4F; }
-          .subtitle-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 500; fill: #5A6B7C; }
-          .header-pill-bg { fill: #EFE9DD; stroke: #D8CFC0; stroke-width: 1; }
-          .header-pill-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 600; fill: #2B3D4F; }
+              .zone { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-indigo { fill: #F1F4F7; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-clay { fill: #FEF6F0; stroke: #DF9E74; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-teal { fill: #EFF8F6; stroke: #76B3AC; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-sec { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 1.8; stroke-dasharray: 6 4; }
 
-          .zone-box { stroke-width: 1.5; stroke-dasharray: 6 4; }
-          .zone-neutral { fill: #F4EFE6; stroke: #C9BFA9; }
-          .zone-security { fill: #FCF3EC; stroke: #DF9E74; }
-          .zone-dmz { fill: #EEF2F6; stroke: #9DB0C2; }
-          .zone-core { fill: #F3F5F8; stroke: #8FA3B8; }
-          .zone-data { fill: #F4EFE6; stroke: #B8AD99; }
-          .zone-obs { fill: #EDF5F4; stroke: #85B5B0; }
-          .zone-egress { fill: #FAF2EC; stroke: #D99B72; }
+              .zone-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
+              .zone-meta { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #5A6776; }
 
-          .zone-badge-bg { fill: #2B3D4F; }
-          .zone-badge-sec-bg { fill: #D15400; }
-          .zone-badge-tel-bg { fill: #0F766E; }
-          .zone-badge-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 11px; font-weight: 600; fill: #FFFFFF; }
-          .zone-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-          .zone-meta { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #64748B; }
+              .card { fill: #FFFDF9; stroke: #E6DFD3; stroke-width: 1.5; }
+              .card-indigo { fill: #FFFDF9; stroke: #2B3D4F; stroke-width: 1.6; }
+              .card-clay { fill: #FFFDF9; stroke: #D15400; stroke-width: 1.7; }
+              .card-teal { fill: #FFFDF9; stroke: #0F766E; stroke-width: 1.6; }
+              .card-crimson { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 1.8; stroke-dasharray: 5 3; }
 
-          .loopback-pill-bg { fill: #E6DFD2; stroke: #C9BFA9; stroke-width: 1; }
-          .loopback-pill-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 600; fill: #2B3D4F; }
+              .b-indigo { fill: #2B3D4F; }
+              .b-clay { fill: #D15400; }
+              .b-teal { fill: #0F766E; }
+              .b-crimson { fill: #B91C1C; }
+              .b-muted { fill: #64748B; }
+              .b-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
 
-          .card-bg { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.25; }
-          .card-sec-border { stroke: #D15400; stroke-width: 1.8; }
-          .card-init-border { stroke: #64748B; stroke-width: 1.5; stroke-dasharray: 5 3; }
+              .c-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
+              .c-body { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.6px; font-weight: 400; fill: #475569; }
+              .c-mono { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.6px; font-weight: 500; fill: #2B3D4F; }
+              .c-clay { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #D15400; }
+              .c-teal { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #0F766E; }
+              .c-crimson { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #B91C1C; }
 
-          .node-id-bg { fill: #2B3D4F; }
-          .node-id-sec-bg { fill: #D15400; }
-          .node-id-tel-bg { fill: #0F766E; }
-          .node-id-muted-bg { fill: #64748B; }
-          .node-id-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.5px; font-weight: 600; fill: #FFFFFF; }
-          .node-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; fill: #1E293B; }
-          .node-body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 400; fill: #475569; }
-          .node-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.5px; font-weight: 500; fill: #2B3D4F; }
+              .chip-t { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11.5px; font-weight: 700; fill: #2B3D4F; }
+              .chip-s { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 9.8px; font-weight: 500; fill: #64748B; }
 
-          .chip-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; fill: #2B3D4F; }
-          .chip-sub { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 500; fill: #64748B; }
+              .pill { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #2B3D4F; }
+              .pill-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-clay-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #B84700; }
+              .pill-crimson { fill: #FEE2E2; stroke: #FCA5A5; stroke-width: 1; }
+              .pill-crimson-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #B91C1C; }
 
-          .port-pill-bg { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-          .port-pill-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 600; fill: #2B3D4F; }
-          .sec-pill-bg { fill: #FFF1E6; stroke: #F5B88E; stroke-width: 1; }
-          .sec-pill-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.5px; font-weight: 700; fill: #B84700; }
-          .init-pill-bg { fill: #F1F5F9; stroke: #CBD5E1; stroke-width: 1; }
-          .init-pill-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.5px; font-weight: 700; fill: #475569; }
+              .edge-p { fill: none; stroke: #2B3D4F; stroke-width: 1.9; stroke-linejoin: round; }
+              .edge-d { fill: none; stroke: #475569; stroke-width: 1.7; stroke-linejoin: round; }
+              .edge-c { fill: none; stroke: #D15400; stroke-width: 2.1; stroke-linejoin: round; }
+              .edge-r { fill: none; stroke: #B91C1C; stroke-width: 2.1; stroke-linejoin: round; }
+              .edge-t { fill: none; stroke: #0F766E; stroke-width: 1.75; stroke-dasharray: 6 4; stroke-linejoin: round; }
+              .edge-i { fill: none; stroke: #64748B; stroke-width: 1.5; stroke-dasharray: 4 3; stroke-linejoin: round; }
 
-          .sec-note-bg { fill: #FFF1E6; stroke: #E5A073; stroke-width: 1; }
-          .sec-note-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; fill: #B84700; }
-          .sec-note-body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; fill: #7C2D12; }
+              .mk-p { fill: #2B3D4F; }
+              .mk-d { fill: #475569; }
+              .mk-c { fill: #D15400; }
+              .mk-r { fill: #B91C1C; }
+              .mk-t { fill: #0F766E; }
+              .mk-i { fill: #64748B; }
 
-          .edge-primary { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
-          .edge-data { fill: none; stroke: #475569; stroke-width: 1.75; stroke-linejoin: round; }
-          .edge-security { fill: none; stroke: #D15400; stroke-width: 2.2; stroke-linejoin: round; }
-          .edge-telemetry { fill: none; stroke: #0F766E; stroke-width: 1.75; stroke-dasharray: 6 4; stroke-linejoin: round; }
-          .edge-init { fill: none; stroke: #64748B; stroke-width: 1.6; stroke-dasharray: 4 4; stroke-linejoin: round; }
-          .edge-scrape { fill: none; stroke: #64748B; stroke-width: 1.6; stroke-dasharray: 2 3; stroke-linejoin: round; }
+              .ep { fill: #FDFBF7; stroke: #CBC3B7; stroke-width: 1; }
+              .ep-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
+              .ep-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
+              .ep-c-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #B84700; }
+              .ep-r { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 1; }
+              .ep-r-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #B91C1C; }
+              .ep-t { fill: #EFF8F6; stroke: #0F766E; stroke-width: 1; }
+              .ep-t-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #0F766E; }
 
-          .mk-primary { fill: #2B3D4F; }
-          .mk-data { fill: #475569; }
-          .mk-security { fill: #D15400; }
-          .mk-telemetry { fill: #0F766E; }
-          .mk-init { fill: #64748B; }
+              .legend-bg { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1.4; }
+              .legend-h { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-t { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
+            </style>
+            <defs>
+              <pattern id="b1-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD3" stroke-width="0.6" opacity="0.5"/>
+              </pattern>
+              <filter id="b1-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
+              </filter>
+              <marker id="b1-mk-p" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-p"/></marker>
+              <marker id="b1-mk-d" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-d"/></marker>
+              <marker id="b1-mk-c" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-c"/></marker>
+              <marker id="b1-mk-r" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-r"/></marker>
+              <marker id="b1-mk-t" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-t"/></marker>
+              <marker id="b1-mk-i" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-i"/></marker>
+            </defs>
 
-          .edge-pill-bg { fill: #FDFBF7; stroke: #CBD5E1; stroke-width: 1; }
-          .edge-pill-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #2B3D4F; }
-          .edge-pill-sec-bg { fill: #FFF4EC; stroke: #E5A073; stroke-width: 1; }
-          .edge-pill-sec-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
-          .edge-pill-tel-bg { fill: #EDF8F6; stroke: #85B5B0; stroke-width: 1; }
-          .edge-pill-tel-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #0F766E; }
+            <!-- Background -->
+            <rect x="0" y="0" width="1440" height="940" class="bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b1-grid)"/>
 
-          .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
-          .legend-heading { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
-          .legend-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #334155; }
-        </style>
+            <!-- Header -->
+            <text x="32" y="34" class="title">01 · High-Level System &amp; Container Topology</text>
+            <text x="32" y="55" class="sub">Blueprint 1 of 12  •  7 Trust Zones (Z1–Z7), 10 Services (N1–N10), Docker Bridge (iqoqo_default) &amp; Native S3Service Egress</text>
+            <rect x="1256" y="16" width="152" height="32" rx="16" class="ver-pill"/>
+            <circle cx="1276" cy="32" r="4" class="ver-dot"/>
+            <text x="1338" y="36" text-anchor="middle" class="ver-pill-txt">iqoqo v1.2.0</text>
 
-          <defs>
-            <!-- Technical Grid Pattern (visible in Blueprint Dark / subtle in Athenaeum) -->
-            <pattern id="bg-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-              <path id="grid-path" d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
-            </pattern>
+            <!-- ==================== BOUNDARY ZONES (Z1 - Z7) ==================== -->
+            <!-- Z1 Clients -->
+            <rect x="32" y="74" width="294" height="142" rx="12" class="zone"/>
+            <rect x="44" y="84" width="28" height="18" rx="4" class="b-indigo"/>
+            <text x="58" y="96" text-anchor="middle" class="b-txt">Z1</text>
+            <text x="80" y="97" class="zone-title">CLIENTS</text>
+            <text x="314" y="96" text-anchor="end" class="zone-meta">UNTRUSTED</text>
 
-            <!-- Subtle Card Drop Shadow -->
-            <filter id="card-shadow" x="-6%" y="-6%" width="112%" height="118%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
-            </filter>
+            <!-- Z2 Edge & CDN Security -->
+            <rect x="378" y="74" width="248" height="142" rx="12" class="zone-clay"/>
+            <rect x="390" y="84" width="28" height="18" rx="4" class="b-clay"/>
+            <text x="404" y="96" text-anchor="middle" class="b-txt">Z2</text>
+            <text x="426" y="97" class="zone-title">EDGE &amp; CDN</text>
 
-            <!-- Arrowhead Markers -->
-            <marker id="arrow-primary" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-primary"/>
-            </marker>
-            <marker id="arrow-data" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-data"/>
-            </marker>
-            <marker id="arrow-security" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-security"/>
-            </marker>
-            <marker id="arrow-telemetry" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-telemetry"/>
-            </marker>
-            <marker id="arrow-init" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-init"/>
-            </marker>
-          </defs>
+            <!-- Z3 DMZ / Reverse Proxy -->
+            <rect x="688" y="74" width="396" height="142" rx="12" class="zone-indigo"/>
+            <rect x="700" y="84" width="28" height="18" rx="4" class="b-indigo"/>
+            <text x="714" y="96" text-anchor="middle" class="b-txt">Z3</text>
+            <text x="736" y="97" class="zone-title">DMZ / REVERSE PROXY</text>
+            <text x="1072" y="96" text-anchor="end" class="zone-meta">PUBLIC ENTRY</text>
 
-          <!-- ==================== LAYER 0: BACKGROUND ==================== -->
-          <g id="layer-background">
-            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
-            <rect id="grid-overlay" x="0" y="0" width="1440" height="980" fill="url(#bg-grid)"/>
-          </g>
+            <!-- Z4 Application Core -->
+            <rect x="32" y="268" width="1052" height="374" rx="14" class="zone-indigo"/>
+            <rect x="46" y="279" width="28" height="18" rx="4" class="b-indigo"/>
+            <text x="60" y="291" text-anchor="middle" class="b-txt">Z4</text>
+            <text x="82" y="292" class="zone-title">APPLICATION CORE</text>
+            <text x="224" y="291" class="zone-meta">DOCKER BRIDGE (iqoqo_default)</text>
 
-          <!-- ==================== LAYER 1: HEADER ==================== -->
-          <g id="layer-header">
-            <text x="32" y="38" class="title-text">iqoqo v1.1.2 — System &amp; Container Topology</text>
-            <text x="32" y="60" class="subtitle-text">Blueprint 1 of 12  •  Docker Network (iqoqo_default) &amp; Trust Boundaries</text>
+            <!-- Z5 State & Data Plane -->
+            <rect x="32" y="698" width="644" height="172" rx="12" class="zone"/>
+            <rect x="46" y="709" width="28" height="18" rx="4" class="b-indigo"/>
+            <text x="60" y="721" text-anchor="middle" class="b-txt">Z5</text>
+            <text x="82" y="722" class="zone-title">STATE &amp; DATA PLANE</text>
+            <rect x="530" y="708" width="132" height="19" rx="5" class="pill"/>
+            <text x="596" y="721" text-anchor="middle" class="pill-txt">127.0.0.1 LOOPBACK</text>
 
-            <!-- Top-right architecture metadata pill -->
-            <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
-            <text x="1280" y="39" text-anchor="middle" class="header-pill-text">C4 Container Topology  •  Self-Hosted</text>
-          </g>
+            <!-- Z6 Observability Plane -->
+            <rect x="720" y="698" width="688" height="172" rx="12" class="zone-teal"/>
+            <rect x="734" y="709" width="28" height="18" rx="4" class="b-teal"/>
+            <text x="748" y="721" text-anchor="middle" class="b-txt">Z6</text>
+            <text x="770" y="722" class="zone-title">OBSERVABILITY PLANE</text>
+            <rect x="1262" y="708" width="132" height="19" rx="5" class="pill"/>
+            <text x="1328" y="721" text-anchor="middle" class="pill-txt">127.0.0.1 LOOPBACK</text>
 
-          <!-- ==================== LAYER 2: BOUNDARY ZONES (Z1 - Z7) ==================== -->
-          <g id="layer-zones">
-            <!-- Z1: Clients -->
-            <g id="zone-z1">
-              <rect x="32" y="84" width="300" height="150" rx="14" class="zone-box zone-neutral"/>
-              <rect x="46" y="96" width="30" height="20" rx="5" class="zone-badge-bg"/>
-              <text x="61" y="110" text-anchor="middle" class="zone-badge-text">Z1</text>
-              <text x="84" y="110" class="zone-title">CLIENTS</text>
-              <text x="318" y="110" text-anchor="end" class="zone-meta">UNTRUSTED INTERNET</text>
-            </g>
+            <!-- Z7 External Egress Targets -->
+            <rect x="1136" y="74" width="272" height="568" rx="12" class="zone-clay"/>
+            <rect x="1148" y="84" width="28" height="18" rx="4" class="b-clay"/>
+            <text x="1162" y="96" text-anchor="middle" class="b-txt">Z7</text>
+            <text x="1184" y="97" class="zone-title">EXTERNAL EGRESS</text>
+            <text x="1148" y="114" class="zone-meta">SSRF Guarded + boto3 S3Service</text>
 
-            <!-- Z2: Edge & CDN Security -->
-            <g id="zone-z2">
-              <rect x="386" y="84" width="254" height="150" rx="14" class="zone-box zone-security"/>
-              <rect x="400" y="96" width="30" height="20" rx="5" class="zone-badge-sec-bg"/>
-              <text x="415" y="110" text-anchor="middle" class="zone-badge-text">Z2</text>
-              <text x="438" y="110" class="zone-title">EDGE &amp; CDN SECURITY</text>
-            </g>
+            <!-- ==================== DIRECTED EDGES ==================== -->
+            <!-- Z1 -> Z2 -->
+            <path d="M 326 150 L 376 150" class="edge-p" marker-end="url(#b1-mk-p)"/>
+            <rect x="328" y="128" width="46" height="17" rx="4" class="ep"/>
+            <text x="351" y="139" text-anchor="middle" class="ep-txt">:443</text>
 
-            <!-- Z3: DMZ / Reverse Proxy -->
-            <g id="zone-z3">
-              <rect x="700" y="84" width="390" height="150" rx="14" class="zone-box zone-dmz"/>
-              <rect x="714" y="96" width="30" height="20" rx="5" class="zone-badge-bg"/>
-              <text x="729" y="110" text-anchor="middle" class="zone-badge-text">Z3</text>
-              <text x="752" y="110" class="zone-title">DMZ / REVERSE PROXY</text>
-              <text x="1076" y="110" text-anchor="end" class="zone-meta">PUBLIC ENTRYPOINT</text>
-            </g>
+            <!-- Z2 -> N1 -->
+            <path d="M 626 150 L 700 150" class="edge-p" marker-end="url(#b1-mk-p)"/>
+            <rect x="630" y="122" width="66" height="23" rx="4" class="ep"/>
+            <text x="663" y="132" text-anchor="middle" class="ep-txt">HTTPS :443</text>
+            <text x="663" y="142" text-anchor="middle" class="ep-txt">HTTP :8000</text>
 
-            <!-- Z4: Application Core -->
-            <g id="zone-z4">
-              <rect x="32" y="294" width="1058" height="376" rx="16" class="zone-box zone-core"/>
-              <rect x="48" y="306" width="30" height="20" rx="5" class="zone-badge-bg"/>
-              <text x="63" y="320" text-anchor="middle" class="zone-badge-text">Z4</text>
-              <text x="86" y="320" class="zone-title">APPLICATION CORE</text>
-              <text x="234" y="320" class="zone-meta">DOCKER BRIDGE NETWORK (iqoqo_default)</text>
-            </g>
+            <!-- N1 -> N2 (:3000 UI/shares) -->
+            <path d="M 760 206 L 760 234 L 186 234 L 186 306" class="edge-p" marker-end="url(#b1-mk-p)"/>
+            <rect x="372" y="224" width="136" height="19" rx="4" class="ep"/>
+            <text x="440" y="237" text-anchor="middle" class="ep-txt">:3000 UI / /share/*</text>
 
-            <!-- Z5: State & Data Plane -->
-            <g id="zone-z5">
-              <rect x="32" y="734" width="644" height="170" rx="14" class="zone-box zone-data"/>
-              <rect x="48" y="746" width="30" height="20" rx="5" class="zone-badge-bg"/>
-              <text x="63" y="760" text-anchor="middle" class="zone-badge-text">Z5</text>
-              <text x="86" y="760" class="zone-title">STATE &amp; DATA PLANE</text>
-              <rect x="528" y="746" width="132" height="20" rx="5" class="loopback-pill-bg"/>
-              <text x="594" y="760" text-anchor="middle" class="loopback-pill-text">127.0.0.1 LOOPBACK</text>
-            </g>
+            <!-- N1 -> N3 (:5000 /api/*, /.well-known/*) -->
+            <path d="M 856 206 L 856 254 L 592 254 L 592 306" class="edge-p" marker-end="url(#b1-mk-p)"/>
+            <rect x="646" y="244" width="174" height="19" rx="4" class="ep"/>
+            <text x="733" y="257" text-anchor="middle" class="ep-txt">:5000 /api/* &amp; /.well-known/*</text>
 
-            <!-- Z6: Observability Plane -->
-            <g id="zone-z6">
-              <rect x="724" y="734" width="684" height="170" rx="14" class="zone-box zone-obs"/>
-              <rect x="738" y="746" width="30" height="20" rx="5" class="zone-badge-tel-bg"/>
-              <text x="753" y="760" text-anchor="middle" class="zone-badge-text">Z6</text>
-              <text x="776" y="760" class="zone-title">OBSERVABILITY PLANE</text>
-              <rect x="1260" y="746" width="134" height="20" rx="5" class="loopback-pill-bg"/>
-              <text x="1327" y="760" text-anchor="middle" class="loopback-pill-text">127.0.0.1 LOOPBACK</text>
-            </g>
+            <!-- N2 -> N3 (FLASK_API_URL 120s/60mb) -->
+            <path d="M 328 376 L 434 376" class="edge-p" marker-end="url(#b1-mk-p)"/>
+            <rect x="334" y="346" width="94" height="25" rx="4" class="ep"/>
+            <text x="381" y="357" text-anchor="middle" class="ep-txt">FLASK_API_URL</text>
+            <text x="381" y="367" text-anchor="middle" class="ep-txt">120s / 60mb</text>
 
-            <!-- Z7: External Egress Targets -->
-            <g id="zone-z7">
-              <rect x="1136" y="84" width="272" height="586" rx="14" class="zone-box zone-egress"/>
-              <rect x="1150" y="96" width="30" height="20" rx="5" class="zone-badge-sec-bg"/>
-              <text x="1165" y="110" text-anchor="middle" class="zone-badge-text">Z7</text>
-              <text x="1188" y="110" class="zone-title">EXTERNAL EGRESS</text>
-              <text x="1150" y="127" class="zone-meta">SSRF &amp; DNS-Rebinding Guarded</text>
-            </g>
-          </g>
+            <!-- N3 -> N5 (HMAC-SHA256 signed envelope) -->
+            <path d="M 592 444 L 592 488" class="edge-r" marker-end="url(#b1-mk-r)"/>
+            <rect x="478" y="456" width="228" height="19" rx="4" class="ep-r"/>
+            <text x="592" y="469" text-anchor="middle" class="ep-r-txt">HMAC-SHA256 Envelope (:5050)</text>
 
-          <!-- ==================== LAYER 3: DIRECTED EDGES & PILL LABELS ==================== -->
-          <g id="layer-edges">
-            <!-- 1. Z1 -> Z2: HTTPS :443 -->
-            <path d="M 332 162 L 384 162" class="edge-primary" marker-end="url(#arrow-primary)"/>
-            <rect x="334" y="137" width="48" height="18" rx="4" class="edge-pill-bg"/>
-            <text x="358" y="149" text-anchor="middle" class="edge-pill-text">:443</text>
+            <!-- N6 -> N7 (Pre-start Init) -->
+            <path d="M 136 626 L 136 736" class="edge-i" marker-end="url(#b1-mk-i)"/>
+            <rect x="88" y="666" width="96" height="19" rx="4" class="ep"/>
+            <text x="136" y="679" text-anchor="middle" class="ep-txt">Pre-start Init</text>
 
-            <!-- 2. Z2 -> N1: HTTPS :443 / HTTP :8000 -->
-            <path d="M 640 162 L 712 162" class="edge-primary" marker-end="url(#arrow-primary)"/>
-            <rect x="641" y="132" width="69" height="24" rx="4" class="edge-pill-bg"/>
-            <text x="675.5" y="142" text-anchor="middle" class="edge-pill-text">HTTPS :443</text>
-            <text x="675.5" y="152" text-anchor="middle" class="edge-pill-text">HTTP :8000</text>
+            <!-- N3 -> N7 (:5432) -->
+            <path d="M 436 416 L 374 416 L 374 660 L 244 660 L 244 736" class="edge-d" marker-end="url(#b1-mk-d)"/>
+            <rect x="242" y="650" width="124" height="19" rx="4" class="ep"/>
+            <text x="304" y="663" text-anchor="middle" class="ep-txt">:5432 SQLAlchemy 2</text>
 
-            <!-- 3. N1 -> N2: :3000 UI / /share/* -->
-            <path d="M 780 222 L 780 256 L 190 256 L 190 332" class="edge-primary" marker-end="url(#arrow-primary)"/>
-            <rect x="366" y="246" width="142" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="437" y="259" text-anchor="middle" class="edge-pill-text">:3000 UI / /share/*</text>
+            <!-- N3 -> N8 (:6379) -->
+            <path d="M 436 432 L 404 432 L 404 736" class="edge-d" marker-end="url(#b1-mk-d)"/>
+            <rect x="352" y="544" width="104" height="25" rx="4" class="ep"/>
+            <text x="404" y="555" text-anchor="middle" class="ep-txt">:6379 Cache /</text>
+            <text x="404" y="565" text-anchor="middle" class="ep-txt">Limit / SSE</text>
 
-            <!-- 4. N1 -> N3: :5000 /api/* & /.well-known/* -->
-            <path d="M 862 222 L 862 278 L 599 278 L 599 332" class="edge-primary" marker-end="url(#arrow-primary)"/>
-            <rect x="646" y="268" width="178" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="735" y="281" text-anchor="middle" class="edge-pill-text">:5000 /api/* &amp; /.well-known/*</text>
+            <!-- N4 -> N8 (:6379 Celery) -->
+            <path d="M 920 444 L 920 658 L 584 658 L 584 736" class="edge-d" marker-end="url(#b1-mk-d)"/>
+            <rect x="674" y="648" width="144" height="19" rx="4" class="ep"/>
+            <text x="746" y="661" text-anchor="middle" class="ep-txt">:6379 Celery Broker</text>
 
-            <!-- 5. N2 -> N3: SSR + HttpOnly JWT (120s) -->
-            <path d="M 332 402 L 444 402" class="edge-primary" marker-end="url(#arrow-primary)"/>
-            <rect x="339" y="370" width="98" height="26" rx="5" class="edge-pill-bg"/>
-            <text x="388" y="381" text-anchor="middle" class="edge-pill-text">SSR + HttpOnly</text>
-            <text x="388" y="392" text-anchor="middle" class="edge-pill-text">JWT (120s)</text>
+            <!-- N4 -> N7 (:5432 Async) -->
+            <path d="M 896 444 L 896 680 L 316 680 L 316 736" class="edge-d" marker-end="url(#b1-mk-d)"/>
+            <rect x="492" y="670" width="136" height="19" rx="4" class="ep"/>
+            <text x="560" y="683" text-anchor="middle" class="ep-txt">:5432 Async Writes</text>
 
-            <!-- 6. N3 -> N5: HMAC-SHA256 + Scoped RDF (:5050) [Security Accent] -->
-            <path d="M 599 470 L 599 514" class="edge-security" marker-end="url(#arrow-security)"/>
-            <rect x="492" y="481" width="214" height="20" rx="5" class="edge-pill-sec-bg"/>
-            <text x="599" y="494" text-anchor="middle" class="edge-pill-sec-text">HMAC-SHA256 + Scoped RDF (:5050)</text>
+            <!-- N3 & N4 -> Z7 (SSRF safe_get + boto3 S3Service + rclone) -->
+            <path d="M 748 334 L 768 334 L 768 296 L 1098 296 L 1098 364 L 1134 364" class="edge-c" marker-end="url(#b1-mk-c)"/>
+            <path d="M 1070 364 L 1098 364" class="edge-c"/>
+            <circle cx="1098" cy="364" r="3.5" class="mk-c"/>
+            <rect x="786" y="286" width="292" height="19" rx="4" class="ep-c"/>
+            <text x="932" y="299" text-anchor="middle" class="ep-c-txt">SSRF safe_get + boto3 S3Service + rclone</text>
 
-            <!-- 7. N6 -> N7: Pre-start Init [Dashed Init] -->
-            <path d="M 140 650 L 140 772" class="edge-init" marker-end="url(#arrow-init)"/>
-            <rect x="92" y="696" width="96" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="140" y="709" text-anchor="middle" class="edge-pill-text">Pre-start Init</text>
+            <!-- N1 -> N9 (OTLP gRPC :4317) -->
+            <path d="M 1072 184 L 1106 184 L 1106 686 L 998 686 L 998 736" class="edge-t" marker-end="url(#b1-mk-t)"/>
+            <rect x="974" y="226" width="112" height="19" rx="4" class="ep-t"/>
+            <text x="1030" y="239" text-anchor="middle" class="ep-t-txt">OTLP gRPC :4317</text>
 
-            <!-- 8. N3 -> N7: :5432 SQLAlchemy 2.0 -->
-            <path d="M 446 442 L 382 442 L 382 690 L 246 690 L 246 772" class="edge-data" marker-end="url(#arrow-data)"/>
-            <rect x="242" y="680" width="132" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="308" y="693" text-anchor="middle" class="edge-pill-text">:5432 SQLAlchemy 2.0</text>
+            <!-- N1 -> N10 (/rum/* -> :5080) -->
+            <path d="M 1072 158 L 1120 158 L 1120 672 L 1252 672 L 1252 736" class="edge-t" marker-end="url(#b1-mk-t)"/>
+            <rect x="1152" y="662" width="106" height="19" rx="4" class="ep-t"/>
+            <text x="1205" y="675" text-anchor="middle" class="ep-t-txt">/rum/* → :5080</text>
 
-            <!-- 9. N3 -> N8: :6379 Cache / Limit / SSE -->
-            <path d="M 446 458 L 412 458 L 412 772" class="edge-data" marker-end="url(#arrow-data)"/>
-            <rect x="358" y="576" width="108" height="26" rx="5" class="edge-pill-bg"/>
-            <text x="412" y="587" text-anchor="middle" class="edge-pill-text">:6379 Cache /</text>
-            <text x="412" y="598" text-anchor="middle" class="edge-pill-text">Limit / SSE</text>
+            <!-- Z4 (N2..N5) -> N9 (OTLP http/protobuf :4318) -->
+            <path d="M 956 642 L 956 736" class="edge-t" marker-end="url(#b1-mk-t)"/>
+            <rect x="878" y="660" width="156" height="24" rx="4" class="ep-t"/>
+            <text x="956" y="671" text-anchor="middle" class="ep-t-txt">OTLP http/protobuf :4318</text>
+            <text x="956" y="681" text-anchor="middle" class="ep-t-txt">(Auth Redacted)</text>
 
-            <!-- 10. N4 -> N8: :6379 Celery Consume/Ack -->
-            <path d="M 914 470 L 914 684 L 584 684 L 584 772" class="edge-data" marker-end="url(#arrow-data)"/>
-            <rect x="678" y="674" width="150" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="753" y="687" text-anchor="middle" class="edge-pill-text">:6379 Celery Consume/Ack</text>
+            <!-- N9 -> Z5 (Scrape Metrics) -->
+            <path d="M 736 796 L 678 796" class="edge-i" marker-end="url(#b1-mk-i)"/>
+            <rect x="680" y="766" width="52" height="24" rx="4" class="ep"/>
+            <text x="706" y="777" text-anchor="middle" class="ep-txt">Scrape</text>
+            <text x="706" y="787" text-anchor="middle" class="ep-txt">Metrics</text>
 
-            <!-- 11. N4 -> N7: :5432 Async Writes / FTS -->
-            <path d="M 886 470 L 886 710 L 318 710 L 318 772" class="edge-data" marker-end="url(#arrow-data)"/>
-            <rect x="488" y="700" width="144" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="560" y="713" text-anchor="middle" class="edge-pill-text">:5432 Async Writes / FTS</text>
+            <!-- N9 -> N10 (OTLP HTTP :5080) -->
+            <path d="M 1026 796 L 1108 796" class="edge-t" marker-end="url(#b1-mk-t)"/>
+            <rect x="1034" y="783" width="66" height="25" rx="4" class="ep-t"/>
+            <text x="1067" y="794" text-anchor="middle" class="ep-t-txt">OTLP HTTP</text>
+            <text x="1067" y="804" text-anchor="middle" class="ep-t-txt">:5080</text>
 
-            <!-- 12. N3 & N4 -> Z7: HTTPS via SSRF Guard (http_client.py) [Security Accent] -->
-            <path d="M 752 354 L 774 354 L 774 316 L 1102 316 L 1102 384 L 1134 384" class="edge-security" marker-end="url(#arrow-security)"/>
-            <path d="M 1074 384 L 1102 384" class="edge-security"/>
-            <circle cx="1102" cy="384" r="3.5" class="mk-security"/>
-            <rect x="822" y="306" width="234" height="20" rx="5" class="edge-pill-sec-bg"/>
-            <text x="939" y="319" text-anchor="middle" class="edge-pill-sec-text">HTTPS via SSRF Guard (http_client.py)</text>
-
-            <!-- 13. N1 -> N9: OTLP gRPC :4317 [Dashed Telemetry] -->
-            <path d="M 1076 200 L 1106 200 L 1106 720 L 1004 720 L 1004 772" class="edge-telemetry" marker-end="url(#arrow-telemetry)"/>
-            <rect x="978" y="246" width="114" height="20" rx="5" class="edge-pill-tel-bg"/>
-            <text x="1035" y="259" text-anchor="middle" class="edge-pill-tel-text">OTLP gRPC :4317</text>
-
-            <!-- 14. N1 -> N10: /rum/* -> :5080 [Dashed Telemetry] -->
-            <path d="M 1076 174 L 1122 174 L 1122 706 L 1254 706 L 1254 772" class="edge-telemetry" marker-end="url(#arrow-telemetry)"/>
-            <rect x="1156" y="696" width="106" height="20" rx="5" class="edge-pill-tel-bg"/>
-            <text x="1209" y="709" text-anchor="middle" class="edge-pill-tel-text">/rum/* → :5080</text>
-
-            <!-- 15. Z4 (N2-N5) -> N9: OTLP http/protobuf :4318 (Auth Redacted) [Dashed Telemetry] -->
-            <path d="M 960 670 L 960 772" class="edge-telemetry" marker-end="url(#arrow-telemetry)"/>
-            <rect x="880" y="688" width="160" height="26" rx="5" class="edge-pill-tel-bg"/>
-            <text x="960" y="699" text-anchor="middle" class="edge-pill-tel-text">OTLP http/protobuf :4318</text>
-            <text x="960" y="710" text-anchor="middle" class="edge-pill-tel-text">(Auth Redacted)</text>
-
-            <!-- 16. N9 -> Z5: Scrape Metrics [Dotted Scrape] -->
-            <path d="M 738 832 L 678 832" class="edge-scrape" marker-end="url(#arrow-init)"/>
-            <rect x="678" y="800" width="56" height="26" rx="4" class="edge-pill-bg"/>
-            <text x="706" y="811" text-anchor="middle" class="edge-pill-text">Scrape</text>
-            <text x="706" y="822" text-anchor="middle" class="edge-pill-text">Metrics</text>
-
-            <!-- 17. N9 -> N10: OTLP HTTP :5080 [Dashed Telemetry] -->
-            <path d="M 1018 832 L 1112 832" class="edge-telemetry" marker-end="url(#arrow-telemetry)"/>
-            <rect x="1028" y="818" width="74" height="28" rx="5" class="edge-pill-tel-bg"/>
-            <text x="1065" y="830" text-anchor="middle" class="edge-pill-tel-text">OTLP HTTP</text>
-            <text x="1065" y="841" text-anchor="middle" class="edge-pill-tel-text">:5080</text>
-          </g>
-
-          <!-- ==================== LAYER 4: SERVICE & ENTITY NODES ==================== -->
-          <g id="layer-nodes">
-
+            <!-- ==================== NODES ==================== -->
             <!-- Z1 Client Chips -->
-            <g id="nodes-z1">
-              <rect x="46" y="126" width="130" height="44" rx="8" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="58" y="144" class="chip-title">Browser SPA</text>
-              <text x="58" y="160" class="chip-sub">Desktop &amp; Mobile Web</text>
+            <g filter="url(#b1-sh)">
+              <rect x="44" y="112" width="130" height="44" rx="8" class="card"/>
+              <text x="55" y="130" class="chip-t">Browser SPA</text>
+              <text x="55" y="145" class="chip-s">Desktop &amp; Mobile Web</text>
 
-              <rect x="186" y="126" width="132" height="44" rx="8" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="198" y="144" class="chip-title">Capacitor 7</text>
-              <text x="198" y="160" class="chip-sub">Native iOS &amp; Android</text>
+              <rect x="184" y="112" width="130" height="44" rx="8" class="card"/>
+              <text x="195" y="130" class="chip-t">Capacitor 7</text>
+              <text x="195" y="145" class="chip-s">iOS &amp; Android Native</text>
 
-              <rect x="46" y="178" width="130" height="44" rx="8" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="58" y="196" class="chip-title">ActivityPub Peers</text>
-              <text x="58" y="212" class="chip-sub">S2S Federated Nodes</text>
+              <rect x="44" y="162" width="130" height="44" rx="8" class="card"/>
+              <text x="55" y="180" class="chip-t">ActivityPub Peers</text>
+              <text x="55" y="195" class="chip-s">S2S Federated Nodes</text>
 
-              <rect x="186" y="178" width="132" height="44" rx="8" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="198" y="196" class="chip-title">AI Agents / Bots</text>
-              <text x="198" y="212" class="chip-sub">RDF / JSON-LD / RSS</text>
+              <rect x="184" y="162" width="130" height="44" rx="8" class="card"/>
+              <text x="195" y="180" class="chip-t">AI Agents / Bots</text>
+              <text x="195" y="195" class="chip-s">RDF / JSON-LD / RSS</text>
             </g>
 
-            <!-- Z2 Cloudflare Card -->
-            <g id="node-z2">
-              <rect x="400" y="126" width="226" height="96" rx="10" class="card-bg card-sec-border" filter="url(#card-shadow)"/>
-              <text x="414" y="146" class="node-title">Cloudflare WAF &amp; CDN</text>
-              <rect x="556" y="133" width="60" height="17" rx="4" class="port-pill-bg"/>
-              <text x="586" y="145" text-anchor="middle" class="port-pill-text">Optional</text>
-              <text x="414" y="166" class="node-body">• Custom WAF Skip (Semantic / AP)</text>
-              <text x="414" y="184" class="node-body">• AI Crawl Control Unblocked</text>
-              <text x="414" y="202" class="node-body">• TLS Edge Termination (:443)</text>
+            <!-- Z2 Cloudflare -->
+            <g filter="url(#b1-sh)">
+              <rect x="390" y="112" width="224" height="94" rx="9" class="card-clay"/>
+              <text x="402" y="131" class="c-title">Cloudflare WAF</text>
+              <rect x="546" y="118" width="58" height="17" rx="4" class="pill"/>
+              <text x="575" y="130" text-anchor="middle" class="pill-txt">Optional</text>
+              <text x="402" y="152" class="c-body">• Custom WAF Skip (Semantic/AP)</text>
+              <text x="402" y="169" class="c-body">• AI Crawl Control Unblocked</text>
+              <text x="402" y="186" class="c-body">• TLS Edge Termination (:443)</text>
             </g>
 
-            <!-- N1: nginx -->
-            <g id="node-n1">
-              <rect x="714" y="124" width="362" height="98" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="726" y="134" width="28" height="20" rx="5" class="node-id-bg"/>
-              <text x="740" y="148" text-anchor="middle" class="node-id-text">N1</text>
-              <text x="762" y="149" class="node-title">nginx</text>
-              <rect x="982" y="134" width="82" height="20" rx="5" class="port-pill-bg"/>
-              <text x="1023" y="148" text-anchor="middle" class="port-pill-text">:8000 → :80</text>
-              <text x="728" y="172" class="node-body">ngx_otel_module (Layer 6 gRPC → :4317)</text>
-              <text x="728" y="190" class="node-body">RO Static Volumes: /covers/ &amp; /gallery/</text>
-              <text x="728" y="208" class="node-mono">Blocks /metrics (404) • Routes /api, /.well-known, /rum</text>
+            <!-- N1 nginx -->
+            <g filter="url(#b1-sh)">
+              <rect x="702" y="110" width="370" height="96" rx="9" class="card-indigo"/>
+              <rect x="714" y="120" width="26" height="18" rx="4" class="b-indigo"/>
+              <text x="727" y="133" text-anchor="middle" class="b-txt">N1</text>
+              <text x="748" y="134" class="c-title">nginx</text>
+              <rect x="980" y="120" width="80" height="18" rx="4" class="pill"/>
+              <text x="1020" y="132" text-anchor="middle" class="pill-txt">:8000 → :80</text>
+              <text x="714" y="156" class="c-body">ngx_otel_module (Layer 6 OTLP gRPC → :4317)</text>
+              <text x="714" y="173" class="c-body">RO Static Volumes: /covers/ &amp; /gallery/</text>
+              <text x="714" y="192" class="c-crimson">Blocks /metrics (404) • Routes /api, /.well-known, /rum</text>
             </g>
 
-            <!-- N2: frontend -->
-            <g id="node-n2">
-              <rect x="48" y="334" width="284" height="136" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="60" y="346" width="28" height="20" rx="5" class="node-id-bg"/>
-              <text x="74" y="360" text-anchor="middle" class="node-id-text">N2</text>
-              <text x="96" y="361" class="node-title">frontend</text>
-              <rect x="266" y="346" width="54" height="20" rx="5" class="port-pill-bg"/>
-              <text x="293" y="360" text-anchor="middle" class="port-pill-text">:3000</text>
-              <text x="60" y="386" class="node-body">Next.js 16.4.6 • React 19.2.8</text>
-              <text x="60" y="405" class="node-body">127.0.0.1:3000 • proxy.ts (Node SSR)</text>
-              <text x="60" y="424" class="node-body">BFF /api/auth-exchange (HttpOnly JWT)</text>
-              <text x="60" y="446" class="node-mono">Dual Build: SSR Docker / Capacitor 7</text>
+            <!-- N2 frontend -->
+            <g filter="url(#b1-sh)">
+              <rect x="46" y="308" width="282" height="136" rx="9" class="card-indigo"/>
+              <rect x="58" y="319" width="26" height="18" rx="4" class="b-indigo"/>
+              <text x="71" y="332" text-anchor="middle" class="b-txt">N2</text>
+              <text x="92" y="333" class="c-title">frontend</text>
+              <rect x="264" y="319" width="52" height="18" rx="4" class="pill"/>
+              <text x="290" y="331" text-anchor="middle" class="pill-txt">:3000</text>
+              <text x="58" y="358" class="c-body">Next.js 16.4.6 • React 19.2.8</text>
+              <text x="58" y="376" class="c-body">proxy.ts (Node SSR) • 127.0.0.1:3000</text>
+              <text x="58" y="394" class="c-body">BFF /api/auth-exchange (HttpOnly)</text>
+              <text x="58" y="420" class="c-mono">Dual Build: SSR Docker / Capacitor 7</text>
             </g>
 
-            <!-- N3: web -->
-            <g id="node-n3">
-              <rect x="446" y="334" width="306" height="136" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="458" y="346" width="28" height="20" rx="5" class="node-id-bg"/>
-              <text x="472" y="360" text-anchor="middle" class="node-id-text">N3</text>
-              <text x="494" y="361" class="node-title">web</text>
-              <rect x="686" y="346" width="54" height="20" rx="5" class="port-pill-bg"/>
-              <text x="713" y="360" text-anchor="middle" class="port-pill-text">:5000</text>
-              <text x="458" y="386" class="node-body">Python 3.14+ • Flask 3.1 • SQLAlchemy 2.0</text>
-              <text x="458" y="405" class="node-body">Gunicorn gthread (2×8) • 127.0.0.1:5000</text>
-              <text x="458" y="424" class="node-body">UID 10001 (appuser) • 2.0 CPU / 2G RAM</text>
-              <text x="458" y="446" class="node-mono">Policy Enforcement Point • Auth Redacted</text>
+            <!-- N3 web -->
+            <g filter="url(#b1-sh)">
+              <rect x="436" y="308" width="312" height="136" rx="9" class="card-indigo"/>
+              <rect x="448" y="319" width="26" height="18" rx="4" class="b-indigo"/>
+              <text x="461" y="332" text-anchor="middle" class="b-txt">N3</text>
+              <text x="482" y="333" class="c-title">web</text>
+              <rect x="684" y="319" width="52" height="18" rx="4" class="pill"/>
+              <text x="710" y="331" text-anchor="middle" class="pill-txt">:5000</text>
+              <text x="448" y="358" class="c-body">Python 3.14+ • Flask 3.1 • SQLAlchemy 2.0</text>
+              <text x="448" y="376" class="c-body">Gunicorn gthread (2w×8t) • 127.0.0.1:5000</text>
+              <text x="448" y="394" class="c-body">UID 10001 • 2.0 CPU / 2GB RAM / 256 PIDs</text>
+              <text x="448" y="420" class="c-mono">Policy Enforcement Point • Auth Redacted</text>
             </g>
 
-            <!-- N4: worker -->
-            <g id="node-n4">
-              <rect x="794" y="334" width="280" height="136" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="806" y="346" width="28" height="20" rx="5" class="node-id-bg"/>
-              <text x="820" y="360" text-anchor="middle" class="node-id-text">N4</text>
-              <text x="842" y="361" class="node-title">worker</text>
-              <rect x="996" y="346" width="66" height="20" rx="5" class="port-pill-bg"/>
-              <text x="1029" y="360" text-anchor="middle" class="port-pill-text">Internal</text>
-              <text x="806" y="386" class="node-body">Celery (--pool=threads, c=4)</text>
-              <text x="806" y="405" class="node-body">Queues: celery, federation</text>
-              <text x="806" y="424" class="node-body">Covers, Vision/OCR, FTS, LOD</text>
-              <text x="806" y="446" class="node-mono">ActivityPub Outbox &amp; Scheduled Tasks</text>
+            <!-- N4 worker -->
+            <g filter="url(#b1-sh)">
+              <rect x="786" y="308" width="284" height="136" rx="9" class="card-clay"/>
+              <rect x="798" y="319" width="26" height="18" rx="4" class="b-clay"/>
+              <text x="811" y="332" text-anchor="middle" class="b-txt">N4</text>
+              <text x="832" y="333" class="c-title">worker</text>
+              <rect x="992" y="319" width="66" height="18" rx="4" class="pill"/>
+              <text x="1025" y="331" text-anchor="middle" class="pill-txt">Internal</text>
+              <text x="798" y="356" class="c-body">Celery threads×4 • Queues: celery, federation</text>
+              <text x="798" y="374" class="c-body">Covers, OCR, FTS, ActivityPub Outbox</text>
+              <text x="798" y="394" class="c-clay">v1.2.0: LOD &amp; Cross-Media Work Linking</text>
+              <text x="798" y="414" class="c-teal">Native boto3 S3Service / rclone Backups</text>
             </g>
 
-            <!-- N6: migration (One-Shot Init) -->
-            <g id="node-n6">
-              <rect x="48" y="516" width="284" height="134" rx="10" class="card-bg card-init-border" filter="url(#card-shadow)"/>
-              <rect x="60" y="528" width="28" height="20" rx="5" class="node-id-muted-bg"/>
-              <text x="74" y="542" text-anchor="middle" class="node-id-text">N6</text>
-              <text x="96" y="543" class="node-title">migration</text>
-              <rect x="224" y="528" width="96" height="20" rx="5" class="init-pill-bg"/>
-              <text x="272" y="542" text-anchor="middle" class="init-pill-text">ONE-SHOT INIT</text>
-              <text x="60" y="568" class="node-body">Pre-start Gate (completed_successfully)</text>
-              <text x="60" y="588" class="node-mono">1. fix_alembic.py → flask db upgrade</text>
-              <text x="60" y="608" class="node-mono">2. sync_db_permissions.py</text>
-              <text x="60" y="628" class="node-mono">3. init_auth.py</text>
+            <!-- N6 migration -->
+            <g filter="url(#b1-sh)">
+              <rect x="46" y="490" width="282" height="136" rx="9" class="card"/>
+              <rect x="58" y="501" width="26" height="18" rx="4" class="b-muted"/>
+              <text x="71" y="514" text-anchor="middle" class="b-txt">N6</text>
+              <text x="92" y="515" class="c-title">migration</text>
+              <rect x="226" y="501" width="90" height="18" rx="4" class="pill"/>
+              <text x="271" y="513" text-anchor="middle" class="pill-txt">ONE-SHOT INIT</text>
+              <text x="58" y="538" class="c-body">Pre-start Gate (completed_successfully)</text>
+              <text x="58" y="558" class="c-mono">1. fix_alembic.py → flask db upgrade</text>
+              <text x="58" y="576" class="c-mono">2. sync_db_permissions.py</text>
+              <text x="58" y="594" class="c-mono">3. init_auth.py</text>
             </g>
 
-            <!-- N5: sparql-runner (Security Perimeter Highlight) -->
-            <g id="node-n5">
-              <rect x="446" y="516" width="416" height="134" rx="10" class="card-bg card-sec-border" filter="url(#card-shadow)"/>
-              <rect x="458" y="528" width="28" height="20" rx="5" class="node-id-sec-bg"/>
-              <text x="472" y="542" text-anchor="middle" class="node-id-text">N5</text>
-              <text x="494" y="543" class="node-title">sparql-runner</text>
-              <rect x="652" y="528" width="128" height="20" rx="5" class="sec-pill-bg"/>
-              <text x="716" y="542" text-anchor="middle" class="sec-pill-text">ISOLATED PERIMETER</text>
-              <rect x="786" y="528" width="64" height="20" rx="5" class="port-pill-bg"/>
-              <text x="818" y="542" text-anchor="middle" class="port-pill-text">:5050</text>
-              <text x="458" y="568" class="node-body">Isolated Python Executor • Non-root UID 10002 (internal)</text>
-              <text x="458" y="588" class="node-body">RO rootfs • /tmp 64M noexec • cap_drop: ALL</text>
-              <text x="458" y="608" class="node-body">1.0 CPU • 512M RAM • 64 PIDs • Killable rlimit Child</text>
-              <text x="458" y="628" class="node-mono">HMAC-SHA256 Envelopes (SPARQL_SERVICE_SECRET)</text>
+            <!-- N5 sparql-runner (Crimson Dashed Perimeter) -->
+            <g filter="url(#b1-sh)">
+              <rect x="436" y="490" width="428" height="136" rx="10" class="card-crimson"/>
+              <rect x="448" y="501" width="26" height="18" rx="4" class="b-crimson"/>
+              <text x="461" y="514" text-anchor="middle" class="b-txt">N5</text>
+              <text x="482" y="515" class="c-title">sparql-runner</text>
+              <rect x="652" y="501" width="136" height="18" rx="4" class="pill-crimson"/>
+              <text x="720" y="513" text-anchor="middle" class="pill-crimson-txt">HARDENED PERIMETER</text>
+              <rect x="794" y="501" width="58" height="18" rx="4" class="pill"/>
+              <text x="823" y="513" text-anchor="middle" class="pill-txt">:5050</text>
+              <text x="448" y="538" class="c-body">Isolated Python RDFLib • Non-root UID 10002 (internal-only)</text>
+              <text x="448" y="556" class="c-body">RO rootfs • /tmp 64M noexec • cap_drop: ALL • no-new-privs</text>
+              <text x="448" y="574" class="c-body">1.0 CPU • 512M RAM • 64 PIDs • Killable rlimit Child</text>
+              <text x="448" y="598" class="c-crimson">Signed Envelopes: HMAC-SHA256 (SPARQL_SERVICE_SECRET)</text>
             </g>
 
-            <!-- N7: db -->
-            <g id="node-n7">
-              <rect x="48" y="774" width="300" height="114" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="60" y="786" width="28" height="20" rx="5" class="node-id-bg"/>
-              <text x="74" y="800" text-anchor="middle" class="node-id-text">N7</text>
-              <text x="96" y="801" class="node-title">db</text>
-              <rect x="282" y="786" width="54" height="20" rx="5" class="port-pill-bg"/>
-              <text x="309" y="800" text-anchor="middle" class="port-pill-text">:5432</text>
-              <text x="60" y="826" class="node-body">PostgreSQL 18-alpine (Single SSoT)</text>
-              <text x="60" y="845" class="node-body">Schemas: auth, catalog, inventory, social</text>
-              <text x="60" y="866" class="node-mono">GIN FTS (tsvector) &amp; JSONB Indexes</text>
+            <!-- N7 db -->
+            <g filter="url(#b1-sh)">
+              <rect x="46" y="738" width="304" height="116" rx="9" class="card-indigo"/>
+              <rect x="58" y="749" width="26" height="18" rx="4" class="b-indigo"/>
+              <text x="71" y="762" text-anchor="middle" class="b-txt">N7</text>
+              <text x="92" y="763" class="c-title">db</text>
+              <rect x="284" y="749" width="54" height="18" rx="4" class="pill"/>
+              <text x="311" y="761" text-anchor="middle" class="pill-txt">:5432</text>
+              <text x="58" y="786" class="c-body">PostgreSQL 18-alpine (Single SSoT)</text>
+              <text x="58" y="804" class="c-clay">7 Schemas: auth, catalog, inventory,</text>
+              <text x="58" y="819" class="c-clay">social, federation, config, public</text>
+              <text x="58" y="840" class="c-mono">GIN FTS (tsvector) &amp; JSONB Indexes</text>
             </g>
 
-            <!-- N8: redis (Valkey 8) -->
-            <g id="node-n8">
-              <rect x="362" y="774" width="298" height="114" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="374" y="786" width="28" height="20" rx="5" class="node-id-bg"/>
-              <text x="388" y="800" text-anchor="middle" class="node-id-text">N8</text>
-              <text x="410" y="801" class="node-title">redis</text>
-              <rect x="594" y="786" width="54" height="20" rx="5" class="port-pill-bg"/>
-              <text x="621" y="800" text-anchor="middle" class="port-pill-text">:6379</text>
-              <text x="374" y="826" class="node-body">Valkey 8-alpine (BSD-3-Clause)</text>
-              <text x="374" y="845" class="node-body">256MB allkeys-lru • valkey-cli ping</text>
-              <text x="374" y="866" class="node-mono">Broker, Facet Cache, Rate-Limit, SSE</text>
+            <!-- N8 redis (Valkey 8) -->
+            <g filter="url(#b1-sh)">
+              <rect x="364" y="738" width="296" height="116" rx="9" class="card-indigo"/>
+              <rect x="376" y="749" width="26" height="18" rx="4" class="b-indigo"/>
+              <text x="389" y="762" text-anchor="middle" class="b-txt">N8</text>
+              <text x="410" y="763" class="c-title">redis</text>
+              <rect x="594" y="749" width="54" height="18" rx="4" class="pill"/>
+              <text x="621" y="761" text-anchor="middle" class="pill-txt">:6379</text>
+              <text x="376" y="786" class="c-body">Valkey 8-alpine (BSD-3-Clause)</text>
+              <text x="376" y="805" class="c-body">256MB allkeys-lru • valkey-cli ping</text>
+              <text x="376" y="828" class="c-mono">Celery Broker, Rate Limits,</text>
+              <text x="376" y="843" class="c-mono">Facet Cache &amp; SSE Pub/Sub</text>
             </g>
 
-            <!-- N9: otel-collector -->
-            <g id="node-n9">
-              <rect x="738" y="774" width="280" height="114" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="750" y="786" width="28" height="20" rx="5" class="node-id-tel-bg"/>
-              <text x="764" y="800" text-anchor="middle" class="node-id-text">N9</text>
-              <text x="786" y="801" class="node-title">otel-collector</text>
-              <rect x="920" y="786" width="86" height="20" rx="5" class="port-pill-bg"/>
-              <text x="963" y="800" text-anchor="middle" class="port-pill-text">:4317 / :4318</text>
-              <text x="750" y="826" class="node-body">otel-contrib (8-Layer Fan-In)</text>
-              <text x="750" y="845" class="node-body">OTLP gRPC (:4317) &amp; HTTP (:4318)</text>
-              <text x="750" y="866" class="node-mono">Scrapes PG, Valkey &amp; Docker (:ro)</text>
+            <!-- N9 otel-collector -->
+            <g filter="url(#b1-sh)">
+              <rect x="736" y="738" width="290" height="116" rx="9" class="card-teal"/>
+              <rect x="748" y="749" width="26" height="18" rx="4" class="b-teal"/>
+              <text x="761" y="762" text-anchor="middle" class="b-txt">N9</text>
+              <text x="782" y="763" class="c-title">otel-collector</text>
+              <rect x="928" y="749" width="86" height="18" rx="4" class="pill"/>
+              <text x="971" y="761" text-anchor="middle" class="pill-txt">:4317 / :4318</text>
+              <text x="748" y="786" class="c-body">otel-contrib (8-Layer Fan-In)</text>
+              <text x="748" y="805" class="c-body">OTLP gRPC (:4317) &amp; HTTP (:4318)</text>
+              <text x="748" y="832" class="c-teal">Scrapes PG, Valkey &amp; docker_stats (:ro)</text>
             </g>
 
-            <!-- N10: openobserve -->
-            <g id="node-n10">
-              <rect x="1114" y="774" width="280" height="114" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <rect x="1126" y="786" width="32" height="20" rx="5" class="node-id-tel-bg"/>
-              <text x="1142" y="800" text-anchor="middle" class="node-id-text">N10</text>
-              <text x="1166" y="801" class="node-title">openobserve</text>
-              <rect x="1328" y="786" width="54" height="20" rx="5" class="port-pill-bg"/>
-              <text x="1355" y="800" text-anchor="middle" class="port-pill-text">:5080</text>
-              <text x="1126" y="826" class="node-body">v0.91.5 (Rust Single Binary + Parquet)</text>
-              <text x="1126" y="845" class="node-body">Traces, Metrics, Logs &amp; Browser RUM</text>
-              <text x="1126" y="866" class="node-mono">ANSI SQL REST API (_search)</text>
+            <!-- N10 openobserve -->
+            <g filter="url(#b1-sh)">
+              <rect x="1110" y="738" width="284" height="116" rx="9" class="card-teal"/>
+              <rect x="1122" y="749" width="30" height="18" rx="4" class="b-teal"/>
+              <text x="1137" y="762" text-anchor="middle" class="b-txt">N10</text>
+              <text x="1160" y="763" class="c-title">openobserve</text>
+              <rect x="1328" y="749" width="54" height="18" rx="4" class="pill"/>
+              <text x="1355" y="761" text-anchor="middle" class="pill-txt">:5080</text>
+              <text x="1122" y="786" class="c-body">v0.91.5 (Rust Single Binary + Parquet)</text>
+              <text x="1122" y="805" class="c-body">Traces, Metrics, Logs, _rumdata/_rumlog</text>
+              <text x="1122" y="832" class="c-mono">ANSI SQL REST API (_search)</text>
             </g>
 
             <!-- Z7 External Egress Cards -->
-            <g id="nodes-z7">
-              <!-- Metadata APIs -->
-              <rect x="1150" y="142" width="244" height="122" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="1164" y="163" class="node-title">Metadata APIs</text>
-              <text x="1164" y="183" class="node-body">• OpenLibrary • Google Books</text>
-              <text x="1164" y="201" class="node-body">• Biblioteka Narodowa • Crossref</text>
-              <text x="1164" y="219" class="node-body">• Discogs • MusicBrainz • BGG</text>
-              <text x="1164" y="237" class="node-body">• Rebrickable • TMDB • Allegro</text>
+            <g filter="url(#b1-sh)">
+              <rect x="1148" y="128" width="248" height="114" rx="9" class="card"/>
+              <text x="1160" y="148" class="c-title">Metadata Providers</text>
+              <text x="1160" y="167" class="c-body">• Google Books • OpenLibrary</text>
+              <text x="1160" y="184" class="c-body">• BN (data + Primo VE) • Crossref</text>
+              <text x="1160" y="201" class="c-body">• Discogs • MusicBrainz • BGG</text>
+              <text x="1160" y="218" class="c-body">• Rebrickable • TMDB • Allegro</text>
 
-              <!-- AI / Vision -->
-              <rect x="1150" y="278" width="244" height="98" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="1164" y="299" class="node-title">AI / Vision Backends</text>
-              <text x="1164" y="319" class="node-body">• Gemini 2.0 Flash (Cloud Vision)</text>
-              <text x="1164" y="337" class="node-body">• Ollama (Local Vision / LLM)</text>
-              <text x="1164" y="355" class="node-body">• OpenAI (Covers / Telemetry)</text>
+              <rect x="1148" y="254" width="248" height="92" rx="9" class="card"/>
+              <text x="1160" y="274" class="c-title">AI / Vision &amp; Ollama</text>
+              <text x="1160" y="293" class="c-body">• Gemini 2.0 Flash (Vision/Covers)</text>
+              <text x="1160" y="310" class="c-body">• Ollama (Vision + Work Links)</text>
+              <text x="1160" y="327" class="c-body">• OpenAI (Covers / Telemetry)</text>
 
-              <!-- Identity & LOD -->
-              <rect x="1150" y="390" width="244" height="102" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="1164" y="411" class="node-title">Identity &amp; LOD</text>
-              <text x="1164" y="431" class="node-body">• Google &amp; Apple OAuth / JWKS</text>
-              <text x="1164" y="449" class="node-body">• DBpedia • GeoNames • WordNet</text>
-              <text x="1164" y="467" class="node-body">• OpenCollections.org LOD Bridge</text>
+              <rect x="1148" y="358" width="248" height="96" rx="9" class="card"/>
+              <text x="1160" y="378" class="c-title">OAuth &amp; LOD Authorities</text>
+              <text x="1160" y="397" class="c-body">• Google &amp; Apple OAuth / JWKS</text>
+              <text x="1160" y="414" class="c-body">• DBpedia • GeoNames • WordNet</text>
+              <text x="1160" y="431" class="c-body">• Wikidata • OpenCollections.org</text>
 
-              <!-- Backups -->
-              <rect x="1150" y="506" width="244" height="82" rx="10" class="card-bg" filter="url(#card-shadow)"/>
-              <text x="1164" y="527" class="node-title">Cloud Backups</text>
-              <text x="1164" y="547" class="node-body">• S3 / Glacier Cold Archive</text>
-              <text x="1164" y="565" class="node-body">• rclone Remotes (cloud_backup.sh)</text>
+              <rect x="1148" y="466" width="248" height="100" rx="9" class="card-teal"/>
+              <text x="1160" y="486" class="c-title">S3 &amp; Cloud Backups</text>
+              <text x="1160" y="505" class="c-teal">• boto3 S3Service (v1.2.0)</text>
+              <text x="1160" y="522" class="c-mono">  S3_BUCKET_BACKUP / ARCHIVE</text>
+              <text x="1160" y="541" class="c-body">• Host rclone Remotes &amp; Glacier</text>
 
-              <!-- Egress Security Note -->
-              <rect x="1150" y="602" width="244" height="52" rx="8" class="sec-note-bg"/>
-              <text x="1162" y="622" class="sec-note-title">SSRF Egress Policy</text>
-              <text x="1162" y="640" class="sec-note-body">Private &amp; link-local IPs blocked at socket</text>
+              <rect x="1148" y="578" width="248" height="52" rx="8" class="pill-crimson"/>
+              <text x="1160" y="597" class="c-crimson">SSRF &amp; DNS-Rebinding Guard</text>
+              <text x="1160" y="615" class="c-body">Private/link-local IPs blocked at socket</text>
             </g>
-          </g>
 
-          <!-- ==================== LAYER 5: LEGEND ==================== -->
-          <g id="layer-legend">
-            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="947" class="legend-heading">LEGEND:</text>
-
-            <!-- Item 1: Primary Request Flow -->
-            <line x1="128" y1="943" x2="174" y2="943" class="edge-primary" marker-end="url(#arrow-primary)"/>
-            <text x="184" y="947" class="legend-text">Primary Request Flow</text>
-
-            <!-- Item 2: Data / State -->
-            <line x1="358" y1="943" x2="404" y2="943" class="edge-data" marker-end="url(#arrow-data)"/>
-            <text x="414" y="947" class="legend-text">Data / State / Queue</text>
-
-            <!-- Item 3: Security Boundary / Guarded Egress -->
-            <line x1="588" y1="943" x2="634" y2="943" class="edge-security" marker-end="url(#arrow-security)"/>
-            <text x="644" y="947" class="legend-text">Security Boundary / Guarded Egress</text>
-
-            <!-- Item 4: Observability / OTLP -->
-            <line x1="908" y1="943" x2="954" y2="943" class="edge-telemetry" marker-end="url(#arrow-telemetry)"/>
-            <text x="964" y="947" class="legend-text">Observability / OTLP / RUM</text>
-
-            <!-- Item 5: One-Shot Init / Scrape -->
-            <line x1="1180" y1="943" x2="1226" y2="943" class="edge-init" marker-end="url(#arrow-init)"/>
-            <text x="1236" y="947" class="legend-text">One-Shot Init / Scrape</text>
-          </g>
-        </svg>
+            <!-- Legend Bar -->
+            <rect x="32" y="886" width="1376" height="40" rx="10" class="legend-bg"/>
+            <text x="50" y="910" class="legend-h">LEGEND:</text>
+            <line x1="126" y1="906" x2="170" y2="906" class="edge-p" marker-end="url(#b1-mk-p)"/>
+            <text x="180" y="910" class="legend-t">Primary Request Flow</text>
+            <line x1="348" y1="906" x2="392" y2="906" class="edge-d" marker-end="url(#b1-mk-d)"/>
+            <text x="402" y="910" class="legend-t">Data / Cache / Broker</text>
+            <line x1="576" y1="906" x2="620" y2="906" class="edge-c" marker-end="url(#b1-mk-c)"/>
+            <text x="630" y="910" class="legend-t">Guarded Egress / v1.2.0</text>
+            <line x1="820" y1="906" x2="864" y2="906" class="edge-r" marker-end="url(#b1-mk-r)"/>
+            <text x="874" y="910" class="legend-t">HMAC / Hardened Perimeter</text>
+            <line x1="1088" y1="906" x2="1132" y2="906" class="edge-t" marker-end="url(#b1-mk-t)"/>
+            <text x="1142" y="910" class="legend-t">OTLP / RUM Telemetry</text>
+          </svg>

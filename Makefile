@@ -361,7 +361,25 @@ start: ensure-mount-perms
 	fi
 	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(ABS_COMPOSE_ENV_FILE)),--env-file $(ABS_COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
 	@if [ "$(MODE)" = "preview" ] && [ -f "$(ABS_COMPOSE_ENV_FILE)" ]; then \
-		cat "$(ABS_COMPOSE_ENV_FILE)" | IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py --dotenv-stdin 2>/dev/null || echo "⚠️ Warning: container reconcile_preview_settings failed for $(ABS_COMPOSE_ENV_FILE)" >&2; \
+		src_secret="$${SRC_SECRET_KEY:-}"; \
+		if [ -z "$$src_secret" ] && [ "$${SKIP_CLONE:-0}" != "1" ] && [ -n "$${SRC_LOC:-}" ]; then \
+			src_env_named="$${SRC_LOC}/.env.$${SRC_NAME:-prod}"; \
+			src_env_default="$${SRC_LOC}/.env"; \
+			if [ -n "$${SRC_HOST:-}" ]; then \
+				src_secret=$$(ssh "$${SRC_HOST}" "f='$${src_env_named}'; [ -f \"\$$f\" ] || f='$${src_env_default}'; if [ -f \"\$$f\" ]; then grep -E '^[[:space:]]*SECRET_KEY=' \"\$$f\" | tail -n1 | cut -d= -f2- | tr -d '\r'; fi" 2>/dev/null || true); \
+			else \
+				src_env_file="$$src_env_named"; \
+				[ -f "$$src_env_file" ] || src_env_file="$$src_env_default"; \
+				if [ -f "$$src_env_file" ]; then \
+					src_secret=$$(grep -E '^[[:space:]]*SECRET_KEY=' "$$src_env_file" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true); \
+				fi; \
+			fi; \
+			src_secret="$${src_secret#\"}"; src_secret="$${src_secret%\"}"; \
+			src_secret="$${src_secret#\'}"; src_secret="$${src_secret%\'}"; \
+		fi; \
+		{ printf '__IQOQO_SRC_SECRET_KEY__=%s\n' "$$src_secret"; cat "$(ABS_COMPOSE_ENV_FILE)"; } | IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py --dotenv-stdin || echo "⚠️ Warning: container reconcile_preview_settings failed for $(ABS_COMPOSE_ENV_FILE)" >&2; \
+		unset src_secret SRC_SECRET_KEY; \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE="$(ABS_COMPOSE_ENV_FILE)" docker compose --env-file "$(ABS_COMPOSE_ENV_FILE)" -f docker-compose.prebuilt.yml up -d --force-recreate --no-deps web worker || true; \
 		export MODE="preview"; \
 		origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?NEXT_PUBLIC_FRONTEND_URL=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
 		[ -n "$$origin_url" ] || origin_url=$$(grep -E '^[[:space:]]*(export[[:space:]]+)?BASE_URL=' "$(ABS_COMPOSE_ENV_FILE)" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r"' | tr -d "'" || true); \
@@ -470,7 +488,7 @@ preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSetting
 		fi; \
 	 fi; \
 	 src_secret="$${SRC_SECRET_KEY:-}"; \
-	 if [ -z "$$src_secret" ] && [ "$${SKIP_CLONE:-1}" != "1" ] && [ -n "$${SRC_LOC:-}" ]; then \
+	 if [ -z "$$src_secret" ] && [ "$${SKIP_CLONE:-0}" != "1" ] && [ -n "$${SRC_LOC:-}" ]; then \
 		src_env_named="$${SRC_LOC}/.env.$${SRC_NAME:-prod}"; \
 		src_env_default="$${SRC_LOC}/.env"; \
 		if [ -n "$${SRC_HOST:-}" ]; then \
@@ -485,10 +503,23 @@ preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSetting
 		src_secret="$${src_secret#\"}"; src_secret="$${src_secret%\"}"; \
 		src_secret="$${src_secret#\'}"; src_secret="$${src_secret%\'}"; \
 	 fi; \
+	 eff_app_ver="$${APP_VERSION:-}"; \
+	 if [ -z "$$eff_app_ver" ] && [ -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" ]; then \
+		web_cid=$$(COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" ps -q web 2>/dev/null | head -n1 || true); \
+		if [ -n "$$web_cid" ]; then \
+			web_img=$$(docker inspect --format '{{.Config.Image}}' "$$web_cid" 2>/dev/null || true); \
+			img_no_digest="$${web_img%%@*}"; \
+			img_leaf="$${img_no_digest##*/}"; \
+			case "$$img_leaf" in \
+				*:*) eff_app_ver="$${img_leaf##*:}" ;; \
+			esac; \
+		fi; \
+	 fi; \
+	 eff_app_ver="$${eff_app_ver:-$(PREBUILT_TAG)}"; \
 	 if [ -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" ]; then \
 		echo "🔐 Reconciling encrypted InstanceSettings & preview overrides from $(DEPLOY_ENV_FILE)..."; \
-		SRC_SECRET_KEY="$$src_secret" DST_ENV_PATH="$(DEPLOY_ENV_FILE)" python3 -c 'import json, os; from pathlib import Path; dst_env = {}; [dst_env.__setitem__(k.strip(), (v[1:-1] if (len(v) >= 2 and ((v[0] == "\"" and v[-1] == "\"") or (v[0] == "'"'"'" and v[-1] == "'"'"'"))) else (v.split(" #", 1)[0].strip() if " #" in v else v))) for raw in Path(os.environ["DST_ENV_PATH"]).read_text(encoding="utf-8").splitlines() for line in [raw.strip()] if line and not line.startswith("#") for clean in [line[7:].lstrip() if line.startswith("export ") else line] if "=" in clean for k, _, v in [clean.partition("=")] for v in [v.strip()] if k.strip() and v]; print(json.dumps({"src_secret_key": os.environ.get("SRC_SECRET_KEY", ""), "dst_env": {k: val for k, val in dst_env.items() if val}}))' \
-		| COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=$${APP_VERSION:-preview} docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py; \
+		{ printf '__IQOQO_SRC_SECRET_KEY__=%s\n' "$$src_secret"; cat "$(DEPLOY_ENV_FILE)"; } \
+		| COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION="$$eff_app_ver" docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py --dotenv-stdin; \
 	 fi; \
 	 unset src_secret SRC_SECRET_KEY; \
 	 export MODE="$${MODE:-preview}"; \
@@ -502,7 +533,7 @@ preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSetting
 	 elif [ -n "$$oo_rum_site" ]; then \
 		export OPENOBSERVE_RUM_SITE="$$oo_rum_site"; \
 	 fi; \
-	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file "$(DEPLOY_ENV_FILE)" 2>/dev/null || true)"; \
+	 rum_out="$$(COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION="$$eff_app_ver" docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/provision_rum_token.py --mgmt-host openobserve 2>/dev/null || true)"; \
 	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
 	 rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
 	 rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
@@ -512,7 +543,7 @@ preview-reconcile: ## Reconcile preview OpenObserve auth, cloned InstanceSetting
 		export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
 	 fi; \
 	 if [ -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" ]; then \
-		COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=$${APP_VERSION:-preview} docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" up -d --force-recreate --no-deps web worker frontend; \
+		COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION="$$eff_app_ver" docker compose --project-directory "$(DEPLOY_DIR)" --env-file "$(DEPLOY_ENV_FILE)" -f "$(DEPLOY_DIR)/docker-compose.prebuilt.yml" up -d --force-recreate --no-deps web worker frontend; \
 	 fi
 
 preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
@@ -631,7 +662,20 @@ monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while 
 		export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
 	fi; \
 	if [ -f "$$pfile" ] && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "$${cproject}-web"; then \
-		docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" up -d --force-recreate --no-deps web worker frontend; \
+		eff_app_ver="$${APP_VERSION:-}"; \
+		if [ -z "$$eff_app_ver" ]; then \
+			web_cid=$$(docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" ps -q web 2>/dev/null | head -n1 || true); \
+			if [ -n "$$web_cid" ]; then \
+				web_img=$$(docker inspect --format '{{.Config.Image}}' "$$web_cid" 2>/dev/null || true); \
+				img_no_digest="$${web_img%%@*}"; \
+				img_leaf="$${img_no_digest##*/}"; \
+				case "$$img_leaf" in \
+					*:*) eff_app_ver="$${img_leaf##*:}" ;; \
+				esac; \
+			fi; \
+		fi; \
+		eff_app_ver="$${eff_app_ver:-$(PREBUILT_TAG)}"; \
+		APP_VERSION="$$eff_app_ver" docker compose --project-directory "$$cpdir" -p "$$cproject" -f "$$pfile" --env-file "$$cenv" up -d --force-recreate --no-deps web worker frontend; \
 	fi; \
 	echo "✅ OpenObserve root authentication successfully reset from $$cenv!"
 
@@ -1213,11 +1257,11 @@ backup-check:
 
 archive-run:
 	@remote_target="$(remote)"; \
-	if [ -z "$$remote_target" ] && [ -f .env ]; then \
-		remote_target=$$(grep -E '^RCLONE_REMOTE_ARCHIVE=' .env 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
-	fi; \
-	remote_target="$${remote_target:-iqoqo-glacier:iqoqo-archive}"; \
-	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
+	if [ -n "$$remote_target" ]; then \
+		cd $(CURDIR) && bash scripts/cloud_backup.sh --archive "$$remote_target"; \
+	else \
+		cd $(CURDIR) && bash scripts/cloud_backup.sh --archive; \
+	fi
 
 archive-install: archive-run
 	@bash scripts/cloud_backup_cron.sh archive-install $(remote)

@@ -100,15 +100,20 @@ _RETRY_POLICY = Retry(
 )
 
 
-def _make_session() -> requests.Session:
+def _make_session(max_retries: int | None = None) -> requests.Session:
     """Return a :class:`requests.Session` with the shared retry adapter mounted.
 
     A new session is created per call so that the retry state is never shared
     across different ISBN lookups happening in parallel request threads.
+
+    Args:
+        max_retries: Optional retry override. Pass ``0`` to disable urllib3
+            retries (single attempt) for bounded optional enrichment calls.
     """
     session = requests.Session()
     session.headers.update({"User-Agent": "iqoqo-catalog-app/1.0 (contact@iqoqo.cc)"})
-    adapter = HTTPAdapter(max_retries=_RETRY_POLICY)
+    retry_cfg: Retry | int = 0 if max_retries == 0 else (_RETRY_POLICY if max_retries is None else max_retries)
+    adapter = HTTPAdapter(max_retries=retry_cfg)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
@@ -176,12 +181,18 @@ def _get_google_books_api_key() -> str | None:
     return os.environ.get("GOOGLE_BOOKS_API_KEY")
 
 
-def _lookup_google_books_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
+def _lookup_google_books_outcome(
+    isbn: str,
+    timeout: tuple[float, float] | float | None = None,
+    *,
+    max_retries: int | None = None,
+) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the Google Books API without leaking secrets.
 
     Args:
         isbn: A canonical 13-digit ISBN string.
         timeout: Optional (connect, read) timeout tuple or float in seconds.
+        max_retries: Optional retry override passed to :func:`_make_session`.
 
     Returns:
         :class:`ISBNProviderOutcome` indicating success, definitive no-result,
@@ -193,7 +204,7 @@ def _lookup_google_books_outcome(isbn: str, timeout: tuple[float, float] | float
         url += f"&key={api_key}"
 
     try:
-        session = _make_session()
+        session = _make_session(max_retries=max_retries)
         to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
         response = session.get(url, timeout=to)
         response.raise_for_status()
@@ -377,12 +388,18 @@ def _extract_cover_url(value: Any) -> str | None:
     return None
 
 
-def _lookup_open_library_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
+def _lookup_open_library_outcome(
+    isbn: str,
+    timeout: tuple[float, float] | float | None = None,
+    *,
+    max_retries: int | None = None,
+) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the Open Library Books API.
 
     Args:
         isbn: A canonical 13-digit ISBN string.
         timeout: Optional (connect, read) timeout tuple or float in seconds.
+        max_retries: Optional retry override passed to :func:`_make_session`.
 
     Returns:
         :class:`ISBNProviderOutcome` indicating success, definitive no-result,
@@ -390,7 +407,7 @@ def _lookup_open_library_outcome(isbn: str, timeout: tuple[float, float] | float
     """
     url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
     try:
-        session = _make_session()
+        session = _make_session(max_retries=max_retries)
         to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
         response = session.get(url, timeout=to)
         response.raise_for_status()
@@ -479,7 +496,12 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
     return outcome.metadata if outcome.status == ISBNProviderOutcomeStatus.SUCCESS else None
 
 
-def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
+def _lookup_biblioteka_narodowa_outcome(
+    isbn: str,
+    timeout: tuple[float, float] | float | None = None,
+    *,
+    max_retries: int | None = None,
+) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the National Library of Poland (Biblioteka Narodowa) API.
 
     Open REST API: https://data.bn.org.pl/api/bibs.json?isbnIssn={isbn}
@@ -488,6 +510,7 @@ def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] 
     Args:
         isbn: A canonical 13-digit ISBN string.
         timeout: Optional (connect, read) timeout tuple or float in seconds.
+        max_retries: Optional retry override passed to :func:`_make_session`.
 
     Returns:
         :class:`ISBNProviderOutcome` indicating success, definitive no-result,
@@ -495,7 +518,7 @@ def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] 
     """
     url = f"https://data.bn.org.pl/api/bibs.json?isbnIssn={isbn}"
     try:
-        session = _make_session()
+        session = _make_session(max_retries=max_retries)
         to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
         record_outbound_telemetry("biblioteka_narodowa", dict(session.headers), url=url)
         response = session.get(url, timeout=to)
@@ -526,7 +549,7 @@ def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] 
 
     bibs = data.get("bibs") if isinstance(data, dict) else None
     if not bibs or not isinstance(bibs, list):
-        return _lookup_bn_primo_outcome(isbn, session=session, timeout=to)
+        return _lookup_bn_primo_outcome(isbn, session=session, timeout=to, max_retries=max_retries)
 
     bib = bibs[0]
     raw_title = bib.get("title", "")
@@ -607,6 +630,7 @@ def _lookup_bn_primo_outcome(
     *,
     session: requests.Session | None = None,
     timeout: tuple[float, float] | float | None = None,
+    max_retries: int | None = None,
 ) -> ISBNProviderOutcome:
     """Fallback to live Biblioteka Narodowa Primo VE REST API when data.bn.org.pl lags."""
     primo_url = (
@@ -614,7 +638,7 @@ def _lookup_bn_primo_outcome(
         f"?q=isbn,exact,{isbn}&vid=48OMNIS_NLOP:48OMNIS_NLOP&scope=NLOP_IZ_NZ&tab=LibraryCatalog&limit=1"
     )
     try:
-        sess = session or _make_session()
+        sess = session or _make_session(max_retries=max_retries)
         to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
         resp = sess.get(primo_url, timeout=to)
         resp.raise_for_status()
@@ -748,6 +772,11 @@ def _metadata_has_gaps(meta: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+_MIN_ENRICHMENT_BUDGET: float = 1.0
+_MIN_VIABLE_READ_TIMEOUT: float = 0.8
+_POLISH_BN_RESERVED_BUDGET: float = 2.0
+
+
 def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float = 6.0) -> dict[str, Any] | None:
     """Look up book metadata for *isbn* from external sources with gap-filling.
 
@@ -779,14 +808,17 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
     def _remaining_time() -> float:
         return max_duration - (time.monotonic() - start_time)
 
-    def _calc_timeout() -> tuple[float, float]:
-        rem = max(0.1, _remaining_time())
+    def _calc_timeout(min_read: float = _MIN_VIABLE_READ_TIMEOUT, max_total: float | None = None) -> tuple[float, float]:
+        rem = _remaining_time()
+        if max_total is not None:
+            rem = min(rem, max_total)
+        rem = max(0.1, rem)
         if rem < 1.5:
-            conn_to = min(rem, max(0.05, rem * 0.5))
-            read_to = min(rem, max(0.05, rem - conn_to))
+            conn_to = min(rem * 0.35, 0.6)
+            read_to = max(min(rem, min_read), rem - conn_to)
         else:
-            conn_to = min(float(_CONNECT_TIMEOUT), rem, max(1.5, rem * 0.4))
-            read_to = min(rem, max(0.2, rem - conn_to))
+            conn_to = min(float(_CONNECT_TIMEOUT), rem * 0.4, 1.5)
+            read_to = max(min_read, rem - conn_to)
         return (conn_to, read_to)
 
     google_outcome = _lookup_google_books_outcome(isbn, timeout=_calc_timeout())
@@ -794,18 +826,26 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         logger.info("ISBN %s resolved via Google Books", isbn)
         result = google_outcome.metadata
 
-        # Check for gap-filling from Open Library if gaps exist and time remains
-        if _metadata_has_gaps(result) and _remaining_time() > 0:
+        # Check for gap-filling from Open Library if gaps exist and viable budget remains
+        if _metadata_has_gaps(result) and _remaining_time() >= _MIN_ENRICHMENT_BUDGET:
             logger.debug("Google Books result has gaps for ISBN %s, querying Open Library for enrichment", isbn)
-            ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
+            ol_outcome = _lookup_open_library_outcome(
+                isbn,
+                timeout=_calc_timeout(min_read=_MIN_VIABLE_READ_TIMEOUT),
+                max_retries=0,
+            )
             if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS and ol_outcome.metadata:
                 logger.info("Enriching ISBN %s metadata gaps from Open Library", isbn)
                 result = _merge_metadata_gaps(result, ol_outcome.metadata, "google_books", "open_library")
 
         # Check for gap-filling from Biblioteka Narodowa if gaps still exist (especially for Polish ISBNs)
-        if _metadata_has_gaps(result) and is_polish and _remaining_time() > 0:
+        if _metadata_has_gaps(result) and is_polish and _remaining_time() >= _MIN_ENRICHMENT_BUDGET:
             logger.debug("Google Books result has gaps for Polish ISBN %s, querying Biblioteka Narodowa", isbn)
-            bn_outcome = _lookup_biblioteka_narodowa_outcome(isbn, timeout=_calc_timeout())
+            bn_outcome = _lookup_biblioteka_narodowa_outcome(
+                isbn,
+                timeout=_calc_timeout(min_read=_MIN_VIABLE_READ_TIMEOUT),
+                max_retries=0,
+            )
             if bn_outcome.status == ISBNProviderOutcomeStatus.SUCCESS and bn_outcome.metadata:
                 logger.info("Enriching ISBN %s metadata gaps from Biblioteka Narodowa", isbn)
                 result = _merge_metadata_gaps(result, bn_outcome.metadata, "google_books", "biblioteka_narodowa")
@@ -817,14 +857,25 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         if _remaining_time() <= 0:
             logger.warning("Lookup duration ceiling reached before Open Library check for ISBN %s", isbn)
             return None
-        ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
+        if is_polish:
+            ol_budget = min(2.5, max(0.5, _remaining_time() - _POLISH_BN_RESERVED_BUDGET))
+            ol_outcome = _lookup_open_library_outcome(
+                isbn,
+                timeout=_calc_timeout(max_total=ol_budget),
+                max_retries=0,
+            )
+        else:
+            ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
         if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
             logger.info("ISBN %s resolved via Open Library", isbn)
             return ol_outcome.metadata
 
         if is_polish and _remaining_time() > 0:
             logger.debug("Checking Biblioteka Narodowa for Polish ISBN %s", isbn)
-            bn_outcome = _lookup_biblioteka_narodowa_outcome(isbn, timeout=_calc_timeout())
+            bn_outcome = _lookup_biblioteka_narodowa_outcome(
+                isbn,
+                timeout=_calc_timeout(min_read=1.5),
+            )
             if bn_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
                 logger.info("ISBN %s resolved via Biblioteka Narodowa", isbn)
                 return bn_outcome.metadata
@@ -838,14 +889,25 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         logger.warning("Lookup duration ceiling reached before Open Library fallback for ISBN %s", isbn)
         return None
 
-    ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
+    if is_polish:
+        ol_budget = min(2.5, max(0.5, _remaining_time() - _POLISH_BN_RESERVED_BUDGET))
+        ol_outcome = _lookup_open_library_outcome(
+            isbn,
+            timeout=_calc_timeout(max_total=ol_budget),
+            max_retries=0,
+        )
+    else:
+        ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
     if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
         logger.info("ISBN %s resolved via Open Library after Google Books transient failure", isbn)
         return ol_outcome.metadata
 
     if is_polish and _remaining_time() > 0:
         logger.debug("Google Books transient failure, checking Biblioteka Narodowa for Polish ISBN %s", isbn)
-        bn_outcome = _lookup_biblioteka_narodowa_outcome(isbn, timeout=_calc_timeout())
+        bn_outcome = _lookup_biblioteka_narodowa_outcome(
+            isbn,
+            timeout=_calc_timeout(min_read=1.5),
+        )
         if bn_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
             logger.info("ISBN %s resolved via Biblioteka Narodowa after Google Books transient failure", isbn)
             return bn_outcome.metadata

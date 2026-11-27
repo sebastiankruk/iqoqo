@@ -29,11 +29,13 @@ from difflib import SequenceMatcher
 from typing import Any, cast
 
 import requests
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.cache import cache
 from app.core.config_service import ConfigService
 from app.db import db
+from app.db.contributions import Contributor, WorkContribution
 from app.db.core import Manifestation, SemanticLink, Work
 
 logger = logging.getLogger(__name__)
@@ -1320,12 +1322,85 @@ class WordNetMapper:
         }
 
 
+def _resolve_or_create_author_contributor(work: Work, author_name: str, sequence: int = 0) -> Contributor | None:
+    """Resolve an existing author Contributor or create one and link via WorkContribution."""
+    clean_name = author_name.strip()
+    if not clean_name:
+        return None
+
+    lowered = clean_name.lower()
+    contributor: Contributor | None = None
+
+    for wc in sorted(work.contributions or [], key=lambda item: (item.sequence or 0, item.id or 0)):
+        if wc.contributor and (wc.contributor.name or "").strip().lower() == lowered:
+            contributor = wc.contributor
+            break
+
+    if contributor is None:
+        contributor = (
+            db.session.execute(
+                select(Contributor)
+                .where(
+                    func.lower(func.trim(Contributor.name)) == lowered,
+                    Contributor.type == "person",
+                )
+                .order_by(Contributor.id.asc())
+            )
+            .scalars()
+            .first()
+        )
+
+    if contributor is None:
+        try:
+            with db.session.begin_nested():
+                contributor = Contributor(name=clean_name, type="person")
+                db.session.add(contributor)
+                db.session.flush()
+        except IntegrityError:
+            contributor = (
+                db.session.execute(
+                    select(Contributor).where(
+                        Contributor.name == clean_name,
+                        Contributor.type == "person",
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if contributor is None:
+                return None
+
+    existing_wc = (
+        db.session.execute(
+            select(WorkContribution).where(
+                WorkContribution.work_id == work.id,
+                WorkContribution.contributor_id == contributor.id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing_wc is None:
+        db.session.add(
+            WorkContribution(
+                work_id=work.id,
+                contributor_id=contributor.id,
+                role="author",
+                sequence=sequence,
+            )
+        )
+        db.session.flush()
+
+    return contributor
+
+
 def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) -> list[SemanticLink]:
     """
-    Resolve and persist Linked Open Data links for a Manifestation and its parent Work.
+    Resolve and persist Linked Open Data links for a Manifestation, its Work, and Contributors.
 
     Strict FRBR Scoping Rules:
-    - Work (F1): DBpedia creative work entity, author persons, WordNet synsets/topics.
+    - Work (F1): DBpedia creative work entity, WordNet synsets/topics, GeoNames subject places.
+    - Contributor (F10/F11): DBpedia person/organization entities linked to Contributor rows.
     - Manifestation (F3): GeoNames publication places, publisher entities, format URIs.
     - Item (F4): Separated from abstract catalog links; items inherit via manifestation.
     """
@@ -1404,20 +1479,28 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                 db.session.add(link)
                 created_links.append(link)
 
-        # 1b. DBpedia Author / Contributor Resolution
+        # 1b. DBpedia Author / Contributor Resolution (Contributor-tier F10/F11 ownership)
         authors: list[str] = []
         if work.meta and isinstance(work.meta.get("authors"), list):
-            authors.extend([a for a in work.meta["authors"] if isinstance(a, str)])
-        elif manifestation.author:
+            authors.extend([a for a in work.meta["authors"] if isinstance(a, str) and a.strip()])
+        elif work.contributions:
+            ordered_wcs = sorted(work.contributions, key=lambda wc: (wc.sequence or 0, wc.id or 0))
+            for wc in ordered_wcs:
+                if wc.role in ("author", "composer", "creator") and wc.contributor and wc.contributor.name:
+                    authors.append(wc.contributor.name)
+        if not authors and manifestation.author:
             authors.append(manifestation.author)
 
-        for author_name in authors[:3]:  # Resolve up to 3 authors to respect rate limits
+        for seq, author_name in enumerate(authors[:3]):  # Resolve up to 3 authors to respect rate limits
+            contributor = _resolve_or_create_author_contributor(work, author_name, sequence=seq)
+            if contributor is None:
+                continue
             author_match = DBpediaClient.resolve_person(author_name, fast_mode=fast_mode)
             if author_match and author_match["confidence"] >= suggestion_threshold:
                 existing_author = db.session.execute(
                     select(SemanticLink).where(
-                        SemanticLink.entity_type == "work",
-                        SemanticLink.entity_id == work.id,
+                        SemanticLink.entity_type == "contributor",
+                        SemanticLink.entity_id == contributor.id,
                         SemanticLink.authority == "dbpedia",
                         SemanticLink.external_uri == author_match["uri"],
                     )
@@ -1426,14 +1509,14 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                 if not existing_author:
                     author_status = "accepted" if author_match["confidence"] >= auto_threshold else "suggested"
                     author_link = SemanticLink(
-                        entity_type="work",
-                        entity_id=work.id,
+                        entity_type="contributor",
+                        entity_id=contributor.id,
                         authority="dbpedia",
                         external_uri=author_match["uri"],
                         pref_label=author_match["label"],
                         confidence=author_match["confidence"],
                         match_strategy=author_match["strategy"],
-                        attributes={**author_match["attributes"], "role": "author"},
+                        attributes={**author_match["attributes"], "role": "author", "contributor_name": contributor.name},
                         status=author_status,
                         verified=False,
                     )

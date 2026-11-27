@@ -204,6 +204,7 @@ class ItemSearchFilters:
     scope: str = "personal"
     friend_ids: list[Any] | None = None
     visibility: list[str] | None = None
+    locations: list[str] | None = None
     excluded_formats: tuple[str, ...] | list[str] | None = None
     expression_kind: tuple[str, ...] | list[str] | None = None
 
@@ -663,6 +664,12 @@ class SearchService:
             else:
                 extra_filters_sql += " AND 1=0"
 
+        if filters.locations:
+            loc_tuple = tuple(str(loc).strip() for loc in filters.locations if str(loc).strip())
+            if loc_tuple:
+                params["location_filter"] = loc_tuple
+                extra_filters_sql += " AND i.owner_id = :user_id AND i.physical_location IN :location_filter"
+
         count_sql = f"""
         SELECT count(i.id) FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
@@ -673,7 +680,7 @@ class SearchService:
         """
         rows_sql = f"""
         SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
-               i.visibility, i.is_hidden,
+               i.visibility, i.is_hidden, i.physical_location,
                i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                m.publisher,
@@ -717,6 +724,9 @@ class SearchService:
         if filters.visibility and "non_public_visibility_filter" in params:
             count_stmt = count_stmt.bindparams(bindparam("non_public_visibility_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("non_public_visibility_filter", expanding=True))
+        if filters.locations and "location_filter" in params:
+            count_stmt = count_stmt.bindparams(bindparam("location_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("location_filter", expanding=True))
 
         total = int(db.session.execute(count_stmt, params).scalar() or 0)
         results = db.session.execute(rows_stmt, params).mappings().all()
@@ -751,6 +761,7 @@ class SearchService:
             scope,
             friend_ids,
             visibility,
+            locations,
             excluded_formats,
             expression_kind,
         ) = dataclasses.astuple(filters)
@@ -842,6 +853,11 @@ class SearchService:
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
+        if locations:
+            loc_list = [str(loc).strip() for loc in locations if str(loc).strip()]
+            if loc_list:
+                query = query.filter(Item.owner_id == user_id, Item.physical_location.in_(loc_list))
+
         if excluded_formats:
             excl_lower = [str(f).strip().lower() for f in excluded_formats if str(f).strip()]
             if excl_lower:
@@ -885,6 +901,7 @@ class SearchService:
                     "collection_status": item.collection_status,
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
+                    "physical_location": item.physical_location,
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
                     "manifestation_id": manifestation.id,

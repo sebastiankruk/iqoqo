@@ -40,7 +40,7 @@ If an upgrade was launched with raw `docker compose -f docker-compose.prebuilt.y
 1. **Re-launch with explicit `ENV_FILE` and `--env-file`** (non-destructive; preserves encrypted DB rows):
 
 ```bash
-APP_VERSION=1.0.3 ENV_FILE=.env.prod docker compose -p iqoqo -f docker-compose.prebuilt.yml --env-file .env.prod up -d --force-recreate web worker frontend
+APP_VERSION=1.2.0 ENV_FILE=.env.prod docker compose -p iqoqo -f docker-compose.prebuilt.yml --env-file .env.prod up -d --force-recreate web worker frontend
 ```
 
 1. **Verify decryption and stack health**:
@@ -115,7 +115,7 @@ docker compose exec web python scripts/init_db.py --seed-file data/seed_example.
 docker compose exec web python scripts/init_auth.py
 
 # 6. Access the application
-# http://localhost:5000 (or your configured WEB_PORT)
+# http://localhost:8000 (Nginx gateway, or your configured NGINX_PORT)
 ```
 
 For detailed configuration and development setup, continue reading below. For deploying iQoQo into an isolated, source-free host directory, see the [Deployment Directory Guide](DEPLOYMENT.md).
@@ -151,7 +151,7 @@ After installation, make sure the Docker daemon is running.
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/your-username/iqoqo.git
+   git clone https://github.com/sebastiankruk/iqoqo.git
    cd iqoqo
    ```
 
@@ -202,7 +202,8 @@ After installation, make sure the Docker daemon is running.
    - **Port configuration:** If you have other services running (like other Flask apps or Home Assistant), change the ports to avoid conflicts:
 
      ```text
-     WEB_PORT=8000    # External port for web access (default: 5000)
+     NGINX_PORT=8000  # External gateway port (default: 8000)
+     WEB_PORT=5000    # Flask API port (default: 5000)
      DB_PORT=5433     # External port for database access (default: 5432)
      ```
 
@@ -250,9 +251,9 @@ After installation, make sure the Docker daemon is running.
 
       This URL is used to mint canonical IRIs for all FRBR entities (e.g., `https://your-domain.example.com/works/42`). It also powers the public Linked Data endpoints, SPARQL endpoint, data exports, and Schema.org structured data.
 
-      > **Local Development:** Set `BASE_URL=http://localhost:5000` (or your configured `WEB_PORT`) for local development.
+      > **Local Development:** Set `BASE_URL=http://localhost:8000` (or `http://127.0.0.1:5000` for direct Flask access) during local development.
 
-      See the **[Semantic Web Guide](SEMANTIC_WEB.md)** for full documentation of SPARQL, Linked Data endpoints, and data exports.
+      See the **[Semantic Web Guide](SEMANTIC_WEB.md)** for full documentation of SPARQL, Linked Data endpoints, IRI minting, and data exports.
 
    - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
@@ -260,89 +261,10 @@ After installation, make sure the Docker daemon is running.
 
    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
-### Format Normalization Configuration (`shared/format_mappings.yaml`)
+### Format Normalization & Linked Open Data Configuration
 
-iqoqo uses `shared/format_mappings.yaml` as the git-tracked Single Source of Truth (SSoT) for mapping external API format strings (e.g. `"Mass Market Paperback"`, `"hardcover"`, `"Vinyl LP"`) to canonical `MediaFormat` identifiers:
-
-```yaml
-# shared/format_mappings.yaml mapping structure
-format_normalizations:
-  # Exact string match mappings
-  video: dvd
-  audio: cd
-  hardcover: hardcover
-  paperback: paperback
-
-  # Scoped fallback mappings for NULL values
-  null:
-    movie: dvd
-    music: cd
-    text: book
-```
-
-Run `make fix-physical-kinds` (`--audit`, `--interactive`, `--dry-run`, `--apply`) to inspect and normalize stored physical item formats.
-
-## Linked Open Data Configuration
-
-iqoqo v0.8.0 introduces a Semantic Web layer that makes your collection queryable via SPARQL and accessible as Linked Data. The following environment variables control this behavior:
-
-| Variable          | Default              | Description                                                  |
-| ----------------- | -------------------- | ------------------------------------------------------------ |
-| `BASE_URL`        | `https://iqoqo.cc`   | Canonical base URL for IRI minting and Linked Data endpoints |
-
-### IRI Minting
-
-Every FRBR entity receives a canonical IRI based on `BASE_URL`:
-
-```text
-{BASE_URL}/works/{id}            → https://iqoqo.cc/works/42
-{BASE_URL}/expressions/{id}      → https://iqoqo.cc/expressions/17
-{BASE_URL}/manifestations/{id}   → https://iqoqo.cc/manifestations/99
-{BASE_URL}/items/{id}            → https://iqoqo.cc/items/256
-```
-
-### Examples
-
-**Production deployment:**
-
-```bash
-# .env
-BASE_URL=https://iqoqo.cc
-```
-
-**Local development:**
-
-```bash
-# .env
-BASE_URL=http://localhost:5000
-```
-
-**Custom domain:**
-
-```bash
-# .env
-BASE_URL=https://library.example.com
-```
-
-### Verification
-
-After starting iqoqo, verify the Semantic Web layer is working:
-
-```bash
-# Test public Linked Data endpoint (no auth required)
-curl -H "Accept: application/ld+json" http://localhost:8000/api/public/works/1
-
-# Test SPARQL endpoint (auth required)
-curl -G "http://localhost:8000/api/sparql" \
-  --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 1" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-# Test data export (auth required)
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  "http://localhost:8000/api/items/export?format=turtle"
-```
-
-See the **[Semantic Web Guide](SEMANTIC_WEB.md)** for comprehensive documentation.
+- **Carrier formats (`shared/format_mappings.yaml`):** Maps external API format strings (for example `"Mass Market Paperback"`, `"audio"`, `"video"`) to canonical `MediaFormat` identifiers. See [Fixing Non-Canonical Format Values](#fixing-non-canonical-format-values) below.
+- **Linked Open Data (`BASE_URL`):** Mints canonical IRIs (`{BASE_URL}/works/{id}`, `/expressions/{id}`, `/manifestations/{id}`, `/items/{id}`; default `https://iqoqo.cc`). Verify public JSON-LD with `curl -H "Accept: application/ld+json" http://localhost:8000/api/public/works/1`; see **[Semantic Web Guide](SEMANTIC_WEB.md)** for full examples and SPARQL usage.
 
 ## Environment Variable Hierarchy
 
@@ -351,8 +273,7 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 ### Backend (Flask & Celery)
 
 | File | Loaded By | Purpose |
-
-| :------------- | :-------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| :--- | :--- | :--- |
 | **`.env`** | Global | **Primary source of truth.** Contains shared defaults for DB names, API keys, and production service names (e.g., `REDIS_URL=redis://redis`). |
 | **`.env.dev`** | `run.sh` | **Local Overrides.** Only loaded during `./run.sh dev`. Use this to override container hostnames with `localhost` or change ports for local processes. |
 
@@ -384,13 +305,9 @@ Full annotated reference: `.env.example`.
 | `IQOQO_KNOWN_JUNK_PHASHES` | unset | Perceptual hashes of placeholder covers to avoid re-fetching. Verify with `scripts/phash_cover.py --check`. |
 | `E2E_RESET_SECRET` | unset | Shared secret for `X-E2E-Reset-Secret` on the lending test-reset endpoint. When unset, that endpoint refuses every request rather than failing open. |
 
-### Remote Storage (v0.8.2)
+### Remote Storage (Backups & Cold Archive)
 
-`S3_BACKEND` selects `auto` (default), `rclone` or `s3`. The containers stopped
-shelling out to rclone and no longer mount `rclone.conf`; host-side backup
-scripts still use your existing rclone install. `RCLONE_REMOTE_ARCHIVE` is
-deprecated in favour of `S3_BUCKET_BACKUP`. Full variable list and provider
-support: `docs/BACKUPS.md`.
+`S3_BACKEND` selects `auto` (default), `rclone`, or `s3` (native boto3 `S3Service` without container `rclone.conf` mounts). `RCLONE_REMOTE_ARCHIVE` is deprecated in favor of `S3_BUCKET_BACKUP` and `S3_BUCKET_ARCHIVE` (`S3_ARCHIVE_PREFIX`, `S3_ARCHIVE_STORAGE_CLASS`). Full variable list and provider support: [BACKUPS.md](BACKUPS.md).
 
 ## Database Setup
 
@@ -456,7 +373,8 @@ Use this option to run both the Flask application and PostgreSQL database in con
    DATABASE_URL="postgresql://iqoqo:your_password@db:5432/iqoqo"
 
    # Set external ports (change if you have other services running)
-   WEB_PORT=8000    # or 5000 if available
+   NGINX_PORT=8000  # External Nginx gateway port
+   WEB_PORT=5000    # Internal/direct Flask API port
    DB_PORT=5433     # or 5432 if available
 
    # Use production settings
@@ -612,176 +530,11 @@ a matching `downgrade()` function so the migration can be rolled back.
 
 ### Data Import/Export
 
-iqoqo provides comprehensive data management capabilities through both CLI scripts and API endpoints.
+iqoqo supports portable JSON and Linked Open Data (`JSON-LD` / `Turtle`) collection exports alongside bulk admin imports:
 
-#### Export Data Format
-
-The iqoqo export format is a JSON file with the following structure:
-
-```json
-{
-  "version": "1.0",
-  "exported_at": "2026-01-29T10:30:00.000000",
-  "works": [
-    {
-      "id": 1,
-      "title": "The Hobbit",
-      "meta": {
-        "authors": ["J.R.R. Tolkien"],
-        "categories": ["Fantasy", "Adventure"]
-      }
-    }
-  ],
-  "expressions": [
-    {
-      "id": 1,
-      "work_id": 1,
-      "content_type": "text",
-      "language": "en",
-      "meta": {
-        "description": "A fantasy adventure novel..."
-      }
-    }
-  ],
-  "manifestations": [
-    {
-      "id": 1,
-      "expression_id": 1,
-      "isbn13": "9780048230706",
-      "upc": null,
-      "ean": null,
-      "publisher": "Allen & Unwin",
-      "publication_date": "1937-09-21",
-      "meta": {
-        "imageLinks": {},
-        "pageCount": 310
-      }
-    }
-  ],
-  "items": [
-    {
-      "id": 1,
-      "manifestation_id": 1,
-      "owner_id": "user123",
-      "status": "available",
-      "condition": "good",
-      "added_at": "2026-01-15T14:22:00.000000",
-      "meta": {
-        "location": "Shelf A",
-        "notes": "First edition"
-      }
-    }
-  ]
-}
-```
-
-#### Exporting Data
-
-**Via API:**
-
-```bash
-# Export all data
-curl -o iqoqo_export.json http://localhost:5000/api/admin/export
-
-# Get database statistics
-curl http://localhost:5000/api/admin/stats
-```
-
-**Via Python:**
-
-```python
-from app import create_app
-from app.core.data_manager import DataManager
-
-app = create_app()
-with app.app_context():
-    # Export to file
-    DataManager.export_to_file('backup.json')
-
-    # Or get as dictionary
-    data = DataManager.export_all()
-```
-
-#### Importing Data
-
-**Via API:**
-
-```bash
-# Import data (merge with existing)
-curl -X POST -H "Content-Type: application/json" \
-     -d @iqoqo_export.json \
-     http://localhost:5000/api/admin/import
-
-# Import and clear existing data first
-curl -X POST -H "Content-Type: application/json" \
-     -d @iqoqo_export.json \
-     "http://localhost:5000/api/admin/import?clear_existing=true"
-
-# Import via file upload
-curl -X POST -F "file=@iqoqo_export.json" \
-     http://localhost:5000/api/admin/import
-```
-
-**Via Python:**
-
-```python
-from app import create_app
-from app.core.data_manager import DataManager
-
-app = create_app()
-with app.app_context():
-    # Import from file
-    counts = DataManager.import_from_file('backup.json')
-    print(f"Imported: {counts}")
-
-    # Import from dictionary
-    data = {...}
-    counts = DataManager.import_data(data, clear_existing=False)
-```
-
-#### Migrating from Legacy iqoqo-prototype
-
-If you're migrating from the original iqoqo-prototype, follow these steps:
-
-1. **Export data from your legacy database:**
-
-   If you have a SQL dump file:
-
-   ```bash
-   python scripts/sql_to_json.py legacy_dump.sql legacy_data.json
-   ```
-
-2. **Migrate the data to FRBR format:**
-
-   ```bash
-   python scripts/migrate_legacy.py legacy_data.json --clear
-   ```
-
-   The `--clear` flag will remove any existing data before migration.
-
-The migration script automatically:
-
-- Creates Works from book titles (deduplicating by title)
-- Creates Expressions for each language/content type
-- Converts Manifestations to the new schema
-- Maps Items to their new Manifestations
-- Preserves all metadata in the `meta` JSON fields
-
-#### Admin API Endpoints
-
-The following endpoints are available for data management:
-
-- `GET /api/admin/stats` - Get database statistics
-- `GET /api/admin/export` - Download full database export as JSON
-- `POST /api/admin/import` - Import data from JSON (body or file upload)
-  - Query param: `clear_existing=true` to clear before import
-- `DELETE /api/admin/clear` - Clear all data (requires `{"confirm": true}` in body)
-
-**Security Note:** In a production environment, these admin endpoints should be protected with authentication and authorization. Consider implementing API keys or OAuth for access control.
-
-#### Artefact (Cover) Management
-
-For exporting and importing covers/images (artefacts) between instances, see the **[Cover Generation & Retrieval Setup](COVERS_SETUP.md#6-importing-covers-to-a-remote-iqoqo-instance)** guide.
+- **CLI / Makefile:** Run `make db-export` (writes `exports/backup.json`) or seed/import on startup with `python scripts/init_db.py --seed-file path/to/data.json`.
+- **Legacy `iqoqo-prototype` migration:** Convert SQL dumps with `python scripts/sql_to_json.py legacy_dump.sql legacy_data.json` and import FRBR entities via `python scripts/migrate_legacy.py legacy_data.json --clear`.
+- **API Endpoints:** Authenticated users export via `GET /api/items/export?format=json-ld|turtle|json`; admins use `GET /api/admin/stats`, `GET /api/admin/export`, `POST /api/admin/import` (`?clear_existing=true`), and `DELETE /api/admin/clear` (`{"confirm": true}`). See **[API Reference](API.md)** and **[Semantic Web Guide](SEMANTIC_WEB.md)** for full request/response contracts, and **[Cover Setup](COVERS_SETUP.md#6-importing-covers-to-a-remote-iqoqo-instance)** for syncing cover art artefacts.
 
 ### Troubleshooting
 
@@ -815,12 +568,12 @@ For exporting and importing covers/images (artefacts) between instances, see the
   ```
 
 - **Port conflicts**: If you see "port already in use" errors:
-  - Check what's using the port: `sudo lsof -i :5432` (database) or `sudo lsof -i :5000` (default `WEB_PORT`, or your configured port, e.g., `:5001`)
-  - Change `WEB_PORT` and/or `DB_PORT` in your `.env` file
-  - `./run.sh dev` automatically kills stale processes on `WEB_PORT` and `3000` at startup
+  - Check what's using the port: `sudo lsof -i :5432` (PostgreSQL), `sudo lsof -i :8000` (`NGINX_PORT`), or `sudo lsof -i :5000` (`WEB_PORT`, or e.g. `:5001`)
+  - Change `NGINX_PORT`, `WEB_PORT`, and/or `DB_PORT` in your `.env` file
+  - `./run.sh dev` automatically cleans stale dev processes on `WEB_PORT` and `3000` at startup
   - Restart the services: `docker compose down && docker compose up -d`
 
-- **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver service binds to port 5000 (the default `WEB_PORT` when not overridden) on macOS Monterey and later. Set `WEB_PORT=5001` (or any other free port) in your `.env` to move Flask off port 5000:
+- **macOS AirPlay Receiver occupies port 5000**: Apple's AirPlay Receiver binds to port 5000 (`WEB_PORT` default for local Flask dev) on macOS Monterey and later. Set `WEB_PORT=5001` in `.env` (and `.env.dev` if used) to move Flask off port 5000:
 
   ```bash
   echo "WEB_PORT=5001" >> .env
@@ -842,7 +595,13 @@ For exporting and importing covers/images (artefacts) between instances, see the
   docker compose logs db
   ```
 
-- **Database initialization fails**: Make sure the database container is fully started before running migrations:
+- **Database initialization fails**: Make sure the database container is healthy before running migrations:
+
+  ```bash
+  docker compose up -d db
+  sleep 5
+  docker compose exec web flask db upgrade
+  ```
 
 #### Frontend Issues
 
@@ -867,58 +626,30 @@ For exporting and importing covers/images (artefacts) between instances, see the
   Also verify `frontend/.env.local` points to the actual Flask port:
 
   ```bash
-  NEXT_PUBLIC_API_URL=http://localhost:5001/api   # match WEB_PORT in .env
+  NEXT_PUBLIC_API_URL=http://localhost:5000/api   # match WEB_PORT in .env
   ```
 
   After editing, clear the Next.js cache and restart: `rm -rf frontend/.next && ./run.sh dev`
-
-  ```bash
-  # Wait for database to be ready
-  docker compose up -d db
-  sleep 5
-  docker compose exec web flask db upgrade
-  ```
 
 ## Running the Application
 
 ### Development Mode (Local)
 
-To run the Flask development server:
+Start PostgreSQL, Flask API, and Next.js frontend together:
 
 ```bash
-# Make sure the database is running
 docker compose up -d db
-
-# Run the development server using the project's virtual environment
-.venv/bin/flask run
+./run.sh dev
 ```
 
-**Alternative:** Activate the virtual environment first, then run Flask:
+Or launch Flask manually after activating `.venv`:
 
 ```bash
 source .venv/bin/activate
 flask run
 ```
 
-The application will be available at `http://localhost:5000`.
-
-To run the Flask development server:
-
-```bash
-# Make sure the database is running
-docker compose up -d db
-
-# Run the development server
-./run.sh dev
-```
-
-**Manual start:**
-
-```bash
-flask run
-```
-
-The application will be available at `http://localhost:5000`.
+The frontend runs on `http://localhost:3000` and the Flask API on `http://127.0.0.1:5000` (or configured `WEB_PORT`).
 
 ### Production Mode (Docker)
 
@@ -928,7 +659,7 @@ For production deployments, use Docker Compose to run the full stack. See [Optio
 docker compose up -d
 ```
 
-Access the application at `http://localhost:{WEB_PORT}` (default: 5000, or 8000 if you changed it in `.env`).
+Access the application via Nginx at `http://localhost:${NGINX_PORT:-8000}`.
 
 ## Data Curation
 
@@ -1056,12 +787,11 @@ checks (including Pylint) and YAML validation without changing the CI baseline.
 - See **[SEMANTIC_WEB.md](SEMANTIC_WEB.md)** for SPARQL, Linked Data, and data export documentation.
 - See **[API.md](API.md)** for complete API reference documentation.
 - See **[OPERATIONS.md](OPERATIONS.md)** for FRBR ETL and ontology sync operations.
-- See **[UPGRADE_0.8.0.md](UPGRADE_0.8.0.md)** for v0.8.0 migration instructions.
 - See **[COVERS_SETUP.md](COVERS_SETUP.md)** for advanced cover art and vision configuration.
-- See **[UPGRADE_POSTGRES_18.md](UPGRADE_POSTGRES_18.md)** for PostgreSQL 16 → 18 migration instructions.
+- See **[archive/UPGRADE_0.8.0.md](archive/UPGRADE_0.8.0.md)** and **[archive/UPGRADE_POSTGRES_18.md](archive/UPGRADE_POSTGRES_18.md)** for historical migration notes.
 - Check **[docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)** for the FRBR ontology structure.
 
-The application will be available at `http://127.0.0.1:5000`.
+In full Docker deployments, access iqoqo through Nginx at `http://localhost:8000` (in local `./run.sh dev`, frontend runs at `http://localhost:3000` and API at `http://127.0.0.1:5000`).
 
 ## Running Tests
 

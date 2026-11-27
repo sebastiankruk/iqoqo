@@ -2,6 +2,8 @@
 
 ## Overview
 
+> **See also:** [Cover Generation & Retrieval Setup](COVERS_SETUP.md) for the end-to-end 7-tier cover waterfall, Vision/OCR extraction, `ManifestationCoversGallery` uploads, and remote cover transfer (`make fix-ai-covers` repairs unwatermarked/legacy AI cover flags).
+
 The `scripts/generate_ai_covers.py` script automates the generation of media covers for manifestations using local (Ollama) or cloud (OpenAI, Gemini) LLMs and applies corner watermarks to the generated covers to indicate their AI origin.
 
 ## Architecture & FRBR Alignment
@@ -40,3 +42,4 @@ Quick reference for common automation tasks:
 - `make generate-covers`: Run AI cover generation batch for unwatermarked items.
 - `make generate-covers-dry`: Dry-run AI cover generation batch.
 - `make watermark-covers`: Apply watermarks to existing AI covers without regenerating.
+- `make fix-ai-covers`: Audit and reconcile AI cover metadata and watermarks.

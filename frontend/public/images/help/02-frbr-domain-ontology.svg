@@ -15,369 +15,390 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp2-title bp2-desc">
-            <title id="bp2-title">iqoqo v1.1.2 — FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions (Blueprint 2)</title>
-            <desc id="bp2-desc">Conceptual ER and domain class diagram for iqoqo v1.1.2 showing the WEMI backbone (Work, Expression, Manifestation, Item), F15/F16/F18 extensions, FRBRoo contribution events, UserWorkIntent, SemanticLink, and Work-level reading rollups.</desc>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later | iqoqo v1.2.0 Architecture Blueprint -->
+<svg id="svg-bp2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp2-title bp2-desc">
+            <title id="bp2-title">02 · FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions — iqoqo v1.2.0</title>
+            <desc id="bp2-desc">Domain class and conceptual ER diagram for iqoqo v1.2.0 showing the WEMI 4-tier backbone, WorkRelation/WorkLinkCandidate cross-media linking, F18 Serials, F16 Containers, F15 Expansion SHACL guard, ImageScan gallery, physical_location, and reading rollups.</desc>
             <style>
-              .canvas-bg { fill: #FDFBF7; }
-              .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 22px; font-weight: 700; fill: #2B3D4F; }
-              .subtitle-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 500; fill: #5A6B7C; }
-              .header-pill-bg { fill: #EFE9DD; stroke: #D8CFC0; stroke-width: 1; }
-              .header-pill-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 600; fill: #2B3D4F; }
+              .bg { fill: #FDFBF7; }
+              .title { font-family: Georgia, 'Merriweather', serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
+              .sub { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.2px; font-weight: 500; fill: #5A6776; }
+              .ver-pill { fill: #2B3D4F; }
+              .ver-pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 11px; font-weight: 700; fill: #FDFBF7; }
+              .ver-dot { fill: #D15400; }
 
-              .zone-box { stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-core { fill: #F3F5F8; stroke: #8FA3B8; }
-              .zone-ext { fill: #F4EFE6; stroke: #C9BFA9; }
-              .zone-events { fill: #EDF5F4; stroke: #85B5B0; }
-              .zone-badge-bg { fill: #2B3D4F; }
-              .zone-badge-clay { fill: #D15400; }
-              .zone-badge-teal { fill: #0F766E; }
-              .zone-badge-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.5px; font-weight: 600; fill: #FFFFFF; }
-              .zone-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-              .zone-meta { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #64748B; }
+              .zone { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-indigo { fill: #F1F4F7; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-teal { fill: #EFF8F6; stroke: #76B3AC; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
+              .zone-meta { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #5A6776; }
 
-              .card-bg { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.25; }
-              .card-core { fill: #FFFFFF; stroke: #8FA3B8; stroke-width: 1.6; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.8; }
-              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.5; }
-              .card-sub { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1.1; }
+              .card { fill: #FFFDF9; stroke: #E6DFD3; stroke-width: 1.5; }
+              .card-indigo { fill: #FFFDF9; stroke: #2B3D4F; stroke-width: 1.7; }
+              .card-clay { fill: #FFFDF9; stroke: #D15400; stroke-width: 1.8; }
+              .card-teal { fill: #FFFDF9; stroke: #0F766E; stroke-width: 1.6; }
+              .card-sub { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1; }
+              .card-shacl { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 1.4; stroke-dasharray: 4 3; }
 
-              .node-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; fill: #1E293B; }
-              .node-subtitle { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; fill: #2B3D4F; }
-              .node-body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.2px; font-weight: 400; fill: #475569; }
-              .node-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 500; fill: #2B3D4F; }
-              .node-clay { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 600; fill: #B84700; }
-              .node-teal { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 600; fill: #0F766E; }
+              .b-indigo { fill: #2B3D4F; }
+              .b-clay { fill: #D15400; }
+              .b-teal { fill: #0F766E; }
+              .b-crimson { fill: #B91C1C; }
+              .b-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.8px; font-weight: 700; fill: #FFFFFF; }
 
-              .pill-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-              .pill-indigo-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.8px; font-weight: 600; fill: #2B3D4F; }
-              .pill-clay { fill: #FFF1E6; stroke: #F5B88E; stroke-width: 1; }
-              .pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
-              .pill-teal { fill: #EDF8F6; stroke: #85B5B0; stroke-width: 1; }
-              .pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #0F766E; }
+              .c-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.8px; font-weight: 700; fill: #2B3D4F; }
+              .c-sub { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11.2px; font-weight: 700; fill: #2B3D4F; }
+              .c-body { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.4px; font-weight: 400; fill: #475569; }
+              .c-mono { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 500; fill: #2B3D4F; }
+              .c-clay { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #D15400; }
+              .c-teal { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #0F766E; }
+              .c-crimson { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #B91C1C; }
 
-              .edge-wemi { fill: none; stroke: #2B3D4F; stroke-width: 2.4; stroke-linejoin: round; }
-              .edge-ext { fill: none; stroke: #D15400; stroke-width: 1.8; stroke-linejoin: round; }
-              .edge-event { fill: none; stroke: #0F766E; stroke-width: 1.8; stroke-linejoin: round; }
-              .edge-dashed { fill: none; stroke: #0F766E; stroke-width: 1.6; stroke-dasharray: 5 4; stroke-linejoin: round; }
-              .edge-guard { fill: none; stroke: #D15400; stroke-width: 1.6; stroke-dasharray: 4 3; stroke-linejoin: round; }
+              .pill { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #2B3D4F; }
+              .pill-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-clay-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #B84700; }
+              .pill-teal { fill: #EFF8F6; stroke: #76B3AC; stroke-width: 1; }
+              .pill-teal-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #0F766E; }
 
-              .mk-wemi { fill: #2B3D4F; }
-              .mk-ext { fill: #D15400; }
-              .mk-event { fill: #0F766E; }
+              .edge-w { fill: none; stroke: #2B3D4F; stroke-width: 2.3; stroke-linejoin: round; }
+              .edge-c { fill: none; stroke: #D15400; stroke-width: 1.9; stroke-linejoin: round; }
+              .edge-cd { fill: none; stroke: #D15400; stroke-width: 1.6; stroke-dasharray: 4 3; stroke-linejoin: round; }
+              .edge-t { fill: none; stroke: #0F766E; stroke-width: 1.8; stroke-linejoin: round; }
+              .edge-td { fill: none; stroke: #0F766E; stroke-width: 1.6; stroke-dasharray: 5 4; stroke-linejoin: round; }
 
-              .edge-pill-bg { fill: #FDFBF7; stroke: #CBD5E1; stroke-width: 1; }
-              .edge-pill-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #2B3D4F; }
-              .edge-pill-clay { fill: #FFF4EC; stroke: #E5A073; stroke-width: 1; }
-              .edge-pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
-              .edge-pill-teal { fill: #EDF8F6; stroke: #85B5B0; stroke-width: 1; }
-              .edge-pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #0F766E; }
+              .mk-w { fill: #2B3D4F; }
+              .mk-c { fill: #D15400; }
+              .mk-t { fill: #0F766E; }
 
-              .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
-              .legend-heading { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
-              .legend-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #334155; }
+              .ep { fill: #FDFBF7; stroke: #CBC3B7; stroke-width: 1; }
+              .ep-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #2B3D4F; }
+              .ep-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
+              .ep-c-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #B84700; }
+              .ep-t { fill: #EFF8F6; stroke: #0F766E; stroke-width: 1; }
+              .ep-t-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #0F766E; }
+
+              .legend-bg { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1.4; }
+              .legend-h { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-t { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
             </style>
             <defs>
               <pattern id="b2-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
+                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD3" stroke-width="0.6" opacity="0.5"/>
               </pattern>
-              <filter id="b2-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+              <filter id="b2-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b2-mk-wemi" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-wemi"/>
-              </marker>
-              <marker id="b2-mk-ext" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-ext"/>
-              </marker>
-              <marker id="b2-mk-event" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-event"/>
-              </marker>
+              <marker id="b2-mk-w" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-w"/></marker>
+              <marker id="b2-mk-c" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-c"/></marker>
+              <marker id="b2-mk-t" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-t"/></marker>
             </defs>
 
             <!-- Background -->
-            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
-            <rect x="0" y="0" width="1440" height="980" fill="url(#b2-grid)"/>
+            <rect x="0" y="0" width="1440" height="940" class="bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b2-grid)"/>
 
             <!-- Header -->
-            <text x="32" y="38" class="title-text">iqoqo v1.1.2 — FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions</text>
-            <text x="32" y="60" class="subtitle-text">Blueprint 2 of 12  •  WEMI Core Backbone, Complex Works (F15/F16/F18), Events &amp; Linked Open Data</text>
-            <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
-            <text x="1280" y="39" text-anchor="middle" class="header-pill-text">Domain Class / Conceptual ER</text>
+            <text x="32" y="34" class="title">02 · FRBR &amp; FRBRoo Four-Tier Ontology &amp; Domain Extensions</text>
+            <text x="32" y="55" class="sub">Blueprint 2 of 12  •  WEMI Core Backbone, Cross-Media WorkRelation (v1.2.0), F15/F16/F18 Extensions &amp; Physical Location</text>
+            <rect x="1256" y="16" width="152" height="32" rx="16" class="ver-pill"/>
+            <circle cx="1276" cy="32" r="4" class="ver-dot"/>
+            <text x="1338" y="36" text-anchor="middle" class="ver-pill-txt">iqoqo v1.2.0</text>
 
             <!-- Zones -->
-            <rect x="32" y="84" width="352" height="820" rx="14" class="zone-box zone-ext"/>
-            <rect x="46" y="96" width="38" height="20" rx="5" class="zone-badge-clay"/>
-            <text x="65" y="110" text-anchor="middle" class="zone-badge-text">EXT</text>
-            <text x="92" y="110" class="zone-title">DOMAIN EXTENSIONS &amp; LOD</text>
+            <rect x="32" y="74" width="364" height="798" rx="14" class="zone"/>
+            <rect x="46" y="85" width="36" height="18" rx="4" class="b-clay"/>
+            <text x="64" y="98" text-anchor="middle" class="b-txt">EXT</text>
+            <text x="90" y="98" class="zone-title">COMPLEX WORKS &amp; RELATIONS</text>
 
-            <rect x="424" y="84" width="528" height="820" rx="16" class="zone-box zone-core"/>
-            <rect x="440" y="96" width="46" height="20" rx="5" class="zone-badge-bg"/>
-            <text x="463" y="110" text-anchor="middle" class="zone-badge-text">WEMI</text>
-            <text x="494" y="110" class="zone-title">CORE FRBR / FRBRoo BACKBONE</text>
-            <text x="936" y="110" text-anchor="end" class="zone-meta">4-TIER STRICT HIERARCHY</text>
+            <rect x="436" y="74" width="516" height="798" rx="14" class="zone-indigo"/>
+            <rect x="450" y="85" width="44" height="18" rx="4" class="b-indigo"/>
+            <text x="472" y="98" text-anchor="middle" class="b-txt">WEMI</text>
+            <text x="502" y="98" class="zone-title">CORE FRBR / FRBRoo BACKBONE</text>
+            <text x="938" y="98" text-anchor="end" class="zone-meta">4-TIER STRICT HIERARCHY</text>
 
-            <rect x="992" y="84" width="416" height="820" rx="14" class="zone-box zone-events"/>
-            <rect x="1008" y="96" width="46" height="20" rx="5" class="zone-badge-teal"/>
-            <text x="1031" y="110" text-anchor="middle" class="zone-badge-text">EVNT</text>
-            <text x="1062" y="110" class="zone-title">EVENTS, INTENTS &amp; ROLLUPS</text>
+            <rect x="992" y="74" width="416" height="798" rx="14" class="zone-teal"/>
+            <rect x="1006" y="85" width="44" height="18" rx="4" class="b-teal"/>
+            <text x="1028" y="98" text-anchor="middle" class="b-txt">EVNT</text>
+            <text x="1058" y="98" class="zone-title">EVENTS, LOD, INTENTS &amp; ROLLUP</text>
 
             <!-- ==================== DIRECTED EDGES ==================== -->
-            <!-- Core WEMI Vertical Spine -->
-            <path d="M 688 274 L 688 318" class="edge-wemi" marker-end="url(#b2-mk-wemi)"/>
-            <rect x="598" y="285" width="180" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="688" y="298" text-anchor="middle" class="edge-pill-text">1 : N  •  frbr:expressionOf</text>
+            <!-- Core WEMI Spine -->
+            <path d="M 694 252 L 694 292" class="edge-w" marker-end="url(#b2-mk-w)"/>
+            <rect x="606" y="262" width="176" height="19" rx="4" class="ep"/>
+            <text x="694" y="275" text-anchor="middle" class="ep-txt">1 : N  •  frbr:expressionOf</text>
 
-            <path d="M 688 452 L 688 496" class="edge-wemi" marker-end="url(#b2-mk-wemi)"/>
-            <rect x="596" y="463" width="184" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="688" y="476" text-anchor="middle" class="edge-pill-text">1 : N  •  frbr:embodimentOf</text>
+            <path d="M 694 416 L 694 456" class="edge-w" marker-end="url(#b2-mk-w)"/>
+            <rect x="604" y="426" width="180" height="19" rx="4" class="ep"/>
+            <text x="694" y="439" text-anchor="middle" class="ep-txt">1 : N  •  frbr:embodimentOf</text>
 
-            <path d="M 688 666 L 688 710" class="edge-wemi" marker-end="url(#b2-mk-wemi)"/>
-            <rect x="602" y="677" width="172" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="688" y="690" text-anchor="middle" class="edge-pill-text">1 : N  •  frbr:exemplarOf</text>
+            <path d="M 694 636 L 694 676" class="edge-w" marker-end="url(#b2-mk-w)"/>
+            <rect x="610" y="646" width="168" height="19" rx="4" class="ep"/>
+            <text x="694" y="659" text-anchor="middle" class="ep-txt">1 : N  •  frbr:exemplarOf</text>
 
             <!-- Left Extensions -> WEMI -->
-            <!-- F18 Serial -> F1 Work & F3 Manifestation -->
-            <path d="M 368 176 L 442 176" class="edge-ext" marker-end="url(#b2-mk-ext)"/>
-            <path d="M 368 220 L 404 220 L 404 532 L 442 532" class="edge-guard" marker-end="url(#b2-mk-ext)"/>
+            <!-- WorkRelation -> F1 Work -->
+            <path d="M 382 174 L 450 174" class="edge-c" marker-end="url(#b2-mk-c)"/>
+            <rect x="386" y="152" width="58" height="17" rx="4" class="ep-c"/>
+            <text x="415" y="164" text-anchor="middle" class="ep-c-txt">W ↔ W</text>
 
-            <!-- F15 Complex / Series -> F1 Work -->
-            <path d="M 368 336 L 394 336 L 394 216 L 442 216" class="edge-ext" marker-end="url(#b2-mk-ext)"/>
+            <!-- F18 Serial -> F1 Work & F3 Manifestation -->
+            <path d="M 382 308 L 414 308 L 414 210 L 450 210" class="edge-c" marker-end="url(#b2-mk-c)"/>
+            <path d="M 382 346 L 422 346 L 422 504 L 450 504" class="edge-cd" marker-end="url(#b2-mk-c)"/>
 
             <!-- F16 Container -> F1 Work & F5 Item -->
-            <path d="M 368 498 L 404 498 L 404 244 L 442 244" class="edge-ext" marker-end="url(#b2-mk-ext)"/>
-            <path d="M 368 548 L 396 548 L 396 764 L 442 764" class="edge-guard" marker-end="url(#b2-mk-ext)"/>
+            <path d="M 382 442 L 406 442 L 406 232 L 450 232" class="edge-c" marker-end="url(#b2-mk-c)"/>
+            <path d="M 382 486 L 414 486 L 414 726 L 450 726" class="edge-cd" marker-end="url(#b2-mk-c)"/>
 
-            <!-- MapAttachment -> F3 Manifestation & F5 Item -->
-            <path d="M 368 656 L 412 656 L 412 624 L 442 624" class="edge-event" marker-end="url(#b2-mk-event)"/>
-            <path d="M 368 696 L 412 696 L 412 802 L 442 802" class="edge-dashed" marker-end="url(#b2-mk-event)"/>
+            <!-- F15 Expansion -> F1 Work -->
+            <path d="M 382 572 L 400 572 L 400 244 L 450 244" class="edge-c" marker-end="url(#b2-mk-c)"/>
 
-            <!-- SemanticLink -> Polymorphic WEMI -->
-            <path d="M 368 830 L 442 830" class="edge-dashed" marker-end="url(#b2-mk-event)"/>
-            <rect x="372" y="810" width="66" height="17" rx="4" class="edge-pill-teal"/>
-            <text x="405" y="822" text-anchor="middle" class="edge-pill-teal-text">owl:sameAs</text>
+            <!-- WorkPart / Series -> F1 Work -->
+            <path d="M 382 782 L 428 782 L 428 192 L 450 192" class="edge-t" marker-end="url(#b2-mk-t)"/>
 
-            <!-- Right Events / Intents / Rollup -> WEMI -->
-            <!-- WorkContribution -> F1 Work -->
-            <path d="M 1018 224 L 934 224" class="edge-event" marker-end="url(#b2-mk-event)"/>
-            <!-- ExpressionContribution -> F2 Expression -->
-            <path d="M 1018 308 L 972 308 L 972 382 L 934 382" class="edge-event" marker-end="url(#b2-mk-event)"/>
-            <!-- ManifestationContribution -> F3 Manifestation -->
-            <path d="M 1018 392 L 964 392 L 964 544 L 934 544" class="edge-event" marker-end="url(#b2-mk-event)"/>
+            <!-- Right Extensions -> WEMI -->
+            <!-- Contributions -> F1, F2, F3 -->
+            <path d="M 1006 184 L 938 184" class="edge-t" marker-end="url(#b2-mk-t)"/>
+            <path d="M 1006 244 L 972 244 L 972 356 L 938 356" class="edge-t" marker-end="url(#b2-mk-t)"/>
+            <path d="M 1006 298 L 964 298 L 964 494 L 938 494" class="edge-t" marker-end="url(#b2-mk-t)"/>
 
-            <!-- UserWorkIntent -> F1 Work & F3 Manifestation -->
-            <path d="M 1008 522 L 976 522 L 976 254 L 934 254" class="edge-ext" marker-end="url(#b2-mk-ext)"/>
-            <path d="M 1008 578 L 934 578" class="edge-guard" marker-end="url(#b2-mk-ext)"/>
-            <rect x="942" y="556" width="60" height="17" rx="4" class="edge-pill-clay"/>
-            <text x="972" y="568" text-anchor="middle" class="edge-pill-clay-text">Optional</text>
+            <!-- MapAttachment -> F3 & F5 -->
+            <path d="M 1006 376 L 958 376 L 958 552 L 938 552" class="edge-t" marker-end="url(#b2-mk-t)"/>
+            <path d="M 1006 426 L 966 426 L 966 720 L 938 720" class="edge-td" marker-end="url(#b2-mk-t)"/>
 
-            <!-- Reading Rollup -> F5 Item -> F1 Work -->
-            <path d="M 1008 784 L 934 784" class="edge-dashed" marker-end="url(#b2-mk-event)"/>
-            <rect x="942" y="762" width="60" height="17" rx="4" class="edge-pill-teal"/>
-            <text x="972" y="774" text-anchor="middle" class="edge-pill-teal-text">GROUP BY</text>
+            <!-- SemanticLink -> Polymorphic -->
+            <path d="M 1006 534 L 938 534" class="edge-td" marker-end="url(#b2-mk-t)"/>
+            <rect x="942" y="513" width="60" height="17" rx="4" class="ep-t"/>
+            <text x="972" y="525" text-anchor="middle" class="ep-t-txt">sameAs</text>
 
-            <!-- ==================== CENTER: CORE WEMI NODES ==================== -->
+            <!-- UserWorkIntent -> F1 & F3 -->
+            <path d="M 1006 640 L 980 640 L 980 220 L 938 220" class="edge-c" marker-end="url(#b2-mk-c)"/>
+            <path d="M 1006 672 L 952 672 L 952 604 L 938 604" class="edge-cd" marker-end="url(#b2-mk-c)"/>
+
+            <!-- Reading Rollup -> F5 -> F1 -->
+            <path d="M 1006 798 L 938 798" class="edge-td" marker-end="url(#b2-mk-t)"/>
+            <rect x="942" y="777" width="60" height="17" rx="4" class="ep-t"/>
+            <text x="972" y="789" text-anchor="middle" class="ep-t-txt">GROUP BY</text>
+
+            <!-- ==================== CENTER: WEMI BACKBONE ==================== -->
             <!-- F1 Work -->
-            <g id="bp2-f1">
-              <rect x="444" y="126" width="488" height="148" rx="10" class="card-core" filter="url(#b2-shadow)"/>
-              <rect x="458" y="138" width="32" height="22" rx="5" class="zone-badge-bg"/>
-              <text x="474" y="153" text-anchor="middle" class="zone-badge-text">F1</text>
-              <text x="498" y="154" class="node-title">Work</text>
-              <rect x="668" y="138" width="128" height="20" rx="5" class="pill-indigo"/>
-              <text x="732" y="152" text-anchor="middle" class="pill-indigo-text">efrbroo:F1_Work</text>
-              <rect x="802" y="138" width="116" height="20" rx="5" class="pill-clay"/>
-              <text x="860" y="152" text-anchor="middle" class="pill-clay-text">catalog.works</text>
-              <text x="458" y="180" class="node-mono">IRI: {BASE_URL}/works/{id}</text>
-              <text x="458" y="200" class="node-body">Abstract intellectual/artistic creation shared across all editions &amp; translations.</text>
-              <text x="458" y="220" class="node-body">Columns: title, sort_title, issn, eissn, work_kind (serial | container)</text>
-              <text x="458" y="240" class="node-body">JSONB meta: authors, categories, original_language  •  raw_payload</text>
-              <text x="458" y="260" class="node-teal">GIN FTS: fts_simple / search_vector  •  schema:CreativeWork</text>
+            <g filter="url(#b2-sh)">
+              <rect x="452" y="114" width="484" height="138" rx="10" class="card-indigo"/>
+              <rect x="464" y="125" width="30" height="20" rx="5" class="b-indigo"/>
+              <text x="479" y="139" text-anchor="middle" class="b-txt">F1</text>
+              <text x="502" y="140" class="c-title">Work</text>
+              <rect x="676" y="125" width="124" height="19" rx="5" class="pill"/>
+              <text x="738" y="138" text-anchor="middle" class="pill-txt">efrbroo:F1_Work</text>
+              <rect x="806" y="125" width="118" height="19" rx="5" class="pill-clay"/>
+              <text x="865" y="138" text-anchor="middle" class="pill-clay-txt">catalog.works</text>
+              <text x="464" y="164" class="c-mono">IRI: {BASE_URL}/works/{id}</text>
+              <text x="464" y="184" class="c-body">Abstract intellectual/artistic creation shared across all editions.</text>
+              <text x="464" y="203" class="c-body">Columns: title, sort_title, issn, eissn, work_kind (serial | container)</text>
+              <text x="464" y="222" class="c-body">JSONB meta: authors, categories, original_language  •  fts_simple</text>
+              <text x="464" y="241" class="c-teal">Schema.org: schema:CreativeWork • GIN FTS indexed</text>
             </g>
 
             <!-- F2 Expression -->
-            <g id="bp2-f2">
-              <rect x="444" y="320" width="488" height="132" rx="10" class="card-core" filter="url(#b2-shadow)"/>
-              <rect x="458" y="332" width="32" height="22" rx="5" class="zone-badge-bg"/>
-              <text x="474" y="347" text-anchor="middle" class="zone-badge-text">F2</text>
-              <text x="498" y="348" class="node-title">Expression</text>
-              <rect x="616" y="332" width="154" height="20" rx="5" class="pill-indigo"/>
-              <text x="693" y="346" text-anchor="middle" class="pill-indigo-text">efrbroo:F2_Expression</text>
-              <rect x="776" y="332" width="142" height="20" rx="5" class="pill-clay"/>
-              <text x="847" y="346" text-anchor="middle" class="pill-clay-text">catalog.expressions</text>
-              <text x="458" y="374" class="node-mono">IRI: {BASE_URL}/expressions/{id}</text>
-              <text x="458" y="394" class="node-body">Specific realization: translation, narration, remaster, or performance.</text>
-              <text x="458" y="414" class="node-body">content_type: text | audio | video | board_game | puzzle | lego | serial</text>
-              <text x="458" y="434" class="node-body">Columns: work_id (FK), language (ISO), kind (live_performance | None), meta</text>
+            <g filter="url(#b2-sh)">
+              <rect x="452" y="294" width="484" height="122" rx="10" class="card-indigo"/>
+              <rect x="464" y="305" width="30" height="20" rx="5" class="b-indigo"/>
+              <text x="479" y="319" text-anchor="middle" class="b-txt">F2</text>
+              <text x="502" y="320" class="c-title">Expression</text>
+              <rect x="620" y="305" width="152" height="19" rx="5" class="pill"/>
+              <text x="696" y="318" text-anchor="middle" class="pill-txt">efrbroo:F2_Expression</text>
+              <rect x="778" y="305" width="146" height="19" rx="5" class="pill-clay"/>
+              <text x="851" y="318" text-anchor="middle" class="pill-clay-txt">catalog.expressions</text>
+              <text x="464" y="344" class="c-mono">IRI: {BASE_URL}/expressions/{id}</text>
+              <text x="464" y="364" class="c-body">Specific realization: translation, narration, remaster, or performance.</text>
+              <text x="464" y="383" class="c-body">content_type: text | audio | video | board_game | puzzle | lego | serial</text>
+              <text x="464" y="402" class="c-body">Columns: work_id (FK), language (ISO), kind (live_performance | None)</text>
             </g>
 
             <!-- F3 Manifestation -->
-            <g id="bp2-f3">
-              <rect x="444" y="498" width="488" height="168" rx="10" class="card-core" filter="url(#b2-shadow)"/>
-              <rect x="458" y="510" width="32" height="22" rx="5" class="zone-badge-bg"/>
-              <text x="474" y="525" text-anchor="middle" class="zone-badge-text">F3</text>
-              <text x="498" y="526" class="node-title">Manifestation</text>
-              <rect x="612" y="510" width="142" height="20" rx="5" class="pill-indigo"/>
-              <text x="683" y="524" text-anchor="middle" class="pill-indigo-text">F3_Manifestation</text>
-              <rect x="760" y="510" width="158" height="20" rx="5" class="pill-clay"/>
-              <text x="839" y="524" text-anchor="middle" class="pill-clay-text">catalog.manifestations</text>
-              <text x="458" y="552" class="node-mono">IRI: {BASE_URL}/manifestations/{id}</text>
-              <text x="458" y="572" class="node-body">Published physical/digital embodiment (book edition, vinyl pressing, issue).</text>
-              <text x="458" y="592" class="node-body">IDs: isbn13, ean, upc, barcode, full_barcode, ean_addon</text>
-              <text x="458" y="612" class="node-body">Edition: publisher, format, format_type, cover_url, meta (audio/video/game)</text>
-              <text x="458" y="632" class="node-clay">Serial Issue: issue_number, cumulative_issue_number, volume, year, month</text>
-              <text x="458" y="652" class="node-teal">Schema.org: Book, MusicRelease, PublicationIssue, Movie, Game, Product</text>
+            <g filter="url(#b2-sh)">
+              <rect x="452" y="458" width="484" height="178" rx="10" class="card-indigo"/>
+              <rect x="464" y="469" width="30" height="20" rx="5" class="b-indigo"/>
+              <text x="479" y="483" text-anchor="middle" class="b-txt">F3</text>
+              <text x="502" y="484" class="c-title">Manifestation</text>
+              <rect x="610" y="469" width="148" height="19" rx="5" class="pill"/>
+              <text x="684" y="482" text-anchor="middle" class="pill-txt">F3_Manifestation</text>
+              <rect x="764" y="469" width="160" height="19" rx="5" class="pill-clay"/>
+              <text x="844" y="482" text-anchor="middle" class="pill-clay-txt">catalog.manifestations</text>
+              <text x="464" y="508" class="c-mono">IRI: {BASE_URL}/manifestations/{id}</text>
+              <text x="464" y="527" class="c-body">IDs: isbn13, ean, upc, barcode, full_barcode, ean_addon</text>
+              <text x="464" y="546" class="c-clay">format (v1.2.0: incl. vcd, cd_dvd_combo) • issue/volume/year/month</text>
+              <text x="464" y="565" class="c-body">Edition: publisher, format_type, cover_url, meta, fts_simple</text>
+              <rect x="464" y="576" width="460" height="48" rx="6" class="card-sub"/>
+              <text x="474" y="593" class="c-teal">v1.2.0 Surfaces: ImageScan Gallery (ManifestationCoversGallery)</text>
+              <text x="474" y="611" class="c-mono">&amp; Anonymized GROUP BY ManifestationStatsCard (/stats)</text>
             </g>
 
-            <!-- F5 Item -->
-            <g id="bp2-f5">
-              <rect x="444" y="712" width="488" height="176" rx="10" class="card-clay" filter="url(#b2-shadow)"/>
-              <rect x="458" y="724" width="38" height="22" rx="5" class="zone-badge-clay"/>
-              <text x="477" y="739" text-anchor="middle" class="zone-badge-text">F4/5</text>
-              <text x="504" y="740" class="node-title">Item (Physical Copy)</text>
-              <rect x="676" y="724" width="114" height="20" rx="5" class="pill-indigo"/>
-              <text x="733" y="738" text-anchor="middle" class="pill-indigo-text">efrbroo:F5_Item</text>
-              <rect x="796" y="724" width="122" height="20" rx="5" class="pill-clay"/>
-              <text x="857" y="738" text-anchor="middle" class="pill-clay-text">inventory.items</text>
-              <text x="458" y="766" class="node-mono">IRI: {BASE_URL}/items/{id}</text>
-              <text x="458" y="786" class="node-body">Tenant-owned copy on shelf; strict separation of progress vs. physical custody.</text>
-              <text x="458" y="806" class="node-body">Links: manifestation_id (FK), owner_id, lent_to_user_id, local_barcode</text>
-              <text x="458" y="826" class="node-body">State: status (progress), collection_status (custody), condition, visibility, is_hidden</text>
-              <text x="458" y="846" class="node-body">JSONB meta: reading_sessions, build_status, map_insert_present, notes, location</text>
-              <text x="458" y="870" class="node-clay">Guard: @require_physical_item rejects virtual negative IDs (HTTP 400)</text>
+            <!-- F4/F5 Item -->
+            <g filter="url(#b2-sh)">
+              <rect x="452" y="678" width="484" height="180" rx="10" class="card-clay"/>
+              <rect x="464" y="689" width="38" height="20" rx="5" class="b-clay"/>
+              <text x="483" y="703" text-anchor="middle" class="b-txt">F4/5</text>
+              <text x="510" y="704" class="c-title">Item (Physical Copy)</text>
+              <rect x="684" y="689" width="114" height="19" rx="5" class="pill"/>
+              <text x="741" y="702" text-anchor="middle" class="pill-txt">efrbroo:F5_Item</text>
+              <rect x="804" y="689" width="120" height="19" rx="5" class="pill-clay"/>
+              <text x="864" y="702" text-anchor="middle" class="pill-clay-txt">inventory.items</text>
+              <text x="464" y="728" class="c-mono">IRI: {BASE_URL}/items/{id}</text>
+              <text x="464" y="747" class="c-body">Links: manifestation_id, owner_id, lent_to_user_id, local_barcode</text>
+              <text x="464" y="766" class="c-body">State: status, collection_status, condition, visibility, is_hidden</text>
+              <rect x="464" y="778" width="460" height="36" rx="6" class="pill-clay"/>
+              <text x="474" y="794" class="c-clay">v1.2.0: physical_location (iqoqo:physicalLocation — owner-gated)</text>
+              <text x="474" y="808" class="c-body">Redacted on public/unauthenticated serializers &amp; crawlers</text>
+              <text x="464" y="832" class="c-body">meta: reading_sessions, build_status, map_insert_present, notes</text>
+              <text x="464" y="849" class="c-crimson">Guard: @require_physical_item rejects virtual negative IDs (400)</text>
             </g>
 
-            <!-- ==================== LEFT: DOMAIN EXTENSIONS ==================== -->
+            <!-- ==================== LEFT: EXTENSIONS ==================== -->
+            <!-- WorkRelation & WorkLinkCandidate (v1.2.0 NEW) -->
+            <g filter="url(#b2-sh)">
+              <rect x="46" y="114" width="336" height="142" rx="9" class="card-clay"/>
+              <rect x="58" y="124" width="70" height="18" rx="4" class="b-clay"/>
+              <text x="93" y="137" text-anchor="middle" class="b-txt">v1.2.0 NEW</text>
+              <text x="136" y="138" class="c-title">WorkRelation &amp; Candidates</text>
+              <text x="58" y="160" class="c-clay">Work → Work: adaptation_of, based_on, sequel_to</text>
+              <text x="58" y="179" class="c-teal">RDF: frbroo:R2_is_derivative_of / schema:isBasedOn</text>
+              <text x="58" y="198" class="c-body">• Discovered via heuristic + Ollama tie-breaker</text>
+              <text x="58" y="216" class="c-mono">• Service: work_linking_service.py</text>
+              <text x="58" y="236" class="c-mono">• Triage Queue: /admin/work-links</text>
+            </g>
+
             <!-- F18 Serial Work -->
-            <g id="bp2-f18">
-              <rect x="48" y="126" width="320" height="128" rx="10" class="card-clay" filter="url(#b2-shadow)"/>
-              <rect x="60" y="138" width="36" height="20" rx="5" class="zone-badge-clay"/>
-              <text x="78" y="152" text-anchor="middle" class="zone-badge-text">F18</text>
-              <text x="104" y="153" class="node-title">Serial Work (Periodicals)</text>
-              <text x="60" y="176" class="node-mono">Work.work_kind = "serial"</text>
-              <text x="60" y="195" class="node-body">• Mod-11 issn / eissn → schema:Periodical</text>
-              <text x="60" y="213" class="node-body">• Expression(serial) groups issue Manifestations</text>
-              <text x="60" y="231" class="node-body">• Issues emit schema:PublicationIssue</text>
-            </g>
-
-            <!-- F15 Complex Work & Series -->
-            <g id="bp2-f15">
-              <rect x="48" y="272" width="320" height="148" rx="10" class="card-bg" filter="url(#b2-shadow)"/>
-              <rect x="60" y="284" width="36" height="20" rx="5" class="zone-badge-bg"/>
-              <text x="78" y="298" text-anchor="middle" class="zone-badge-text">F15</text>
-              <text x="104" y="299" class="node-title">Complex Work &amp; Series</text>
-              <text x="60" y="322" class="node-body">• WorkExpansionLink: is_expansion_of (Games)</text>
-              <text x="60" y="340" class="node-body">• WorkPart: Anthologies &amp; Box Sets (hasPart)</text>
-              <text x="60" y="358" class="node-body">• WorkSeriesMembership: Multi-series (1.5, 8)</text>
-              <rect x="60" y="372" width="296" height="36" rx="6" class="pill-clay"/>
-              <text x="70" y="387" class="pill-clay-text">SHACL Guard: Expansion Work cannot also</text>
-              <text x="70" y="401" class="pill-clay-text">be aggregated into ContainerAggregation</text>
+            <g filter="url(#b2-sh)">
+              <rect x="46" y="268" width="336" height="114" rx="9" class="card"/>
+              <rect x="58" y="278" width="32" height="18" rx="4" class="b-indigo"/>
+              <text x="74" y="291" text-anchor="middle" class="b-txt">F18</text>
+              <text x="98" y="292" class="c-title">F18_Serial_Work (Periodicals)</text>
+              <text x="58" y="314" class="c-mono">Work.work_kind = "serial" • Mod-11 issn/eissn</text>
+              <text x="58" y="333" class="c-body">• Expression(serial) → Issue Manifestations</text>
+              <text x="58" y="352" class="c-body">• Emits schema:Periodical &amp; PublicationIssue</text>
+              <text x="58" y="370" class="c-mono">• Tracks issue/volume/year/month/ean_addon</text>
             </g>
 
             <!-- F16 Container Work -->
-            <g id="bp2-f16">
-              <rect x="48" y="438" width="320" height="140" rx="10" class="card-bg" filter="url(#b2-shadow)"/>
-              <rect x="60" y="450" width="36" height="20" rx="5" class="zone-badge-bg"/>
-              <text x="78" y="464" text-anchor="middle" class="zone-badge-text">F16</text>
-              <text x="104" y="465" class="node-title">ContainerAggregation</text>
-              <text x="60" y="488" class="node-body">• LEGO Sets (10318-1, piece_count, minifigs)</text>
-              <text x="60" y="506" class="node-body">• Board Game Box → Rulebook (Work) / Pieces</text>
-              <text x="60" y="524" class="node-body">• Attributes: component_name, quantity</text>
-              <text x="60" y="546" class="node-mono">Item.meta.build_status (sealed|built|...)</text>
-              <text x="60" y="564" class="node-body">• Tracks missing physical components</text>
+            <g filter="url(#b2-sh)">
+              <rect x="46" y="394" width="336" height="122" rx="9" class="card"/>
+              <rect x="58" y="404" width="32" height="18" rx="4" class="b-indigo"/>
+              <text x="74" y="417" text-anchor="middle" class="b-txt">F16</text>
+              <text x="98" y="418" class="c-title">ContainerAggregation</text>
+              <text x="58" y="440" class="c-body">• LEGO Sets (10318-1, piece_count, minifigs)</text>
+              <text x="58" y="458" class="c-body">• Board Game Boxes → Rulebooks &amp; Pieces</text>
+              <text x="58" y="476" class="c-mono">• Fields: component_name, quantity</text>
+              <text x="58" y="498" class="c-mono">• Copy state: Item.meta.build_status</text>
             </g>
 
-            <!-- MapAttachment -->
-            <g id="bp2-map">
-              <rect x="48" y="596" width="320" height="132" rx="10" class="card-teal" filter="url(#b2-shadow)"/>
-              <rect x="60" y="608" width="38" height="20" rx="5" class="zone-badge-teal"/>
-              <text x="79" y="622" text-anchor="middle" class="zone-badge-text">MAP</text>
-              <text x="106" y="623" class="node-title">Maps &amp; Supplements</text>
-              <text x="60" y="646" class="node-body">• Standalone cartographic_map / atlas Works</text>
-              <text x="60" y="664" class="node-body">• Manifestation.meta.map_attachments</text>
-              <text x="60" y="682" class="node-teal">Predicate: iqoqo:hasMapAttachment</text>
-              <text x="60" y="704" class="node-mono">Item.meta.map_insert_present (boolean)</text>
+            <!-- F15 WorkExpansionLink + Crimson SHACL Guard -->
+            <g filter="url(#b2-sh)">
+              <rect x="46" y="528" width="336" height="154" rx="9" class="card"/>
+              <rect x="58" y="538" width="32" height="18" rx="4" class="b-indigo"/>
+              <text x="74" y="551" text-anchor="middle" class="b-txt">F15</text>
+              <text x="98" y="552" class="c-title">WorkExpansionLink</text>
+              <text x="58" y="574" class="c-mono">Expansion Work → Base Game (is_expansion_of)</text>
+              <text x="58" y="593" class="c-body">• Models board game expansions as separate Works</text>
+              <rect x="58" y="608" width="312" height="60" rx="7" class="card-shacl"/>
+              <rect x="68" y="616" width="84" height="16" rx="4" class="b-crimson"/>
+              <text x="110" y="627" text-anchor="middle" class="b-txt">SHACL GUARD</text>
+              <text x="68" y="646" class="c-crimson">Cannot simultaneously be aggregated</text>
+              <text x="68" y="660" class="c-crimson">in ContainerAggregation</text>
+            </g>
+
+            <!-- WorkPart & WorkSeriesMembership -->
+            <g filter="url(#b2-sh)">
+              <rect x="46" y="694" width="336" height="164" rx="9" class="card-teal"/>
+              <rect x="58" y="704" width="44" height="18" rx="4" class="b-teal"/>
+              <text x="80" y="717" text-anchor="middle" class="b-txt">PART</text>
+              <text x="110" y="718" class="c-title">WorkPart &amp; Series</text>
+              <text x="58" y="742" class="c-body">• WorkPart: Whole-part anthologies &amp; box sets</text>
+              <text x="58" y="760" class="c-teal">  Predicate: hasPart (Container → Part Work)</text>
+              <text x="58" y="784" class="c-body">• WorkSeriesMembership: Multi-series support</text>
+              <text x="58" y="802" class="c-mono">  Decimal sequence numbers (e.g., 1.5, 8)</text>
+              <text x="58" y="832" class="c-body">• Surfaced via series badges &amp; /graph edges</text>
+            </g>
+
+            <!-- ==================== RIGHT: EVENTS, LOD, INTENTS, ROLLUP ==================== -->
+            <!-- FRBRoo Contribution Events -->
+            <g filter="url(#b2-sh)">
+              <rect x="1006" y="114" width="388" height="206" rx="9" class="card-teal"/>
+              <text x="1018" y="135" class="c-title">FRBRoo Contribution Events</text>
+              <rect x="1282" y="122" width="100" height="18" rx="4" class="pill-teal"/>
+              <text x="1332" y="134" text-anchor="middle" class="pill-teal-txt">Contributor</text>
+
+              <rect x="1018" y="148" width="364" height="48" rx="6" class="card-sub"/>
+              <text x="1028" y="165" class="c-sub">WorkContribution (Composition)</text>
+              <text x="1028" y="183" class="c-mono">composer, author, director, designer → F1</text>
+
+              <rect x="1018" y="204" width="364" height="48" rx="6" class="card-sub"/>
+              <text x="1028" y="221" class="c-sub">ExpressionContribution (Performance)</text>
+              <text x="1028" y="239" class="c-mono">translator, narrator, performer, conductor → F2</text>
+
+              <rect x="1018" y="260" width="364" height="48" rx="6" class="card-sub"/>
+              <text x="1028" y="277" class="c-sub">ManifestationContribution (Publication)</text>
+              <text x="1028" y="295" class="c-mono">studio, distributor, publisher, producer → F3</text>
+            </g>
+
+            <!-- MapAttachment & map_insert_present -->
+            <g filter="url(#b2-sh)">
+              <rect x="1006" y="332" width="388" height="118" rx="9" class="card-teal"/>
+              <rect x="1018" y="342" width="38" height="18" rx="4" class="b-teal"/>
+              <text x="1037" y="355" text-anchor="middle" class="b-txt">MAP</text>
+              <text x="1064" y="356" class="c-title">MapAttachment &amp; Completeness</text>
+              <text x="1018" y="378" class="c-body">• Standalone cartographic_map / atlas Works</text>
+              <text x="1018" y="397" class="c-teal">• Manifestation: iqoqo:hasMapAttachment (meta)</text>
+              <text x="1018" y="416" class="c-mono">• Item: meta.map_insert_present (completeness bit)</text>
+              <text x="1018" y="435" class="c-body">• Interactive pan/zoom &lt;MapViewerModal /&gt;</text>
             </g>
 
             <!-- SemanticLink -->
-            <g id="bp2-lod">
-              <rect x="48" y="746" width="320" height="142" rx="10" class="card-teal" filter="url(#b2-shadow)"/>
-              <rect x="60" y="758" width="38" height="20" rx="5" class="zone-badge-teal"/>
-              <text x="79" y="772" text-anchor="middle" class="zone-badge-text">LOD</text>
-              <text x="106" y="773" class="node-title">SemanticLink (External)</text>
-              <text x="60" y="796" class="node-mono">Polymorphic (entity_type, entity_id)</text>
-              <text x="60" y="816" class="node-body">• Authorities: DBpedia, GeoNames, WordNet,</text>
-              <text x="60" y="834" class="node-body">  Wikidata, OpenCollections.org</text>
-              <text x="60" y="854" class="node-body">• Fields: status (accepted), confidence, verified</text>
-              <text x="60" y="874" class="node-teal">Emits: owl:sameAs, schema:sameAs, rdfs:seeAlso</text>
-            </g>
-
-            <!-- ==================== RIGHT: EVENTS, INTENTS & ROLLUPS ==================== -->
-            <!-- FRBRoo Contribution Events -->
-            <g id="bp2-contrib">
-              <rect x="1008" y="126" width="384" height="304" rx="10" class="card-teal" filter="url(#b2-shadow)"/>
-              <text x="1022" y="149" class="node-title">FRBRoo Contribution Events</text>
-              <rect x="1264" y="135" width="114" height="20" rx="5" class="pill-teal"/>
-              <text x="1321" y="149" text-anchor="middle" class="pill-teal-text">Contributor (Agent)</text>
-              <text x="1022" y="169" class="node-body">Tier-accurate creative credits in catalog schema:</text>
-
-              <rect x="1020" y="182" width="360" height="72" rx="8" class="card-sub"/>
-              <text x="1032" y="201" class="node-subtitle">WorkContribution  (Composition Event)</text>
-              <text x="1032" y="220" class="node-mono">Roles: composer, author, director, designer</text>
-              <text x="1032" y="238" class="node-body">Links Contributor → F1 Work</text>
-
-              <rect x="1020" y="264" width="360" height="72" rx="8" class="card-sub"/>
-              <text x="1032" y="283" class="node-subtitle">ExpressionContribution  (Performance)</text>
-              <text x="1032" y="302" class="node-mono">Roles: translator, narrator, performer, band</text>
-              <text x="1032" y="320" class="node-body">Links Contributor → F2 Expression</text>
-
-              <rect x="1020" y="346" width="360" height="72" rx="8" class="card-sub"/>
-              <text x="1032" y="365" class="node-subtitle">ManifestationContribution  (Publication)</text>
-              <text x="1032" y="384" class="node-mono">Roles: studio, distributor, publisher, network</text>
-              <text x="1032" y="402" class="node-body">Links Contributor → F3 Manifestation</text>
+            <g filter="url(#b2-sh)">
+              <rect x="1006" y="462" width="388" height="122" rx="9" class="card-teal"/>
+              <rect x="1018" y="472" width="38" height="18" rx="4" class="b-teal"/>
+              <text x="1037" y="485" text-anchor="middle" class="b-txt">LOD</text>
+              <text x="1064" y="486" class="c-title">SemanticLink (Polymorphic)</text>
+              <text x="1018" y="508" class="c-mono">(entity_type, entity_id) → External Authority URI</text>
+              <text x="1018" y="527" class="c-body">• DBpedia • GeoNames • WordNet</text>
+              <text x="1018" y="544" class="c-body">• Wikidata • OpenCollections.org</text>
+              <text x="1018" y="566" class="c-teal">status=accepted • confidence • verified</text>
             </g>
 
             <!-- UserWorkIntent -->
-            <g id="bp2-intent">
-              <rect x="1008" y="454" width="384" height="196" rx="10" class="card-clay" filter="url(#b2-shadow)"/>
-              <rect x="1022" y="466" width="54" height="20" rx="5" class="zone-badge-clay"/>
-              <text x="1049" y="480" text-anchor="middle" class="zone-badge-text">INTENT</text>
-              <text x="1084" y="481" class="node-title">UserWorkIntent (Wishlist)</text>
-              <text x="1022" y="506" class="node-mono">inventory.user_work_intents</text>
-              <text x="1022" y="526" class="node-body">• Models User → Work (+ optional Manifestation)</text>
-              <text x="1022" y="546" class="node-body">• Virtual items use negative IDs (-1, -2) in UI</text>
-              <text x="1022" y="566" class="node-body">• Statuses: PROGRESS_STATUSES + fulfilled</text>
-              <text x="1022" y="586" class="node-body">• Auto-fulfilled on physical acquisition</text>
-              <text x="1022" y="610" class="node-clay">Service: app/core/wishlist_service.py</text>
-              <text x="1022" y="630" class="node-body">• Converts to physical Item if user adds notes/tags</text>
+            <g filter="url(#b2-sh)">
+              <rect x="1006" y="596" width="388" height="128" rx="9" class="card-clay"/>
+              <rect x="1018" y="606" width="52" height="18" rx="4" class="b-clay"/>
+              <text x="1044" y="619" text-anchor="middle" class="b-txt">INTENT</text>
+              <text x="1078" y="620" class="c-title">UserWorkIntent (Virtual Wishlist)</text>
+              <text x="1018" y="642" class="c-body">• Models User → Work (+ optional Manifestation)</text>
+              <text x="1018" y="660" class="c-mono">• Virtual negative IDs (-1, -2) in Item UI grids</text>
+              <text x="1018" y="678" class="c-body">• Auto-fulfilled on physical acquisition</text>
+              <text x="1018" y="702" class="c-clay">Service: app/core/wishlist_service.py</text>
             </g>
 
-            <!-- Work Reading Rollup & Sessions -->
-            <g id="bp2-rollup">
-              <rect x="1008" y="674" width="384" height="214" rx="10" class="card-teal" filter="url(#b2-shadow)"/>
-              <rect x="1022" y="686" width="56" height="20" rx="5" class="zone-badge-teal"/>
-              <text x="1050" y="700" text-anchor="middle" class="zone-badge-text">ROLLUP</text>
-              <text x="1086" y="701" class="node-title">Work Reading Rollup &amp; Logs</text>
-              <text x="1022" y="726" class="node-mono">compute_work_reading_rollup() [1× GROUP BY]</text>
-              <text x="1022" y="746" class="node-body">• Precedence: completed &gt; in_progress &gt; intent &gt; dnf</text>
-              <text x="1022" y="766" class="node-body">• Scoped to viewer's owned physical Items (incl. private)</text>
-              <text x="1022" y="786" class="node-body">• Excludes unowned wishlist intents</text>
-              <text x="1022" y="810" class="node-subtitle">Reading Sessions (POST /items/&lt;id&gt;/reading-sessions)</text>
-              <text x="1022" y="830" class="node-body">• 1..1440 min (max 200/Item) + ItemStatusLog days</text>
-              <text x="1022" y="850" class="node-clay">• Session note field stays strictly private to owner</text>
-              <text x="1022" y="872" class="node-teal">UI: &lt;WorkRollupBadge /&gt; • ?work_read_status=</text>
+            <!-- Work Reading Rollup -->
+            <g filter="url(#b2-sh)">
+              <rect x="1006" y="736" width="388" height="122" rx="9" class="card-teal"/>
+              <rect x="1018" y="746" width="54" height="18" rx="4" class="b-teal"/>
+              <text x="1045" y="759" text-anchor="middle" class="b-txt">ROLLUP</text>
+              <text x="1080" y="760" class="c-title">Work Reading Rollup</text>
+              <text x="1018" y="782" class="c-mono">compute_work_reading_rollup() [Batched GROUP BY]</text>
+              <text x="1018" y="802" class="c-teal">completed &gt; in_progress &gt; intent &gt; dnf</text>
+              <text x="1018" y="822" class="c-body">• Per-user over owned physical Items (incl. private)</text>
+              <text x="1018" y="842" class="c-mono">UI: &lt;WorkRollupBadge /&gt; • ?work_read_status=</text>
             </g>
 
-            <!-- Legend -->
-            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="947" class="legend-heading">LEGEND:</text>
-            <line x1="128" y1="943" x2="174" y2="943" class="edge-wemi" marker-end="url(#b2-mk-wemi)"/>
-            <text x="184" y="947" class="legend-text">Core WEMI Hierarchy</text>
-            <line x1="364" y1="943" x2="410" y2="943" class="edge-ext" marker-end="url(#b2-mk-ext)"/>
-            <text x="420" y="947" class="legend-text">FRBRoo Extension / Intent</text>
-            <line x1="628" y1="943" x2="674" y2="943" class="edge-event" marker-end="url(#b2-mk-event)"/>
-            <text x="684" y="947" class="legend-text">Contribution Event / Map</text>
-            <line x1="888" y1="943" x2="934" y2="943" class="edge-guard" marker-end="url(#b2-mk-ext)"/>
-            <text x="944" y="947" class="legend-text">Optional / Cross-Tier Link</text>
-            <line x1="1152" y1="943" x2="1198" y2="943" class="edge-dashed" marker-end="url(#b2-mk-event)"/>
-            <text x="1208" y="947" class="legend-text">LOD / Computed Rollup</text>
+            <!-- Legend Bar -->
+            <rect x="32" y="886" width="1376" height="40" rx="10" class="legend-bg"/>
+            <text x="50" y="910" class="legend-h">LEGEND:</text>
+            <line x1="126" y1="906" x2="170" y2="906" class="edge-w" marker-end="url(#b2-mk-w)"/>
+            <text x="180" y="910" class="legend-t">Core WEMI Hierarchy</text>
+            <line x1="354" y1="906" x2="398" y2="906" class="edge-c" marker-end="url(#b2-mk-c)"/>
+            <text x="408" y="910" class="legend-t">v1.2.0 / FRBRoo Extension</text>
+            <line x1="604" y1="906" x2="648" y2="906" class="edge-t" marker-end="url(#b2-mk-t)"/>
+            <text x="658" y="910" class="legend-t">Contribution / Map / Series</text>
+            <line x1="864" y1="906" x2="908" y2="906" class="edge-td" marker-end="url(#b2-mk-t)"/>
+            <text x="918" y="910" class="legend-t">LOD / Computed Rollup</text>
+            <rect x="1116" y="897" width="18" height="18" rx="4" class="b-crimson"/>
+            <text x="1142" y="910" class="legend-t">SHACL / Physical Guard</text>
           </svg>

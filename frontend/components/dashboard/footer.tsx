@@ -15,10 +15,12 @@
 //
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { getSyncInstanceUrl } from "@/lib/capacitor/storage";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { ServerSelectorModal } from "@/components/mobile/server-selector";
 import { useTranslations } from "next-intl";
 
 /**
@@ -62,6 +64,8 @@ export function Footer() {
   const t = useTranslations("Footer");
   const uiVersion = APP_VERSION;
   const serverHost = useSyncExternalStore(emptySubscribe, getConnectedHostSnapshot, () => "");
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const native = isNativeApp();
 
   return (
     <footer className="border-t border-border bg-card">
@@ -72,13 +76,25 @@ export function Footer() {
           {serverHost && (
             <>
               <span>&middot;</span>
-              <span
-                data-testid="footer-connected-server"
-                title={t("connectedServer", { host: serverHost })}
-                className="inline-block max-w-[140px] sm:max-w-[240px] truncate align-bottom"
-              >
-                {t("connectedServer", { host: serverHost })}
-              </span>
+              {native ? (
+                <button
+                  type="button"
+                  data-testid="footer-connected-server"
+                  onClick={() => setSwitcherOpen(true)}
+                  title={t("connectedServer", { host: serverHost })}
+                  className="inline-block max-w-[140px] sm:max-w-[240px] truncate align-bottom underline hover:text-foreground transition-colors"
+                >
+                  {t("connectedServer", { host: serverHost })}
+                </button>
+              ) : (
+                <span
+                  data-testid="footer-connected-server"
+                  title={t("connectedServer", { host: serverHost })}
+                  className="inline-block max-w-[140px] sm:max-w-[240px] truncate align-bottom"
+                >
+                  {t("connectedServer", { host: serverHost })}
+                </span>
+              )}
             </>
           )}{" "}
           &middot;{" "}
@@ -112,6 +128,7 @@ export function Footer() {
           <span>{t("rules")}</span>
         </p>
       </div>
+      {native && <ServerSelectorModal isOpen={switcherOpen} onClose={() => setSwitcherOpen(false)} />}
     </footer>
   );
 }

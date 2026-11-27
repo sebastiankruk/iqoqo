@@ -125,7 +125,7 @@ EOF
 
 teardown() {
   rm -rf "${TEST_TEMP_DIR}"
-  rm -rf data/federation_keys 2>/dev/null || true
+  rm -rf data/keys data/federation_keys 2>/dev/null || true
   # A preserved archive is the expected outcome of the failure tests; clean it
   # so a passing run does not leave megabytes in /tmp.
   rm -f /tmp/iqoqo_backup_*.tar.gz 2>/dev/null || true
@@ -373,6 +373,65 @@ EOF
   [ "$status" -eq 1 ]
   [[ "${output}" =~ "rclone is not installed" ]]
   [[ "${output}" =~ "S3_BACKEND=s3" ]]
+}
+
+@test "cloud_backup.sh --archive uses S3 on S3-only hosts with archive bucket, prefix, and storage class" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  export S3_BACKEND="auto"
+  export AWS_ACCESS_KEY_ID="test-archive-key"
+  export AWS_SECRET_ACCESS_KEY="test-archive-secret"
+  export S3_BUCKET_BACKUP="daily-bucket"
+  export S3_BUCKET_ARCHIVE="cold-archive-bucket"
+  export S3_ARCHIVE_PREFIX="cold/archives"
+  export S3_ARCHIVE_STORAGE_CLASS="GLACIER"
+  export S3_REGION_NAME="eu-central-1"
+
+  run bash scripts/cloud_backup.sh --archive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "backend: s3, bucket: cold-archive-bucket, prefix: cold/archives/" ]]
+  [[ "$output" =~ "storage class: GLACIER" ]]
+  [ ! -s "${RCLONE_LOG}" ]
+  [ -f "${UPLOAD_RECORD}" ]
+
+  python3 -c '
+import json
+with open("'"${UPLOAD_RECORD}"'") as f:
+    rec = json.load(f)
+assert rec["bucket"] == "cold-archive-bucket", rec
+assert rec["key"].startswith("cold/archives/iqoqo_backup_"), rec
+assert rec["extra"]["StorageClass"] == "GLACIER", rec
+'
+}
+
+@test "Makefile archive-run on S3-only host does not hijack S3_BACKEND=auto into rclone" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  local fake_proj="${TEST_TEMP_DIR}/make-proj"
+  mkdir -p "${fake_proj}/scripts"
+  cp Makefile "${fake_proj}/"
+  cp scripts/cloud_backup.sh "${fake_proj}/scripts/"
+
+  run make -C "${fake_proj}" --no-print-directory -n archive-run
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "cloud_backup.sh --archive" ]]
+  [[ ! "$output" =~ "iqoqo-glacier:iqoqo-archive" ]]
+}
+
+@test "cloud_backup.sh --archive falls back to S3_BUCKET_BACKUP when S3_BUCKET_ARCHIVE is unset and aborts if both unset" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  export S3_BACKEND="s3"
+  export AWS_ACCESS_KEY_ID="test-archive-key"
+  export AWS_SECRET_ACCESS_KEY="test-archive-secret"
+  export S3_BUCKET_BACKUP="shared-fallback-bucket"
+  unset S3_BUCKET_ARCHIVE
+
+  run bash scripts/cloud_backup.sh --archive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "backend: s3, bucket: shared-fallback-bucket, prefix: archives/" ]]
+
+  unset S3_BUCKET_BACKUP
+  run bash scripts/cloud_backup.sh --archive
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "S3_BUCKET_ARCHIVE and S3_BUCKET_BACKUP are both unset" ]]
 }
 
 @test "cloud_backup.sh fails if rclone is selected but has no config" {
@@ -679,6 +738,52 @@ EOF
   [ "${file_perm}" = "600" ]
 
   rm -rf data/federation_keys
+}
+
+@test "cloud_backup.sh archives data/keys when present (canonical key directory)" {
+  mkdir -p data/keys
+  local k_hdr="-----BEGIN RSA"
+  local k_ftr="-----END RSA"
+  printf "%s %s\n%s\n%s %s\n" "${k_hdr}" "PRIVATE KEY-----" "MIIEowIBAAKCAQEA0stub" "${k_ftr}" "PRIVATE KEY-----" > data/keys/server.pem
+  chmod 0600 data/keys/server.pem
+
+  export RCLONE_SHOULD_FAIL=1
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+
+  preserved=$(ls /tmp/iqoqo_backup_*.tar.gz 2>/dev/null | head -1)
+  [ -n "${preserved}" ]
+  tar -ztf "${preserved}" | grep -q "keys_"
+
+  local inspect_dir="${TEST_TEMP_DIR}/inspect_keys"
+  mkdir -p "${inspect_dir}"
+  tar -xzf "${preserved}" -C "${inspect_dir}"
+  local nested_keys
+  nested_keys=$(find "${inspect_dir}" -name "keys_*.tar.gz" | head -1)
+  [ -n "${nested_keys}" ]
+  tar -ztf "${nested_keys}" | grep -q "data/keys/server.pem"
+  rm -rf data/keys
+}
+
+@test "scripts/restore.sh validates archive and restores canonical data/keys with 0700/0600 permissions" {
+  local mock_backup_dir="${TEST_TEMP_DIR}/iqoqo_backup_mock_canon"
+  mkdir -p "${mock_backup_dir}"
+  echo "CREATE TABLE test_restore;" > "${mock_backup_dir}/db_dump_20261127_120000.sql"
+
+  local mock_keys_dir="${TEST_TEMP_DIR}/mock_canon_keys/data/keys"
+  mkdir -p "${mock_keys_dir}"
+  echo "MOCK_KEY" > "${mock_keys_dir}/server.pem"
+  tar -czf "${mock_backup_dir}/keys_20261127_120000.tar.gz" -C "${TEST_TEMP_DIR}/mock_canon_keys" data/keys
+
+  local mock_archive="${TEST_TEMP_DIR}/mock_canon_backup.tar.gz"
+  tar -czf "${mock_archive}" -C "${TEST_TEMP_DIR}" iqoqo_backup_mock_canon
+
+  run bash scripts/restore.sh --yes "${mock_archive}"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Federation keys restored with 0700 directory and 0600 file permissions (data/keys)" ]]
+  [ "$(stat -c '%a' data/keys)" = "700" ]
+  [ "$(stat -c '%a' data/keys/server.pem)" = "600" ]
+  rm -rf data/keys
 }
 
 @test "scripts/restore.sh fails with invalid or missing archive" {

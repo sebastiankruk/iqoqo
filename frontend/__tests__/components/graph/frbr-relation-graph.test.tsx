@@ -78,6 +78,68 @@ describe("FRBRRelationGraph depth 3-4 & library layout (C140)", () => {
     expect(hop3).not.toBe(hop4);
   });
 
+  it("renders canonical lod:<sha256> node shared across Contributor and multiple Works (C164)", () => {
+    const canonId = "lod:9e107d9d372bb682";
+    const graph: CatalogGraphData = {
+      anchor: { entity_type: "contributor", entity_id: 7, node_id: "contributor:7" },
+      mode: "neighborhood",
+      nodes: [
+        {
+          id: "contributor:7",
+          entity_type: "contributor",
+          entity_id: 7,
+          label: "Stephen King",
+          hop: 0,
+          is_anchor: true,
+        },
+        { id: "work:11", entity_type: "work", entity_id: 11, label: "It", hop: 1, is_anchor: false },
+        {
+          id: canonId,
+          entity_type: "lod",
+          entity_id: 101,
+          label: "Stephen King",
+          external_uri: "https://dbpedia.org/resource/Stephen_King",
+          hop: 1,
+          is_anchor: false,
+        },
+      ],
+      edges: [
+        {
+          id: "w11--c7",
+          source: "work:11",
+          target: "contributor:7",
+          relation: "contributed_by",
+          category: "contributors",
+          label: "author",
+        },
+        {
+          id: "c7--lod",
+          source: "contributor:7",
+          target: canonId,
+          relation: "same_as",
+          category: "lod",
+          label: "sameAs",
+        },
+        { id: "w11--lod", source: "work:11", target: canonId, relation: "same_as", category: "lod", label: "sameAs" },
+      ],
+      meta: {
+        depth: 2,
+        requested_depth: 2,
+        max_nodes: 150,
+        max_edges: 400,
+        node_count: 3,
+        edge_count: 3,
+        truncated: false,
+      },
+    };
+
+    render(<FRBRRelationGraph graph={graph} onRecenter={vi.fn()} />);
+
+    const lodNodes = screen.getAllByTestId(`graph-node-${canonId}`);
+    expect(lodNodes).toHaveLength(1);
+    expect(screen.getAllByText("Stephen King").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("renders isolated nodes in unanchored library mode without collapsing onto (0,0)", () => {
     const libraryGraph: CatalogGraphData = {
       anchor: null,

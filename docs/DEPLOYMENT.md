@@ -86,6 +86,9 @@ make preview-up
 # 6. Stop preview environment cleanly
 make preview-down
 
+# 6b. Reconcile cloned preview DB secrets & settings (preserves APP_VERSION, re-encrypts InstanceSettings, resets OpenObserve auth)
+make preview-reconcile
+
 # 7. Check health of preview stack reading DEPLOY_DIR/.env
 make status preview
 

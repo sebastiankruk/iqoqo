@@ -17,10 +17,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from collections import deque
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlsplit, urlunsplit
 
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import selectinload
@@ -239,16 +240,56 @@ def _map_node_dict(manifestation_id: int, idx: int, attachment: dict[str, Any], 
     }
 
 
+def _canonical_lod_uri(uri: str) -> str:
+    """Normalize an external LOD URI so scheme, host case, and trailing-slash variants share one identity."""
+    raw = (uri or "").strip()
+    if not raw:
+        return ""
+    parsed = urlsplit(raw)
+    if parsed.scheme and parsed.netloc:
+        scheme = "https" if parsed.scheme.lower() in ("http", "https") else parsed.scheme.lower()
+        netloc = parsed.netloc.lower()
+        path = parsed.path.rstrip("/") or "/"
+        return urlunsplit((scheme, netloc, path, parsed.query, ""))
+    return raw.rstrip("/")
+
+
+def _canonical_lod_node_key(link: SemanticLink) -> str:
+    """Return a deterministic ``lod:<digest>`` node ID keyed by canonicalized external URI."""
+    canon_uri = _canonical_lod_uri(link.external_uri or "")
+    if not canon_uri:
+        return _node_key("lod", link.id)
+    digest = hashlib.sha256(canon_uri.encode("utf-8")).hexdigest()[:16]
+    return f"lod:{digest}"
+
+
+def _merge_lod_node(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+    """Enrich an existing canonical LOD node with the best label and lowest hop across colliding links."""
+    incoming_hop = incoming.get("hop")
+    if isinstance(incoming_hop, int) and incoming_hop < existing.get("hop", incoming_hop):
+        existing["hop"] = incoming_hop
+
+    existing_uri = existing.get("external_uri") or ""
+    fallback_slug = existing_uri.rstrip("/").rsplit("/", 1)[-1] or existing.get("authority") or ""
+    incoming_label = (incoming.get("label") or "").strip()
+    existing_label = (existing.get("label") or "").strip()
+    incoming_slug = (incoming.get("external_uri") or "").rstrip("/").rsplit("/", 1)[-1] or ""
+    if incoming_label and (not existing_label or existing_label == fallback_slug) and incoming_label != incoming_slug:
+        existing["label"] = incoming_label
+
+
 def _lod_node_dict(link: SemanticLink, *, hop: int) -> dict[str, Any]:
-    fallback_label = link.external_uri.rstrip("/").rsplit("/", 1)[-1] or link.authority
+    fallback_label = (link.external_uri or "").rstrip("/").rsplit("/", 1)[-1] or link.authority
+    canonical_uri = _canonical_lod_uri(link.external_uri or "")
     return {
-        "id": _node_key("lod", link.id),
+        "id": _canonical_lod_node_key(link),
         "entity_type": "lod",
         "entity_id": link.id,
-        "label": link.pref_label or fallback_label,
+        "label": (link.pref_label or "").strip() or fallback_label,
         "subtitle": link.authority,
         "authority": link.authority,
         "external_uri": link.external_uri,
+        "canonical_uri": canonical_uri,
         "hop": hop,
         "is_anchor": False,
         "url": link.external_uri,
@@ -307,6 +348,8 @@ class GraphService:
         def try_add_node(node_key: str, node_payload: dict[str, Any]) -> bool:
             nonlocal node_truncated
             if node_key in nodes:
+                if node_payload.get("entity_type") == "lod":
+                    _merge_lod_node(nodes[node_key], node_payload)
                 return True
             if len(nodes) >= effective_max_nodes:
                 node_truncated = True
@@ -494,6 +537,8 @@ class GraphService:
         def try_add_node(node_key: str, node_payload: dict[str, Any]) -> bool:
             nonlocal node_truncated
             if node_key in nodes:
+                if node_payload.get("entity_type") == "lod":
+                    _merge_lod_node(nodes[node_key], node_payload)
                 return True
             if len(nodes) >= effective_max_nodes:
                 node_truncated = True
@@ -699,6 +744,8 @@ class GraphService:
                 if not try_add_node(payload["id"], payload):
                     break
 
+        present_person_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("contributor:")]
+
         # 6. Accepted LOD SemanticLinks (prioritize links attached to present nodes)
         if "lod" in allowed_entities and not node_truncated:
             lod_quota = effective_max_nodes if len(active_tiers) <= 1 else tier_quota
@@ -710,6 +757,8 @@ class GraphService:
                 anchor_filters.append(and_(SemanticLink.entity_type == "expression", SemanticLink.entity_id.in_(present_expr_ids)))
             if present_man_ids:
                 anchor_filters.append(and_(SemanticLink.entity_type == "manifestation", SemanticLink.entity_id.in_(present_man_ids)))
+            if present_person_ids:
+                anchor_filters.append(and_(SemanticLink.entity_type == "contributor", SemanticLink.entity_id.in_(present_person_ids)))
             if anchor_filters:
                 lod_rows = (
                     db.session.execute(
@@ -739,7 +788,6 @@ class GraphService:
 
         # 7. Connect edges between present nodes
         present_item_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("item:")]
-        present_person_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("contributor:")]
 
         if "frbr" in allowed_categories:
             if present_expr_ids and present_work_ids:

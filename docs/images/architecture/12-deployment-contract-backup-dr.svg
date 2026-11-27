@@ -15,272 +15,279 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp12" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="1440" height="960" role="img" aria-labelledby="bp12-title bp12-desc">
-            <title id="bp12-title">12 · Source-Free Deployment Contract, Mount Guards &amp; Multi-Tier Backup</title>
-            <desc id="bp12-desc">Modern Athenaeum deployment and disaster recovery diagram for iqoqo v1.1.2 showing Path A Host Checkout and Path B Source-Free DEPLOY_DIR converging into shared pre-flight mount guards, UID 10001/10002 invariants, destructive script guards, and the 4-stage cloud_backup.sh DR pipeline.</desc>
-            <style>
-              .bg { fill: #FDFBF7; }
-              .title { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
-              .sub { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 500; fill: #5A6776; }
-              .hdr-pill { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.2; }
-              .hdr-pill-txt { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #2B3D4F; }
-
-              .zone { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-teal { fill: #EEF9F7; stroke: #0F766E; stroke-width: 1.4; stroke-dasharray: 6 4; }
-              .zone-clay { fill: #FFF3EB; stroke: #D15400; stroke-width: 1.4; stroke-dasharray: 6 4; }
-              .zone-title { font-family: 'Merriweather', Georgia, serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
-              .zone-meta { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 600; fill: #5A6776; }
-
-              .card { fill: #FFFFFF; stroke: #D6CFC5; stroke-width: 1.5; }
-              .card-indigo { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.6; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.6; }
-              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
-              .card-crimson { fill: #FFFFFF; stroke: #991B1B; stroke-width: 1.9; }
-              .card-tint-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1; }
-              .card-tint-teal { fill: #EEF9F7; stroke: #5EEAD4; stroke-width: 1; }
-              .card-tint-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-              .card-tint-crimson { fill: #FEF2F2; stroke: #FCA5A5; stroke-width: 1; }
-
-              .badge-indigo { fill: #2B3D4F; }
-              .badge-clay { fill: #D15400; }
-              .badge-teal { fill: #0F766E; }
-              .badge-crimson { fill: #991B1B; }
-              .badge-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
-
-              .c-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
-              .c-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.6px; font-weight: 400; fill: #475569; }
-              .c-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 500; fill: #2B3D4F; }
-              .c-clay { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #D15400; }
-              .c-teal { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #0F766E; }
-              .c-crimson { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #991B1B; }
-
-              .edge-indigo { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
-              .edge-clay { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
-              .edge-teal { fill: none; stroke: #0F766E; stroke-width: 2; stroke-linejoin: round; }
-              .mk-indigo { fill: #2B3D4F; }
-              .mk-clay { fill: #D15400; }
-              .mk-teal { fill: #0F766E; }
-
-              .e-pill { fill: #FDFBF7; stroke: #CBC3B7; stroke-width: 1; }
-              .e-pill-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
-
-              .legend-bg { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.25; }
-              .legend-h { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-              .legend-t { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
-            </style>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg id="svg-bp12" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp12-title bp12-desc">
+            <title id="bp12-title">Blueprint 12: Source-Free Deployment Contract, Mount Guards &amp; Multi-Tier Backup</title>
+            <desc id="bp12-desc">Modern Athenaeum deployment and disaster recovery diagram for iqoqo v1.2.0 showing Path A Host Checkout and Path B Source-Free DEPLOY_DIR converging into shared v1.2.0 stdin secret reconciliation, non-root UID 10001/10002 mount guards, Crimson production destructive locks, and the 4-stage cloud_backup.sh / native boto3 S3Service DR pipeline.</desc>
             <defs>
-              <pattern id="b12-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD5" stroke-width="0.6" opacity="0.45"/>
+              <style>
+                .b12-bg { fill: #FDFBF7; }
+                .b12-frame { fill: none; stroke: #E5DFD3; stroke-width: 2; }
+                .b12-title { font-family: Georgia, 'Merriweather', serif; font-size: 19.5px; font-weight: 700; fill: #2B3D4F; }
+                .b12-sub { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 500; fill: #475569; }
+                .b12-pill-ver { fill: #2B3D4F; }
+                .b12-pill-ver-t { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; font-weight: 600; fill: #FDFBF7; }
+
+                .b12-z-i { fill: #EEF2F6; stroke: #2B3D4F; stroke-width: 1.4; stroke-dasharray: 6 4; }
+                .b12-z-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1.4; stroke-dasharray: 6 4; }
+                .b12-z-t { fill: #ECFDF5; stroke: #0F766E; stroke-width: 1.4; stroke-dasharray: 6 4; }
+                .b12-z-title { font-family: Georgia, 'Merriweather', serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
+                .b12-z-meta { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #64748B; }
+
+                .b12-card { fill: #FFFFFF; stroke: #CBD5E1; stroke-width: 1.3; }
+                .b12-card-i { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.65; }
+                .b12-card-c { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.85; }
+                .b12-card-t { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.65; }
+                .b12-card-r { fill: #FEF2F2; stroke: #991B1B; stroke-width: 1.9; stroke-dasharray: 6 4; }
+
+                .b12-b-i { fill: #2B3D4F; }
+                .b12-b-c { fill: #D15400; }
+                .b12-b-t { fill: #0F766E; }
+                .b12-b-r { fill: #991B1B; }
+                .b12-b-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; font-weight: 700; fill: #FFFFFF; }
+
+                .b12-ct { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12.2px; font-weight: 700; fill: #2B3D4F; }
+                .b12-cb { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.1px; font-weight: 400; fill: #475569; }
+                .b12-cm { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.1px; font-weight: 500; fill: #2B3D4F; }
+                .b12-cc { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.1px; font-weight: 700; fill: #D15400; }
+                .b12-cl { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.1px; font-weight: 700; fill: #0F766E; }
+                .b12-cr { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.1px; font-weight: 700; fill: #991B1B; }
+
+                .b12-p-i { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+                .b12-p-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
+                .b12-p-t { fill: #ECFDF5; stroke: #0F766E; stroke-width: 1; }
+                .b12-p-r { fill: #FFFFFF; stroke: #991B1B; stroke-width: 1; }
+                .b12-pt-i { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 600; fill: #2B3D4F; }
+                .b12-pt-c { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #D15400; }
+                .b12-pt-t { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #0F766E; }
+
+                .b12-ei { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
+                .b12-ec { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
+                .b12-et { fill: none; stroke: #0F766E; stroke-width: 2; stroke-linejoin: round; }
+
+                .b12-leg { fill: #F6F2EA; stroke: #E5DFD3; stroke-width: 1.3; }
+                .b12-leg-h { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+                .b12-leg-t { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.6px; font-weight: 500; fill: #2B3D4F; }
+              </style>
+              <pattern id="b12-dots" width="22" height="22" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="0.9" fill="#E5DFD3"/>
               </pattern>
-              <filter id="b12-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2B3D4F" flood-opacity="0.08"/>
+              <filter id="b12-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b12-mk-indigo" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-indigo"/>
-              </marker>
-              <marker id="b12-mk-clay" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-clay"/>
-              </marker>
-              <marker id="b12-mk-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-teal"/>
-              </marker>
+              <marker id="b12-mki" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#2B3D4F"/></marker>
+              <marker id="b12-mkc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#D15400"/></marker>
+              <marker id="b12-mkt" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#0F766E"/></marker>
             </defs>
 
-            <!-- Background -->
-            <rect x="0" y="0" width="1440" height="960" class="bg"/>
-            <rect x="0" y="0" width="1440" height="960" fill="url(#b12-grid)"/>
+            <!-- Background & Border -->
+            <rect x="0" y="0" width="1440" height="940" class="b12-bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b12-dots)"/>
+            <rect x="1" y="1" width="1438" height="938" class="b12-frame"/>
 
-            <!-- Header -->
-            <text x="32" y="36" class="title">12 · Source-Free Deployment Contract, Mount Guards &amp; Multi-Tier Backup</text>
-            <text x="32" y="57" class="sub">iqoqo v1.1.2  •  Dual Deploy Topologies, Non-Root UID 10001/10002 Mount Probes, Production Guards &amp; S3 Glacier DR</text>
-            <rect x="1174" y="16" width="234" height="32" rx="8" class="hdr-pill"/>
-            <text x="1291" y="36" text-anchor="middle" class="hdr-pill-txt">Deployment &amp; Disaster Recovery</text>
+            <!-- Top Header Bar -->
+            <rect x="36" y="17" width="102" height="22" rx="5" class="b12-b-i"/>
+            <text x="87" y="32" text-anchor="middle" class="b12-b-txt">BLUEPRINT 12</text>
+            <text x="150" y="35" class="b12-title">Blueprint 12: Source-Free Deployment Contract, Mount Guards &amp; Multi-Tier Backup</text>
+            <text x="36" y="57" class="b12-sub">Dual Deploy Paths • v1.2.0 Stdin Secret Reconciliation • UID 10001/10002 Guards • Dual rclone / Native S3Service DR</text>
+            <rect x="1152" y="17" width="252" height="30" rx="15" class="b12-pill-ver"/>
+            <circle cx="1170" cy="32" r="4" fill="#D15400"/>
+            <text x="1284" y="36" text-anchor="middle" class="b12-pill-ver-t">iqoqo v1.2.0 • Modern Athenaeum</text>
+            <line x1="36" y1="71" x2="1404" y2="71" stroke="#E5DFD3" stroke-width="1.2"/>
 
-            <!-- ==================== TOP SPLIT: PATH A & PATH B ==================== -->
-            <!-- Path A: Host Checkout -->
-            <g filter="url(#b12-shadow)">
-              <rect x="32" y="76" width="644" height="224" rx="14" class="card-indigo"/>
-              <rect x="46" y="88" width="64" height="20" rx="5" class="badge-indigo"/>
-              <text x="78" y="102" text-anchor="middle" class="badge-txt">PATH A</text>
-              <text x="120" y="103" class="zone-title">Host Checkout (./run.sh dev|prod)</text>
-              <rect x="526" y="88" width="136" height="20" rx="5" class="card-tint-indigo"/>
-              <text x="594" y="101" text-anchor="middle" class="c-mono">Full Git Checkout</text>
+            <!-- ==================== TOP ROW: DUAL DEPLOYMENT PATHS ==================== -->
+            <!-- Path A -->
+            <g filter="url(#b12-sh)">
+              <rect x="36" y="84" width="660" height="206" rx="12" class="b12-card-i"/>
+              <rect x="50" y="96" width="60" height="19" rx="5" class="b12-b-i"/>
+              <text x="80" y="109" text-anchor="middle" class="b12-b-txt">PATH A</text>
+              <text x="120" y="110" class="b12-z-title">Host Checkout (./run.sh dev|prod)</text>
+              <rect x="546" y="96" width="136" height="19" rx="5" class="b12-p-i"/>
+              <text x="614" y="109" text-anchor="middle" class="b12-pt-i">Full Git Checkout</text>
 
-              <text x="48" y="130" class="c-body">• Runs directly from developer or server git repository (app/, frontend/, tests/)</text>
-              <text x="48" y="152" class="c-mono">• Interactive Bootstrap: scripts/iqoqo_installer.py</text>
-              <text x="48" y="172" class="c-mono">• Preview Clone Sync: scripts/reconcile_preview_settings.py</text>
-              <text x="48" y="190" class="c-body">  Re-encrypts cloned preview InstanceSettings with target SECRET_KEY</text>
-              <rect x="48" y="206" width="612" height="78" rx="8" class="card-tint-indigo"/>
-              <text x="60" y="226" class="c-title">Direct Execution Steps</text>
-              <text x="60" y="246" class="c-mono">1. pre_deploy_mounts.py .  →  2. chmod 0600 .env</text>
-              <text x="60" y="264" class="c-mono">3. ensure_env_secrets.py   →  4. provision_rum_token.py</text>
+              <text x="50" y="136" class="b12-cb">• Runs directly from repository checkout (app/, frontend/, tests/)</text>
+              <text x="50" y="156" class="b12-cm">• Bootstrap: scripts/iqoqo_installer.py  •  scripts/ensure_env_secrets.py</text>
+              <text x="50" y="176" class="b12-cm">• RUM Provisioning: provision_rum_token.py → 127.0.0.1:5080 (loopback)</text>
+
+              <rect x="50" y="192" width="632" height="82" rx="8" class="b12-p-i"/>
+              <text x="62" y="212" class="b12-ct">Host Direct Startup Contract</text>
+              <text x="62" y="232" class="b12-cm">1. scripts/pre_deploy_mounts.py .   →  2. chmod 0600 .env</text>
+              <text x="62" y="250" class="b12-cm">3. ensure_env_secrets.py            →  4. provision_rum_token.py</text>
+              <text x="62" y="266" class="b12-cb">Shares identical mount validation &amp; secret hardening guards with Path B</text>
             </g>
 
-            <!-- Path B: Source-Free DEPLOY_DIR -->
-            <g filter="url(#b12-shadow)">
-              <rect x="708" y="76" width="700" height="224" rx="14" class="card-teal"/>
-              <rect x="722" y="88" width="64" height="20" rx="5" class="badge-teal"/>
-              <text x="754" y="102" text-anchor="middle" class="badge-txt">PATH B</text>
-              <text x="796" y="103" class="zone-title">Source-Free DEPLOY_DIR (make deploy-sync / preview-up)</text>
-              <rect x="1220" y="88" width="174" height="20" rx="5" class="card-tint-teal"/>
-              <text x="1307" y="101" text-anchor="middle" class="c-teal">/opt/iqoqo | /opt/pre.iqoqo</text>
+            <!-- Path B -->
+            <g filter="url(#b12-sh)">
+              <rect x="720" y="84" width="684" height="206" rx="12" class="b12-card-t"/>
+              <rect x="734" y="96" width="60" height="19" rx="5" class="b12-b-t"/>
+              <text x="764" y="109" text-anchor="middle" class="b12-b-txt">PATH B</text>
+              <text x="804" y="110" class="b12-z-title">Source-Free DEPLOY_DIR (make deploy-sync / preview-up)</text>
+              <rect x="1220" y="96" width="170" height="19" rx="5" class="b12-p-t"/>
+              <text x="1305" y="109" text-anchor="middle" class="b12-pt-t">/opt/iqoqo | /opt/pre.iqoqo</text>
 
-              <text x="724" y="130" class="c-teal">• ZERO source code checkouts — real files only (no external symlinks)</text>
-              <text x="724" y="152" class="c-mono">• Drift Control: .deploy_manifest.json (SHA-256) via make deploy-verify</text>
-              <text x="724" y="172" class="c-mono">• Runtime Files: .env (0600), docker-compose*.yml, scripts/, shared/,</text>
-              <text x="724" y="188" class="c-mono">  deploy/nginx.conf, deploy/otel-collector-*.yaml, docs/ontology/ (RO)</text>
-              <rect x="724" y="206" width="668" height="78" rx="8" class="card-tint-teal"/>
-              <text x="736" y="226" class="c-title">Lifecycle &amp; Data Protection Targets</text>
-              <text x="736" y="246" class="c-mono">make deploy-validate  •  make deploy-sync  •  make deploy-maintain [--prune]</text>
-              <text x="736" y="264" class="c-body">Preserves data/, exports/, covers/, gallery/ &amp; prunes old .env.bak.* snapshots</text>
+              <text x="734" y="136" class="b12-cl">• ZERO source code checkouts — real files only (no external symlinks)</text>
+              <text x="734" y="156" class="b12-cm">• Runtime Assets: docker-compose*.yml, .env (0600), .deploy_manifest.json (SHA-256),</text>
+              <text x="734" y="172" class="b12-cm">  scripts/, shared/, deploy/nginx.conf, deploy/otel-collector-*.yaml, docs/ontology/</text>
+
+              <rect x="734" y="192" width="656" height="82" rx="8" class="b12-p-t"/>
+              <text x="746" y="212" class="b12-ct">Contract Verification &amp; Maintenance Targets</text>
+              <text x="746" y="232" class="b12-cm">make deploy-validate  •  make deploy-sync  •  make deploy-verify</text>
+              <text x="746" y="250" class="b12-cm">make deploy-maintain [--prune]  •  make status preview</text>
+              <text x="746" y="266" class="b12-cb">Protects data/, exports/, covers/, gallery/; prunes excess .env.bak.* snapshots</text>
             </g>
 
-            <!-- Convergence Arrows into Middle Shared Band -->
-            <path d="M 354 300 L 354 334" class="edge-indigo" marker-end="url(#b12-mk-indigo)"/>
-            <path d="M 1058 300 L 1058 334" class="edge-teal" marker-end="url(#b12-mk-teal)"/>
-            <rect x="266" y="308" width="176" height="18" rx="4" class="e-pill"/>
-            <text x="354" y="320" text-anchor="middle" class="e-pill-txt">Identical Pre-Flight Guards</text>
-            <rect x="970" y="308" width="176" height="18" rx="4" class="e-pill"/>
-            <text x="1058" y="320" text-anchor="middle" class="e-pill-txt">Identical Pre-Flight Guards</text>
+            <!-- Convergence Arrows -->
+            <path d="M 366 290 L 366 324" class="b12-ei" marker-end="url(#b12-mki)"/>
+            <path d="M 1062 290 L 1062 324" class="b12-et" marker-end="url(#b12-mkt)"/>
+            <rect x="282" y="298" width="168" height="17" rx="4" class="b12-p-i"/>
+            <text x="366" y="310" text-anchor="middle" class="b12-pt-i">Shared Pre-Flight Guards</text>
+            <rect x="978" y="298" width="168" height="17" rx="4" class="b12-p-t"/>
+            <text x="1062" y="310" text-anchor="middle" class="b12-pt-t">Shared Pre-Flight Guards</text>
 
-            <!-- ==================== MIDDLE BAND: SHARED GUARDS ==================== -->
-            <rect x="32" y="336" width="1376" height="284" rx="14" class="zone-clay"/>
-            <rect x="46" y="348" width="104" height="20" rx="5" class="badge-clay"/>
-            <text x="98" y="362" text-anchor="middle" class="badge-txt">SHARED GUARDS</text>
-            <text x="160" y="363" class="zone-title">Shared Pre-Flight Mount Guards, Secret Hardening &amp; Destructive Locks</text>
+            <!-- ==================== MIDDLE ROW: SHARED PRE-FLIGHT GUARDS ==================== -->
+            <rect x="36" y="326" width="1368" height="278" rx="14" class="b12-z-i"/>
+            <rect x="50" y="337" width="110" height="19" rx="5" class="b12-b-i"/>
+            <text x="105" y="350" text-anchor="middle" class="b12-b-txt">PRE-FLIGHT</text>
+            <text x="170" y="351" class="b12-z-title">Shared Pre-Flight Security, Non-Root Mount &amp; Production Guards</text>
 
-            <!-- Card 1: Secrets -->
-            <g filter="url(#b12-shadow)">
-              <rect x="48" y="378" width="424" height="226" rx="10" class="card"/>
-              <rect x="60" y="390" width="66" height="19" rx="5" class="badge-indigo"/>
-              <text x="93" y="403" text-anchor="middle" class="badge-txt">SECRETS</text>
-              <text x="134" y="404" class="c-title">Secrets &amp; Fernet Alignment</text>
-              <text x="60" y="428" class="c-mono">scripts/ensure_env_secrets.py</text>
-              <text x="60" y="450" class="c-body">• Tightens single-source .env permissions to 0600</text>
-              <text x="60" y="470" class="c-body">• Auto-generates strong ZO_ROOT_USER_PASSWORD</text>
-              <text x="60" y="486" class="c-body">  &amp; shell-safe secrets (no unescaped $ / backticks)</text>
-              <text x="60" y="510" class="c-clay">• Fernet SECRET_KEY alignment check:</text>
-              <text x="60" y="527" class="c-mono">  check_encrypted_settings_drift() + make status</text>
-              <text x="60" y="550" class="c-teal">• provision_rum_token.py targets 127.0.0.1 only</text>
-              <text x="60" y="568" class="c-body">  (never prints or writes RUM token to disk)</text>
+            <!-- Card 1: v1.2.0 NEW Secret Reconciliation & Stdin Framing (Clay) -->
+            <g filter="url(#b12-sh)">
+              <rect x="50" y="368" width="442" height="222" rx="10" class="b12-card-c"/>
+              <rect x="62" y="379" width="76" height="18" rx="4" class="b12-b-c"/>
+              <text x="100" y="391" text-anchor="middle" class="b12-b-txt">v1.2.0 NEW</text>
+              <text x="148" y="392" class="b12-ct">Secret Reconciliation &amp; Stdin Framing</text>
+              <text x="62" y="415" class="b12-cc">make preview-reconcile</text>
+              <text x="62" y="433" class="b12-cm">reconcile_preview_settings.py --dotenv-stdin</text>
+              <rect x="62" y="445" width="418" height="44" rx="6" class="b12-p-c"/>
+              <text x="72" y="463" class="b12-pt-c">Optional first-line stdin framing (zero argv leak):</text>
+              <text x="72" y="479" class="b12-cm">__IQOQO_SRC_SECRET_KEY__=&lt;source_key&gt;</text>
+              <text x="62" y="510" class="b12-cb">• Preserves APP_VERSION container tag across syncs</text>
+              <text x="62" y="529" class="b12-cm">• monitoring-reset-auth uses clean stdin piping</text>
+              <text x="62" y="549" class="b12-cl">• check_encrypted_settings_drift() + make status</text>
+              <text x="62" y="566" class="b12-cb">  detect Fernet decryption drift immediately</text>
             </g>
 
-            <!-- Card 2: Non-Root UID & Mount Guards -->
-            <g filter="url(#b12-shadow)">
-              <rect x="490" y="378" width="486" height="226" rx="10" class="card-indigo"/>
-              <rect x="502" y="390" width="84" height="19" rx="5" class="badge-clay"/>
-              <text x="544" y="403" text-anchor="middle" class="badge-txt">UID GUARDS</text>
-              <text x="594" y="404" class="c-title">Non-Root UID &amp; Bind-Mount Probes</text>
-              <text x="502" y="428" class="c-mono">scripts/pre_deploy_mounts.py  +  docker-entrypoint.sh</text>
-              <text x="502" y="450" class="c-body">• Fails fast before Gunicorn/Celery start if write probe fails</text>
-              <rect x="502" y="462" width="462" height="58" rx="7" class="card-tint-indigo"/>
-              <text x="512" y="480" class="c-mono">appuser (UID 10001:10001) Writable Bind Mounts:</text>
-              <text x="512" y="497" class="c-mono">covers/ • gallery/ • uploads/raw_covers/ • data/ • exports/</text>
-              <text x="512" y="512" class="c-body">Remediation: make ensure-mount-perms (chmod -R a+rwX)</text>
-              <text x="502" y="542" class="c-mono">• sparqluser (UID 10002): Read-only rootfs, cap_drop: ALL</text>
-              <text x="502" y="562" class="c-clay">• Regular-File Invariant (never auto-created dirs):</text>
-              <text x="502" y="579" class="c-mono">  .allegro_token.json (0600)  &amp;  deploy/nginx.conf</text>
+            <!-- Card 2: Non-Root UID & Mount Guards (Teal) -->
+            <g filter="url(#b12-sh)">
+              <rect x="508" y="368" width="462" height="222" rx="10" class="b12-card-t"/>
+              <rect x="520" y="379" width="76" height="18" rx="4" class="b12-b-t"/>
+              <text x="558" y="391" text-anchor="middle" class="b12-b-txt">UID GUARDS</text>
+              <text x="606" y="392" class="b12-ct">Non-Root UID &amp; Bind-Mount Guards</text>
+              <text x="520" y="415" class="b12-cm">pre_deploy_mounts.py  +  deploy/docker-entrypoint.sh</text>
+              <text x="520" y="435" class="b12-cb">• Backend (web, worker): appuser (UID 10001, GID 10001)</text>
+              <text x="520" y="453" class="b12-cb">• SPARQL Executor: sparql-runner (UID 10002, RO rootfs)</text>
+              <rect x="520" y="465" width="438" height="58" rx="6" class="b12-p-t"/>
+              <text x="530" y="483" class="b12-pt-t">Fail-Fast Writability Probe (before service start):</text>
+              <text x="530" y="500" class="b12-cm">covers/ • gallery/ • uploads/raw_covers/ • data/ • exports/</text>
+              <text x="530" y="516" class="b12-cb">Fix: make ensure-mount-perms (chmod -R a+rwX)</text>
+              <text x="520" y="544" class="b12-cc">Regular-File Invariant (never Docker-created dirs):</text>
+              <text x="520" y="562" class="b12-cm">.allegro_token.json (0600)  &amp;  deploy/nginx.conf</text>
             </g>
 
-            <!-- Card 3: Destructive Script Guards (Crimson) -->
-            <g filter="url(#b12-shadow)">
-              <rect x="994" y="378" width="398" height="226" rx="10" class="card-crimson"/>
-              <rect x="1006" y="390" width="96" height="19" rx="5" class="badge-crimson"/>
-              <text x="1054" y="403" text-anchor="middle" class="badge-txt">PROD SAFETY</text>
-              <text x="1110" y="404" class="c-title">Destructive Script Guards</text>
-              <text x="1006" y="428" class="c-crimson">Protected Mutating / Reset Operations:</text>
-              <text x="1006" y="450" class="c-mono">• scripts/clone.sh</text>
-              <text x="1006" y="469" class="c-mono">• scripts/init_db.py --reset</text>
-              <text x="1006" y="488" class="c-mono">• scripts/backfill_legacy_covers.py --apply</text>
-              <rect x="1006" y="504" width="374" height="84" rx="7" class="card-tint-crimson"/>
-              <text x="1018" y="523" class="c-crimson">Fail-Closed Production Lock:</text>
-              <text x="1018" y="541" class="c-body">• Hard-blocked under FLASK_ENV=production</text>
-              <text x="1018" y="558" class="c-body">• Dry-run by default; --apply requires exact</text>
-              <text x="1018" y="575" class="c-mono">  --confirm-target 'postgresql://host/db'</text>
+            <!-- Card 3: Destructive Script Locks (Crimson Dashed) -->
+            <g filter="url(#b12-sh)">
+              <rect x="986" y="368" width="404" height="222" rx="10" class="b12-card-r"/>
+              <rect x="998" y="379" width="96" height="18" rx="4" class="b12-b-r"/>
+              <text x="1046" y="391" text-anchor="middle" class="b12-b-txt">PROD LOCKS</text>
+              <text x="1104" y="392" class="b12-ct">Destructive Script Locks</text>
+              <text x="998" y="416" class="b12-cr">Hard-Guarded Mutating / Reset Scripts:</text>
+              <text x="998" y="437" class="b12-cm">• scripts/clone.sh</text>
+              <text x="998" y="455" class="b12-cm">• scripts/init_db.py --reset</text>
+              <text x="998" y="473" class="b12-cm">• scripts/backfill_legacy_covers.py --apply</text>
+              <rect x="998" y="488" width="380" height="88" rx="7" class="b12-p-r"/>
+              <text x="1008" y="507" class="b12-cr">Fail-Closed Production Guard:</text>
+              <text x="1008" y="526" class="b12-cb">• Blocks execution under FLASK_ENV=production</text>
+              <text x="1008" y="544" class="b12-cb">• Dry-run by default; --apply requires exact</text>
+              <text x="1008" y="562" class="b12-cm">  credential-free target identity confirmation</text>
             </g>
 
-            <!-- ==================== BOTTOM PIPELINE: MULTI-TIER BACKUP DR ==================== -->
-            <rect x="32" y="644" width="1376" height="244" rx="14" class="zone-teal"/>
-            <rect x="46" y="656" width="88" height="20" rx="5" class="badge-teal"/>
-            <text x="90" y="670" text-anchor="middle" class="badge-txt">BACKUP DR</text>
-            <text x="144" y="671" class="zone-title">Multi-Tier Backup &amp; Disaster Recovery Pipeline</text>
-            <rect x="520" y="656" width="186" height="20" rx="5" class="card-tint-indigo"/>
-            <text x="613" y="669" text-anchor="middle" class="c-mono">scripts/cloud_backup.sh</text>
-            <text x="1394" y="670" text-anchor="end" class="zone-meta">RPO: 24H DAILY • COLD ARCHIVE</text>
+            <!-- ==================== BOTTOM BAND: 4-STAGE BACKUP DR PIPELINE ==================== -->
+            <rect x="36" y="624" width="1368" height="254" rx="14" class="b12-z-t"/>
+            <rect x="50" y="635" width="88" height="19" rx="5" class="b12-b-t"/>
+            <text x="94" y="648" text-anchor="middle" class="b12-b-txt">BACKUP DR</text>
+            <text x="148" y="649" class="b12-z-title">4-Stage Multi-Tier Backup &amp; Disaster Recovery Pipeline</text>
+            <text x="1390" y="648" text-anchor="end" class="b12-z-meta">RPO 24H • FAST CLOUD + GLACIER ARCHIVE</text>
 
             <!-- Stage 1: Trigger -->
-            <g filter="url(#b12-shadow)">
-              <rect x="48" y="692" width="310" height="178" rx="10" class="card"/>
-              <rect x="60" y="704" width="54" height="19" rx="5" class="badge-indigo"/>
-              <text x="87" y="717" text-anchor="middle" class="badge-txt">STAGE 1</text>
-              <text x="122" y="718" class="c-title">Snapshot Trigger</text>
-              <text x="60" y="744" class="c-mono">Daily Host Cron (03:00):</text>
-              <text x="60" y="762" class="c-teal">make backup-install remote=&lt;r&gt;</text>
-              <text x="60" y="788" class="c-mono">On-Demand Manual Trigger:</text>
-              <text x="60" y="806" class="c-mono">make backup-run remote=&lt;r&gt;</text>
-              <text x="60" y="834" class="c-body">Reads active DEPLOY_DIR/.env</text>
-              <text x="60" y="850" class="c-body">with strict set -eo pipefail</text>
+            <g filter="url(#b12-sh)">
+              <rect x="50" y="666" width="316" height="198" rx="9" class="b12-card-i"/>
+              <rect x="62" y="677" width="52" height="18" rx="4" class="b12-b-i"/>
+              <text x="88" y="689" text-anchor="middle" class="b12-b-txt">STAGE 1</text>
+              <text x="122" y="690" class="b12-ct">Snapshot Trigger</text>
+              <text x="62" y="716" class="b12-cm">Daily Host Cron (03:00):</text>
+              <text x="62" y="734" class="b12-cl">make backup-install remote=&lt;r&gt;</text>
+              <text x="62" y="760" class="b12-cm">On-Demand Manual Run:</text>
+              <text x="62" y="778" class="b12-cm">make backup-run remote=&lt;r&gt;</text>
+              <rect x="62" y="796" width="292" height="52" rx="6" class="b12-p-i"/>
+              <text x="72" y="815" class="b12-pt-i">Executor: scripts/cloud_backup.sh</text>
+              <text x="72" y="833" class="b12-cb">Reads single-source DEPLOY_DIR/.env</text>
             </g>
 
-            <!-- Stage 2: Dump & Archive -->
-            <g filter="url(#b12-shadow)">
-              <rect x="392" y="692" width="310" height="178" rx="10" class="card-indigo"/>
-              <rect x="404" y="704" width="54" height="19" rx="5" class="badge-indigo"/>
-              <text x="431" y="717" text-anchor="middle" class="badge-txt">STAGE 2</text>
-              <text x="466" y="718" class="c-title">Dump &amp; Archive</text>
-              <text x="404" y="744" class="c-mono">1. pg_dumpall (PostgreSQL db)</text>
-              <text x="404" y="762" class="c-body">   Single SSoT; Valkey is ephemeral</text>
-              <text x="404" y="786" class="c-mono">2. Compressed .tar.gz Bundle:</text>
-              <text x="404" y="804" class="c-mono">   • app/static/covers/</text>
-              <text x="404" y="820" class="c-mono">   • app/static/gallery/</text>
-              <text x="404" y="836" class="c-mono">   • uploads/raw_covers/</text>
-              <text x="404" y="852" class="c-clay">   • data/keys/ (0700 RSA PEMs)</text>
+            <!-- Stage 2: Consistent Dump & Archive -->
+            <g filter="url(#b12-sh)">
+              <rect x="392" y="666" width="316" height="198" rx="9" class="b12-card-i"/>
+              <rect x="404" y="677" width="52" height="18" rx="4" class="b12-b-i"/>
+              <text x="430" y="689" text-anchor="middle" class="b12-b-txt">STAGE 2</text>
+              <text x="464" y="690" class="b12-ct">Dump &amp; Archive</text>
+              <text x="404" y="714" class="b12-cm">1. pg_dumpall (PG 18 SSoT)</text>
+              <text x="404" y="731" class="b12-cb">   Valkey state is ephemeral (skipped)</text>
+              <text x="404" y="753" class="b12-cm">2. Tar Archive (.tar.gz):</text>
+              <text x="404" y="770" class="b12-cm">   covers/ • gallery/ • raw_covers/</text>
+              <text x="404" y="787" class="b12-cm">   data/keys/ (RSA actor PEMs)</text>
+              <rect x="404" y="800" width="292" height="50" rx="6" class="b12-p-c"/>
+              <text x="414" y="817" class="b12-pt-c">v1.2.0 Legacy Key Fallback:</text>
+              <text x="414" y="833" class="b12-cb">data/federation_keys/ (0700/0600 perms)</text>
             </g>
 
-            <!-- Stage 3: Cloud Sync & Glacier -->
-            <g filter="url(#b12-shadow)">
-              <rect x="736" y="692" width="310" height="178" rx="10" class="card-clay"/>
-              <rect x="748" y="704" width="54" height="19" rx="5" class="badge-clay"/>
-              <text x="775" y="717" text-anchor="middle" class="badge-txt">STAGE 3</text>
-              <text x="810" y="718" class="c-title">Cloud Sync &amp; Glacier</text>
-              <text x="748" y="744" class="c-clay">rclone Hardened Transfer:</text>
-              <text x="748" y="762" class="c-mono">rclone copy -- &lt;bundle&gt; &lt;remote&gt;</text>
-              <text x="748" y="780" class="c-body">(-- delimiter blocks flag injection)</text>
-              <text x="748" y="806" class="c-body">• Tier 1: Fast Cloud Remote</text>
-              <text x="748" y="822" class="c-body">  (S3 / Google Drive / Backblaze)</text>
-              <text x="748" y="846" class="c-teal">• Tier 2: S3 Glacier Cold Archive</text>
+            <!-- Stage 3: v1.2.0 NEW Dual Transfer Backend (Clay) -->
+            <g filter="url(#b12-sh)">
+              <rect x="734" y="666" width="316" height="198" rx="9" class="b12-card-c"/>
+              <rect x="746" y="677" width="52" height="18" rx="4" class="b12-b-c"/>
+              <text x="772" y="689" text-anchor="middle" class="b12-b-txt">STAGE 3</text>
+              <rect x="962" y="677" width="76" height="18" rx="4" class="b12-b-c"/>
+              <text x="1000" y="689" text-anchor="middle" class="b12-b-txt">v1.2.0 NEW</text>
+              <text x="746" y="712" class="b12-ct">Dual Transfer Backend</text>
+              <text x="746" y="734" class="b12-cm">A) Host rclone (-- delimiter hardening)</text>
+              <text x="746" y="754" class="b12-cc">B) Native boto3 S3Service:</text>
+              <rect x="746" y="764" width="292" height="86" rx="6" class="b12-p-c"/>
+              <text x="756" y="781" class="b12-cm">S3_BACKEND=auto|rclone|s3</text>
+              <text x="756" y="798" class="b12-cm">S3_BUCKET_BACKUP</text>
+              <text x="756" y="815" class="b12-cm">S3_BUCKET_ARCHIVE + S3_ARCHIVE_PREFIX</text>
+              <text x="756" y="832" class="b12-cc">S3_ARCHIVE_STORAGE_CLASS (Glacier)</text>
             </g>
 
-            <!-- Stage 4: Verification & Recovery -->
-            <g filter="url(#b12-shadow)">
-              <rect x="1080" y="692" width="310" height="178" rx="10" class="card-teal"/>
-              <rect x="1092" y="704" width="54" height="19" rx="5" class="badge-teal"/>
-              <text x="1119" y="717" text-anchor="middle" class="badge-txt">STAGE 4</text>
-              <text x="1154" y="718" class="c-title">Verify &amp; Restore</text>
-              <text x="1092" y="744" class="c-teal">make backup-check remote=&lt;r&gt;</text>
-              <text x="1092" y="762" class="c-body">Verifies cron, rclone, disk &amp; freshness</text>
-              <text x="1092" y="788" class="c-mono">Full DR Restore Paths:</text>
-              <text x="1092" y="806" class="c-mono">• psql -U iqoqo &lt; dump.sql</text>
-              <text x="1092" y="824" class="c-mono">• scripts/restore_covers.py &lt;zip&gt;</text>
-              <text x="1092" y="848" class="c-body">• Portable JSON: make db-export</text>
+            <!-- Stage 4: Verification & Cold Archive -->
+            <g filter="url(#b12-sh)">
+              <rect x="1076" y="666" width="314" height="198" rx="9" class="b12-card-t"/>
+              <rect x="1088" y="677" width="52" height="18" rx="4" class="b12-b-t"/>
+              <text x="1114" y="689" text-anchor="middle" class="b12-b-txt">STAGE 4</text>
+              <text x="1148" y="690" class="b12-ct">Verify &amp; Cold Archive</text>
+              <text x="1088" y="716" class="b12-cl">make backup-check</text>
+              <text x="1088" y="734" class="b12-cb">Continuous cron, remote, disk &amp; freshness</text>
+              <rect x="1088" y="748" width="290" height="54" rx="6" class="b12-p-t"/>
+              <text x="1098" y="766" class="b12-pt-t">S3 Glacier Cold Archiving:</text>
+              <text x="1098" y="783" class="b12-cm">make archive-run</text>
+              <text x="1098" y="797" class="b12-cm">make archive-check --archive</text>
+              <text x="1088" y="826" class="b12-cm">Restore: psql &lt; dump.sql</text>
+              <text x="1088" y="844" class="b12-cm">         restore_covers.py &lt;zip&gt;</text>
             </g>
 
-            <!-- Backup Pipeline Arrows -->
-            <path d="M 358 781 L 390 781" class="edge-indigo" marker-end="url(#b12-mk-indigo)"/>
-            <path d="M 702 781 L 734 781" class="edge-clay" marker-end="url(#b12-mk-clay)"/>
-            <path d="M 1046 781 L 1078 781" class="edge-teal" marker-end="url(#b12-mk-teal)"/>
+            <!-- Pipeline Stage Arrows -->
+            <path d="M 366 765 L 390 765" class="b12-ei" marker-end="url(#b12-mki)"/>
+            <path d="M 708 765 L 732 765" class="b12-ec" marker-end="url(#b12-mkc)"/>
+            <path d="M 1050 765 L 1074 765" class="b12-et" marker-end="url(#b12-mkt)"/>
 
-            <!-- Legend -->
-            <rect x="32" y="904" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="929" class="legend-h">LEGEND:</text>
-            <line x1="128" y1="925" x2="174" y2="925" class="edge-indigo" marker-end="url(#b12-mk-indigo)"/>
-            <text x="184" y="929" class="legend-t">Host Checkout / DB Dump</text>
-            <line x1="376" y1="925" x2="422" y2="925" class="edge-teal" marker-end="url(#b12-mk-teal)"/>
-            <text x="432" y="929" class="legend-t">Source-Free DEPLOY_DIR / Verify</text>
-            <line x1="680" y1="925" x2="726" y2="925" class="edge-clay" marker-end="url(#b12-mk-clay)"/>
-            <text x="736" y="929" class="legend-t">Hardened rclone Off-Site Sync</text>
-            <rect x="968" y="915" width="18" height="18" rx="4" class="badge-clay"/>
-            <text x="994" y="929" class="legend-t">UID 10001/10002 Guard</text>
-            <rect x="1182" y="915" width="18" height="18" rx="4" class="badge-crimson"/>
-            <text x="1208" y="929" class="legend-t">Prod Destructive Lock</text>
+            <!-- Bottom Legend Bar -->
+            <rect x="36" y="890" width="1368" height="36" rx="9" class="b12-leg"/>
+            <text x="52" y="912" class="b12-leg-h">LEGEND:</text>
+            <line x1="126" y1="908" x2="168" y2="908" class="b12-ei" marker-end="url(#b12-mki)"/>
+            <text x="178" y="912" class="b12-leg-t">Host Path / DB Dump</text>
+            <line x1="348" y1="908" x2="390" y2="908" class="b12-et" marker-end="url(#b12-mkt)"/>
+            <text x="400" y="912" class="b12-leg-t">Source-Free / Verify &amp; Glacier</text>
+            <line x1="628" y1="908" x2="670" y2="908" class="b12-ec" marker-end="url(#b12-mkc)"/>
+            <text x="680" y="912" class="b12-leg-t">v1.2.0 Stdin / Dual S3Service</text>
+            <rect x="914" y="899" width="16" height="16" rx="4" class="b12-b-t"/>
+            <text x="938" y="912" class="b12-leg-t">UID 10001/10002 Mount Guard</text>
+            <rect x="1162" y="899" width="16" height="16" rx="4" class="b12-b-r"/>
+            <text x="1186" y="912" class="b12-leg-t">Prod Destructive Lock</text>
           </svg>

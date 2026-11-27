@@ -53,6 +53,7 @@ from app.core.permissions import PROTECTED_ROLE_NAMES, PermissionName
 from app.core.search_service import build_ilike_search_clause
 from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
+from app.db.contributions import ExpressionContribution, ManifestationContribution, WorkContribution
 from app.db.core import (
     DuplicateCandidate,
     EntityAuditLog,
@@ -1550,7 +1551,7 @@ def get_lod_stats():
     """Query lifetime database statistics of Linked Open Data links across the catalog."""
     total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
 
-    # Count distinct manifestations with direct accepted semantic links OR whose work has accepted semantic links
+    # Count distinct manifestations with direct, Expression/Work, or Contributor accepted semantic links
     manif_with_direct_links = select(SemanticLink.entity_id).where(
         SemanticLink.entity_type == "manifestation",
         SemanticLink.status == "accepted",
@@ -1559,16 +1560,39 @@ def get_lod_stats():
         SemanticLink.entity_type == "work",
         SemanticLink.status == "accepted",
     )
+    exprs_with_links = select(SemanticLink.entity_id).where(
+        SemanticLink.entity_type == "expression",
+        SemanticLink.status == "accepted",
+    )
+    contributors_with_links = select(SemanticLink.entity_id).where(
+        SemanticLink.entity_type == "contributor",
+        SemanticLink.status == "accepted",
+    )
+    works_with_contrib_links = select(WorkContribution.work_id).where(WorkContribution.contributor_id.in_(contributors_with_links))
+    exprs_with_contrib_links = select(ExpressionContribution.expression_id).where(
+        ExpressionContribution.contributor_id.in_(contributors_with_links)
+    )
+    manifs_with_contrib_links = select(ManifestationContribution.manifestation_id).where(
+        ManifestationContribution.contributor_id.in_(contributors_with_links)
+    )
     manifs_with_linked_works = (
         select(Manifestation.id)
         .join(Expression, Manifestation.expression_id == Expression.id)
-        .where(Expression.work_id.in_(works_with_links))
+        .where(
+            db.or_(
+                Expression.id.in_(exprs_with_links),
+                Expression.id.in_(exprs_with_contrib_links),
+                Expression.work_id.in_(works_with_links),
+                Expression.work_id.in_(works_with_contrib_links),
+            )
+        )
     )
     linked_manifestations = (
         db.session.scalar(
             select(func.count(Manifestation.id)).where(  # pylint: disable=not-callable
                 db.or_(
                     Manifestation.id.in_(manif_with_direct_links),
+                    Manifestation.id.in_(manifs_with_contrib_links),
                     Manifestation.id.in_(manifs_with_linked_works),
                 )
             )

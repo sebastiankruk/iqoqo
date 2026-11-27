@@ -26,7 +26,7 @@ scripts on your machine still use your existing rclone install, unchanged.
 One name is **deprecated** in favour of the `S3_BUCKET_*` variables, and iqoqo
 warns by name when set without a replacement:
 
-- `RCLONE_REMOTE_ARCHIVE` → `S3_BUCKET_BACKUP`
+- `RCLONE_REMOTE_ARCHIVE` → `S3_BUCKET_ARCHIVE` (falls back to `S3_BUCKET_BACKUP` when unset)
 
 Leaving every S3 value blank runs fully local; each role degrades to a no-op
 rather than failing. Full variable reference: `.env.example`, and
@@ -34,11 +34,11 @@ rather than failing. Full variable reference: `.env.example`, and
 
 ### Remote storage roles
 
-| Role | rclone variable (host scripts) | Native variable (containers) | Recommended storage class |
-| ---- | ------------------------------ | ---------------------------- | ------------------------- |
+| Role | rclone variable (host scripts) | Native variable (containers / boto3) | Recommended storage class |
+| ---- | ------------------------------ | ------------------------------------ | ------------------------- |
 | Daily database dumps & asset backups | `RCLONE_REMOTE_FAST` | `S3_BUCKET_BACKUP` | AWS S3 Standard / Standard-IA / Dropbox |
-| Long-term cold storage archive | `RCLONE_REMOTE_ARCHIVE` | `S3_BUCKET_BACKUP` | AWS S3 Glacier Flexible Retrieval / Deep Archive |
-| Shared AI cover cache across instances | `RCLONE_COVERS_REMOTE` | `S3_BUCKET_COVERS` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+| Long-term cold storage archive | `RCLONE_REMOTE_ARCHIVE` | `S3_BUCKET_ARCHIVE` (fallback `S3_BUCKET_BACKUP`) + `S3_ARCHIVE_STORAGE_CLASS` | AWS S3 Glacier Instant / Flexible / Deep Archive |
+| Shared AI cover cache across instances | `RCLONE_COVERS_REMOTE` | `S3_BUCKET_COVERS` (key prefix via `S3_KEY_PREFIX`) | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
 
 The native backend works against AWS S3, MinIO, Cloudflare R2, Wasabi, Backblaze
 B2 and Oracle Cloud Object Storage. Server-side encryption is available via
@@ -108,11 +108,27 @@ Starting in **v0.8.3**, `cloud_backup.sh` includes robust execution safeguards:
 
 ---
 
-## 2. Long-Term Archiving & AWS S3 Glacier (`RCLONE_REMOTE_ARCHIVE`)
+## 2. Long-Term Archiving & AWS S3 Glacier (`RCLONE_REMOTE_ARCHIVE` / `S3_BUCKET_ARCHIVE`)
 
-For long-term retention and compliance, iQoQo supports pushing cold backups directly to **AWS S3 Glacier** on a monthly schedule.
+For long-term retention and compliance, iQoQo supports pushing cold archives on a monthly schedule via either **native boto3 (`S3Service`)** or **host-side `rclone`** (`cloud_backup.sh --archive`).
 
-### AWS S3 Glacier Setup via Rclone
+### Native boto3 S3 Glacier Setup (`S3_BACKEND=auto|s3`, C163+)
+
+```bash
+S3_BACKEND=s3
+S3_BUCKET_BACKUP=iqoqo-backup
+S3_BUCKET_ARCHIVE=iqoqo-archive
+S3_ARCHIVE_PREFIX=archives/
+S3_ARCHIVE_STORAGE_CLASS=GLACIER
+S3_KEY_PREFIX=""
+AWS_ACCESS_KEY_ID=<YOUR_AWS_ACCESS_KEY_ID>
+AWS_SECRET_ACCESS_KEY=<YOUR_AWS_SECRET_ACCESS_KEY>
+S3_REGION_NAME=eu-north-1
+```
+
+When `S3_BUCKET_ARCHIVE` (or `S3_BUCKET_BACKUP`) is set with AWS credentials and `S3_BACKEND` allows S3 (`s3` or `auto` without matching `rclone` archive remote), `make archive-run` / `scripts/cloud_backup.sh --archive` uploads monthly bundles directly using `S3_ARCHIVE_PREFIX` and `S3_ARCHIVE_STORAGE_CLASS`, and `make archive-check` verifies monthly freshness within 45 days (warning past 35 days).
+
+### Alternative: AWS S3 Glacier Setup via Rclone
 
 1. **AWS IAM User Setup**:
    - Create an IAM User in AWS Console with S3 permissions (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`).
@@ -270,7 +286,7 @@ Starting in **v0.9.4**, `scripts/cloud_backup.sh` automatically archives:
 
 - **Full PostgreSQL Dump**: All schemas including `public`, `auth`, `social`, and `federation` (with Fernet-encrypted actor private keys in `federation.actors`).
 - **Asset Volumes**: `app/static/covers`, `app/static/gallery`, and `app/static/uploads/raw_covers`.
-- **Instance Actor Cryptographic Keys**: `data/federation_keys/` (`server.pem` instance RSA key). Preserving this key ensures remote ActivityPub peers do not reject instance HTTP signatures (`key_fingerprint` pinning) after a node recovery.
+- **Instance Actor Cryptographic Keys**: `data/keys/` (`server.pem` / instance RSA key, with legacy `data/federation_keys/` fallback if present). Preserving this key ensures remote ActivityPub peers do not reject instance HTTP signatures (`key_fingerprint` pinning) after a node recovery.
 
 ### Restoring from Backup
 
@@ -290,7 +306,7 @@ The restore script automatically:
 
 1. Validates SQL dump integrity and restores all database schemas via `docker exec` or `docker compose`.
 2. Extracts uploaded cover art and gallery assets into place.
-3. Restores `data/federation_keys/` and enforces strict owner-only permissions (`chmod 0700 data/federation_keys` and `chmod 0600 data/federation_keys/*.pem`).
+3. Restores `data/keys/` (and legacy `data/federation_keys/` if archived) and enforces strict owner-only permissions (`chmod 0700` on directory and `chmod 0600` on private key files).
 
 ---
 

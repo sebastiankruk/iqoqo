@@ -1,6 +1,6 @@
 # CONTEXT — iqoqo
 
-> Last updated: 2026-09-05
+> Last updated: 2026-11-27 (`v1.2.0`)
 
 ## Overview
 
@@ -37,8 +37,8 @@
 │         │                  │                   │             │
 │         ▼                  ▼                   ▼             │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │    Nginx    │    │ PostgreSQL  │    │    Redis    │     │
-│  │   Gateway   │    │     18      │    │      8      │     │
+│  │    Nginx    │    │ PostgreSQL  │    │  Valkey 8   │     │
+│  │   Gateway   │    │     18      │    │(Redis Comp.)│     │
 │  │  Port 8000   │    │  Port 5432  │    │  Port 6379  │     │
 │  └─────────────┘    └─────────────┘    └─────────────┘     │
 │                                                              │
@@ -56,14 +56,14 @@
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | Next.js 16.2 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Vitest |
-| Backend | Python 3.14+, Flask 3.1, SQLAlchemy 2.0, Alembic, Celery, Redis 8 |
-| Database | PostgreSQL 18 (Full-Text Search & JSONB) |
-| Auth | JWT (PyJWT + bcrypt), Google OAuth |
-| Observability | OpenTelemetry + OpenObserve (Traces, Metrics, Logs) |
-| Backups | Rclone (Fast daily sync + S3 Glacier cold archiving) |
-| AI Covers | Local SD, Ollama, OpenAI, Gemini |
-| Deployment | Docker Compose, Prebuilt GHCR images (`backend`, `frontend`, `nginx`) |
+| Frontend | Next.js 16.4 (App Router + Capacitor 7 mobile), React 19.2, TypeScript 5, Tailwind CSS v4, shadcn/ui, Vitest |
+| Backend | Python 3.14+, Flask 3.1, SQLAlchemy 2.0, Alembic, Celery, Valkey 8 |
+| Database | PostgreSQL 18 (Multi-schema: `auth`, `catalog`, `inventory`, `social`, `federation`, `config`) |
+| Auth | JWT (`PyJWT` + `scrypt`), `iqo_` PATs, TOTP 2FA, Google & Apple OAuth |
+| Observability | 8-layer OpenTelemetry + OpenObserve (Traces, Metrics, Logs, Browser RUM) |
+| Backups | Native boto3 `S3Service` (`S3_BUCKET_ARCHIVE`) & `rclone` multi-tier backup |
+| AI Covers | Local SD, Ollama, OpenAI, Gemini + multi-zone Tesseract OCR (`eng+pol`) |
+| Deployment | Docker Compose, source-free `DEPLOY_DIR` contract, prebuilt GHCR images |
 
 ## Key Files to Reference
 
@@ -91,5 +91,5 @@
 - **FRBR Ontology:** The data model strictly follows FRBR: Work → Expression → Manifestation → Item.
 - **Authentication:** JWT access and refresh tokens. Requests use `Authorization: Bearer <token>` header.
 - **PostgreSQL 18:** Uses PostgreSQL 18 with relational JSONB and GIN full-text search indexes.
-- **Background Tasks:** Asynchronous tasks (cover fetching, cloud backups) are dispatched via Celery with Redis broker.
+- **Background Tasks:** Asynchronous tasks (cover fetching, LOD linking, Federation dispatch) run via Celery with Valkey 8 (`redis://redis:6379`).
 - **AiOps Standards:** Test runs and linters support terse AI output with `IQOQO_AI_MODE=1`.

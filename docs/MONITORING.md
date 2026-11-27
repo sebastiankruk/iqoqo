@@ -18,7 +18,7 @@ graph TD
     NX["⚛️ Next.js SSR<br/>Layer 1"]
     H["🔗 Outbound HTTP (requests)<br/>Layer 4"]
     LLM["🤖 OpenAI LLM<br/>Layer 7"]
-    DB["🗄️ PostgreSQL + Redis<br/>Layer 8"]
+    DB["🗄️ PostgreSQL + Valkey 8<br/>Layer 8"]
 
     B -->|"OTLP HTTP (CORS)"| COL
     N -->|"OTLP gRPC (ngx_otel_module)"| COL
@@ -164,7 +164,7 @@ unlimited. That is a deliberate fit for ad-hoc debugging — you keep everything
 until you look at it — but note the property that follows from it. RUM logs land
 in `_rumlog` and session replays are stored as blobs under `/data` in the
 `openobserve_data` volume, which lives on the **host disk next to the Postgres
-and Redis data**. Since the write path is unauthenticated and unbounded, a
+and Valkey data**. Since the write path is unauthenticated and unbounded, a
 determined party can grow that volume without limit; filling the host disk takes
 down iqoqo itself, not just telemetry. **The loopback bind on OpenObserve
 (`docker-compose.monitoring.yml`) is the only control preventing a remote party
@@ -403,13 +403,11 @@ fixed here:
    returns immediately, so `run.sh` hand-rolls a readiness wait and `make
    status` cannot distinguish a wedged container from a starting one. Adding
    one would make the bounded wait near-zero in the common case.
-3. **`.env.bak.*` snapshots are never pruned.** Every key rotation leaves
-   timestamped secret-bearing copies in the repository root, indefinitely.
-4. **`HTTP_PROXY` in `.env` is still a credential-exfiltration path** for any
+3. **`HTTP_PROXY` in `.env` is still a credential-exfiltration path** for any
    *other* `curl` in the deployment. The RUM provisioning step is immune —
    `http.client` has no proxy support — but `scripts/iqoqo-status.sh` and the
    OTLP paths are not. `curl --disable --noproxy '*'` would close it.
-5. **`NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID` defaults to `iqoqo`** while
+4. **`NEXT_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID` defaults to `iqoqo`** while
    `/api/default/rumtoken` uses an OpenObserve-generated application
    identifier. If they differ, OpenObserve rejects every ingest payload and RUM
    is silently dead. This needs a live check against a running instance with

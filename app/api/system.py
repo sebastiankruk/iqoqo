@@ -315,6 +315,7 @@ def get_faceted_stats():
     lod_authority = request.args.get("lod_authority")
     lod_status = request.args.get("lod_status")
     has_map = request.args.get("has_map", "false").lower() in ("true", "1")
+    locations_list = parse_csv_param(request.args.get("location"))
 
     category_list = parse_csv_param(category_str)
     expression_kind_list = parse_csv_param(request.args.get("expression_kind"))
@@ -348,6 +349,7 @@ def get_faceted_stats():
         lod_authority=lod_authority,
         lod_status=lod_status,
         has_map=has_map,
+        locations=locations_list,
         scope=resolved_scope,
     )
     return jsonify({"success": True, "data": stats, "error": None})

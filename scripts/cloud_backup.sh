@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 # iQoQo Cloud Backup Script
-# Usage: ./scripts/cloud_backup.sh [rclone_remote]
+# Usage: ./scripts/cloud_backup.sh [--archive] [rclone_remote]
 #
 # Backs up:
 #   1. PostgreSQL full database dump (pg_dumpall - all schemas including public, auth, social, federation)
@@ -181,7 +181,19 @@ trap cleanup EXIT INT TERM
 # uses, and because it reaches backends boto3 cannot. The S3 path is selected
 # only when explicitly asked for, or when there is no rclone setup at all — in
 # which case trying rclone would just fail with a confusing "unknown remote".
-RCLONE_REMOTE="${1:-${RCLONE_REMOTE_FAST:-}}"
+IS_ARCHIVE=false
+if [ "${1:-}" = "--archive" ]; then
+    IS_ARCHIVE=true
+    shift
+fi
+
+if [ "${IS_ARCHIVE}" = true ]; then
+    RCLONE_REMOTE="${1:-${RCLONE_REMOTE_ARCHIVE:-}}"
+    TARGET_S3_BUCKET="${S3_BUCKET_ARCHIVE:-${S3_BUCKET_BACKUP:-}}"
+else
+    RCLONE_REMOTE="${1:-${RCLONE_REMOTE_FAST:-}}"
+    TARGET_S3_BUCKET="${S3_BUCKET_BACKUP:-}"
+fi
 RCLONE_CONF="${RCLONE_CONFIG:-${HOME}/.config/rclone/rclone.conf}"
 
 # If running as root (e.g. from cron) and no rclone config is found in /root,
@@ -215,7 +227,7 @@ case "${S3_BACKEND}" in
     auto)
         if rclone_conf_present; then
             BACKEND="rclone"
-        elif [ -n "${S3_BUCKET_BACKUP:-}" ]; then
+        elif [ -n "${TARGET_S3_BUCKET:-}" ]; then
             BACKEND="s3"
         else
             BACKEND="none"
@@ -251,14 +263,20 @@ case "${BACKEND}" in
         # an explicit remote:path is used verbatim.
         if [[ "${RCLONE_REMOTE}" == *":"* ]]; then
             RCLONE_TARGET="${RCLONE_REMOTE}"
+        elif [ "${IS_ARCHIVE}" = true ]; then
+            RCLONE_TARGET="${RCLONE_REMOTE:-iqoqo-glacier:iqoqo-archive}"
         else
             RCLONE_TARGET="${RCLONE_REMOTE:-iqoqo-backup}:iqoqo_backups"
         fi
         ;;
     s3)
-        if [ -z "${S3_BUCKET_BACKUP:-}" ]; then
-            echo "❌ Error: S3_BUCKET_BACKUP is not set but S3_BACKEND=s3." >&2
-            echo "   Set S3_BUCKET_BACKUP plus AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY." >&2
+        if [ -z "${TARGET_S3_BUCKET:-}" ]; then
+            if [ "${IS_ARCHIVE}" = true ]; then
+                echo "❌ Error: S3_BUCKET_ARCHIVE and S3_BUCKET_BACKUP are both unset with S3_BACKEND=s3." >&2
+            else
+                echo "❌ Error: S3_BUCKET_BACKUP is not set but S3_BACKEND=s3." >&2
+            fi
+            echo "   Set S3_BUCKET_BACKUP (or S3_BUCKET_ARCHIVE) plus AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY." >&2
             exit 1
         fi
         if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
@@ -281,12 +299,18 @@ case "${BACKEND}" in
             echo "   (or run from the project venv: make venv)" >&2
             exit 1
         fi
-        S3_KEY_PREFIX="${S3_KEY_PREFIX:-backups/}"
+        if [ "${IS_ARCHIVE}" = true ]; then
+            EFFECTIVE_S3_PREFIX="${S3_ARCHIVE_PREFIX:-archives/}"
+            EFFECTIVE_STORAGE_CLASS="${S3_ARCHIVE_STORAGE_CLASS:-}"
+        else
+            EFFECTIVE_S3_PREFIX="${S3_KEY_PREFIX:-backups/}"
+            EFFECTIVE_STORAGE_CLASS=""
+        fi
         # Normalise to exactly one separator, so the key is
-        # "${S3_KEY_PREFIX}iqoqo_backup_<ts>.tar.gz" however the operator wrote it.
-        S3_KEY_PREFIX="${S3_KEY_PREFIX#/}"
-        S3_KEY_PREFIX="${S3_KEY_PREFIX%/}"
-        [ -n "${S3_KEY_PREFIX}" ] && S3_KEY_PREFIX="${S3_KEY_PREFIX}/"
+        # "${EFFECTIVE_S3_PREFIX}iqoqo_backup_<ts>.tar.gz" however the operator wrote it.
+        EFFECTIVE_S3_PREFIX="${EFFECTIVE_S3_PREFIX#/}"
+        EFFECTIVE_S3_PREFIX="${EFFECTIVE_S3_PREFIX%/}"
+        [ -n "${EFFECTIVE_S3_PREFIX}" ] && EFFECTIVE_S3_PREFIX="${EFFECTIVE_S3_PREFIX}/"
         ;;
     none)
         echo "❌ Error: no backup destination is configured." >&2
@@ -305,9 +329,9 @@ case "${BACKEND}" in
         echo "🗄️  Starting iQoQo backup (backend: rclone, target: ${RCLONE_TARGET})..."
         ;;
     s3)
-        DEST_DESC="${S3_BUCKET_BACKUP}/${S3_KEY_PREFIX}"
-        log "Resolved backend: s3 (bucket: ${S3_BUCKET_BACKUP}, prefix: ${S3_KEY_PREFIX:-<root>})"
-        echo "🗄️  Starting iQoQo backup (backend: s3, bucket: ${S3_BUCKET_BACKUP}, prefix: ${S3_KEY_PREFIX:-<root>})..."
+        DEST_DESC="${TARGET_S3_BUCKET}/${EFFECTIVE_S3_PREFIX}"
+        log "Resolved backend: s3 (bucket: ${TARGET_S3_BUCKET}, prefix: ${EFFECTIVE_S3_PREFIX:-<root>})"
+        echo "🗄️  Starting iQoQo backup (backend: s3, bucket: ${TARGET_S3_BUCKET}, prefix: ${EFFECTIVE_S3_PREFIX:-<root>})..."
         ;;
 esac
 
@@ -417,7 +441,7 @@ fi
 
 # 2. Archive uploaded assets and instance keys (non-fatal if missing)
 # Standard iQoQo asset and key paths relative to app root/volumes
-ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers" "data/federation_keys")
+ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers" "data/keys" "data/federation_keys")
 for asset_dir in "${ASSET_PATHS[@]}"; do
     if [ -d "${asset_dir}" ]; then
         echo "📁 Archiving ${asset_dir}..."
@@ -458,8 +482,8 @@ case "${BACKEND}" in
         # upload_file is used rather than put_object so the archive streams in
         # bounded chunks instead of being read into memory whole -- a pg_dumpall
         # archive of a real library is routinely multiple gigabytes.
-        echo "☁️  Uploading to ${S3_BUCKET_BACKUP}/${S3_KEY_PREFIX}..."
-        if ARCHIVE_PATH="${ARCHIVE}" BUCKET="${S3_BUCKET_BACKUP}" KEY_PREFIX="${S3_KEY_PREFIX}" "${PYTHON_BIN}" - <<'PYEOF'
+        echo "☁️  Uploading to ${TARGET_S3_BUCKET}/${EFFECTIVE_S3_PREFIX}..."
+        if ARCHIVE_PATH="${ARCHIVE}" BUCKET="${TARGET_S3_BUCKET}" KEY_PREFIX="${EFFECTIVE_S3_PREFIX}" STORAGE_CLASS="${EFFECTIVE_STORAGE_CLASS}" "${PYTHON_BIN}" - <<'PYEOF'
 import logging
 import os
 import sys
@@ -474,26 +498,29 @@ except ImportError:
 archive = os.environ["ARCHIVE_PATH"]
 bucket = os.environ["BUCKET"]
 prefix = os.environ.get("KEY_PREFIX", "")
+storage_class = os.environ.get("STORAGE_CLASS", "").strip() or None
 
-service = S3Service("backup", access_key=os.environ.get("AWS_ACCESS_KEY_ID"), secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY"))
+service = S3Service.from_environment("backup")
 # The bucket is assigned rather than read from the environment so the same
-# process-local resolution rules as the application apply.
+# process-local resolution rules (including --archive S3_BUCKET_ARCHIVE) apply.
 service._bucket = bucket  # pylint: disable=protected-access
 
 key = f"{prefix}{os.path.basename(archive)}"
 extra = service._extra_args()  # pylint: disable=protected-access
 
 try:
-    service.upload_file(archive, key, content_type="application/gzip")
+    service.upload_file(archive, key, content_type="application/gzip", storage_class=storage_class)
 except S3UploadError as exc:
     sys.exit(f"error: {exc}")
 
 if extra.get("ServerSideEncryption"):
     print(f"  encrypted at rest with {extra['ServerSideEncryption']}")
+if storage_class:
+    print(f"  storage class: {storage_class}")
 print(f"  wrote {key}")
 PYEOF
         then
-            echo "✅ Backup uploaded → ${S3_BUCKET_BACKUP}/${S3_KEY_PREFIX}$(basename "${ARCHIVE}")"
+            echo "✅ Backup uploaded → ${TARGET_S3_BUCKET}/${EFFECTIVE_S3_PREFIX}$(basename "${ARCHIVE}")"
             upload_ok=true
         fi
         ;;

@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import foreign
 
@@ -125,7 +125,8 @@ class SemanticLink(db.Model):  # type: ignore[name-defined]
 
     Supported authorities: ``dbpedia``, ``geonames``, ``wordnet``.
     Entities mapped:
-    - ``work``: DBpedia creative works / authors, WordNet synsets
+    - ``work``: DBpedia creative works, WordNet synsets
+    - ``expression``: Expression-level realization authority links
     - ``manifestation``: GeoNames publication places, publishers, format URIs
     - ``contributor``: DBpedia person / organisation
     """
@@ -284,14 +285,35 @@ class Work(db.Model):  # type: ignore[name-defined]
         self,
         authority: str | None = None,
         status: str | None = "accepted",
+        include_contributors: bool = False,
     ) -> list[SemanticLink]:
-        """Retrieve Work-scoped semantic links, optionally filtered by authority and status."""
+        """Retrieve Work-scoped semantic links, optionally including Contributor links."""
         links = list(self.semantic_links)
+        if include_contributors:
+            contributor_ids = {wc.contributor_id for wc in (self.contributions or []) if wc.contributor_id}
+            if contributor_ids:
+                links.extend(
+                    db.session.execute(
+                        select(SemanticLink).where(
+                            SemanticLink.entity_type == "contributor",
+                            SemanticLink.entity_id.in_(contributor_ids),
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
         if authority:
             links = [link for link in links if link.authority == authority]
         if status:
             links = [link for link in links if link.status == status]
-        return links
+        deduped: list[SemanticLink] = []
+        seen_keys: set[int] = set()
+        for link in links:
+            key = link.id if link.id is not None else id(link)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                deduped.append(link)
+        return deduped
 
     @property
     def iri(self) -> str:
@@ -670,6 +692,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     def get_semantic_links(
         self,
         include_work: bool = True,
+        include_contributors: bool = True,
         authority: str | None = None,
         status: str | None = "accepted",
     ) -> list[SemanticLink]:
@@ -677,16 +700,56 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
 
         Manifestation-level links include publication places (GeoNames), publishers, formats.
         If ``include_work`` is True and manifestation is linked to an expression/work,
-        inherited Work-level links (DBpedia creative work/authors, WordNet synsets) are included.
+        inherited Expression/Work-level links and Contributor links (DBpedia person/org)
+        connected via Work, Expression, or Manifestation contributions are included.
         """
         links = list(self.semantic_links)
-        if include_work and self.expression and self.expression.work:
-            links.extend(self.expression.work.semantic_links)
+        if include_work and self.expression:
+            if self.expression_id is not None:
+                links.extend(
+                    db.session.execute(
+                        select(SemanticLink).where(
+                            SemanticLink.entity_type == "expression",
+                            SemanticLink.entity_id == self.expression_id,
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+            if self.expression.work:
+                links.extend(self.expression.work.semantic_links)
+
+        if include_contributors:
+            contributor_ids: set[int] = {mc.contributor_id for mc in (self.contributions or []) if mc.contributor_id}
+            if include_work and self.expression:
+                contributor_ids.update(ec.contributor_id for ec in (self.expression.contributions or []) if ec.contributor_id)
+                if self.expression.work:
+                    contributor_ids.update(wc.contributor_id for wc in (self.expression.work.contributions or []) if wc.contributor_id)
+            if contributor_ids:
+                links.extend(
+                    db.session.execute(
+                        select(SemanticLink).where(
+                            SemanticLink.entity_type == "contributor",
+                            SemanticLink.entity_id.in_(contributor_ids),
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+
         if authority:
             links = [link for link in links if link.authority == authority]
         if status:
             links = [link for link in links if link.status == status]
-        return links
+
+        deduped: list[SemanticLink] = []
+        seen_keys: set[int] = set()
+        for link in links:
+            key = link.id if link.id is not None else id(link)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                deduped.append(link)
+        return deduped
 
     @property
     def iri(self) -> str:
@@ -735,6 +798,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     collection_status = db.Column(db.String(50), default="available")  # see COLLECTION_STATUSES
     condition = db.Column(db.String(50))
     local_barcode = db.Column(db.String(64), nullable=True, index=True)
+    physical_location = db.Column(db.String(255), nullable=True, index=True)
 
     lent_to_user_id = db.Column(
         UUID(as_uuid=True),
@@ -814,10 +878,10 @@ class Item(db.Model):  # type: ignore[name-defined]
         self.is_hidden = not value
         self.visibility = "public" if value else "private"
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, include_location: bool = False) -> dict:
         """Serialize Item entity to dictionary."""
         effective_visibility = self.visibility or ("private" if self.is_hidden else "public")
-        return {
+        data = {
             "id": self.id,
             "manifestation_id": self.manifestation_id,
             "owner_id": str(self.owner_id) if self.owner_id else None,
@@ -834,6 +898,9 @@ class Item(db.Model):  # type: ignore[name-defined]
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "meta": self.meta or {},
         }
+        if include_location:
+            data["physical_location"] = self.physical_location
+        return data
 
 
 class UserWorkIntent(db.Model):  # type: ignore[name-defined]

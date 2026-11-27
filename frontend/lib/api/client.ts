@@ -24,6 +24,8 @@ import { getInstanceUrl, getAuthToken } from "@/lib/capacitor/storage";
 // For server-side calls use lib/api/server-client.ts instead.
 const API_BASE = "/api";
 
+export const API_TIMEOUT_MS = 15_000;
+
 /**
  * Preconfigured axios instance pointing at the Flask backend.
  * withCredentials is intentionally omitted: no session-based auth is
@@ -34,7 +36,7 @@ export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
-  timeout: 15_000,
+  timeout: API_TIMEOUT_MS,
 });
 
 /**
@@ -95,8 +97,12 @@ apiClient.interceptors.response.use(
  * @param params - Optional query parameters
  * @returns {Promise<T>} The unwrapped data
  */
-export async function apiFetch<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-  const res = await apiClient.get<ApiResponse<T>>(path, { params });
+export async function apiFetch<T>(
+  path: string,
+  params?: Record<string, unknown>,
+  options?: { signal?: AbortSignal }
+): Promise<T> {
+  const res = await apiClient.get<ApiResponse<T>>(path, { params, signal: options?.signal });
   if (!res.data.success || res.data.data === null) {
     throw new Error(res.data.error ?? "Unknown error");
   }

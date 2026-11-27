@@ -254,7 +254,15 @@ def main(argv: list[str] | None = None) -> int:
     raw_stdin = sys.stdin.read()
     if args.dotenv_stdin:
         src_secret_key = os.environ.get("SRC_SECRET_KEY", "")
-        dst_env = parse_env_text(raw_stdin)
+        env_text = raw_stdin
+        first_line, sep, rest = raw_stdin.partition("\n")
+        if first_line.startswith("__IQOQO_SRC_SECRET_KEY__="):
+            framed_secret = first_line.split("=", 1)[1].strip()
+            if framed_secret:
+                src_secret_key = framed_secret
+            env_text = rest if sep else ""
+        dst_env = parse_env_text(env_text)
+        dst_env.pop("__IQOQO_SRC_SECRET_KEY__", None)
     else:
         stripped = raw_stdin.strip()
         payload: dict[str, Any] = json.loads(stripped) if stripped else {}
@@ -277,16 +285,22 @@ def main(argv: list[str] | None = None) -> int:
             purge_undecryptable=args.purge_undecryptable,
         )
 
-    print(
-        f"✅ Encrypted settings reconciled (re-encrypted: {summary['reencrypted']}, "
-        f"overridden from env: {summary['overridden']}, cleared stale: {summary['cleared']})"
-    )
     preserved = summary["preserved_undecryptable"]
     if preserved:
         print(
+            f"⚠️ Encrypted settings partially reconciled (re-encrypted: {summary['reencrypted']}, "
+            f"overridden from env: {summary['overridden']}, cleared stale: {summary['cleared']}, "
+            f"preserved undecryptable: {len(preserved)})"
+        )
+        print(
             f"⚠️ WARNING: Preserved {len(preserved)} undecryptable cloned InstanceSettings row(s) "
             f"because SRC_SECRET_KEY was unavailable ({', '.join(preserved)}). "
-            "Re-run with SRC_SECRET_KEY or pass --purge-undecryptable to delete."
+            "Re-run with SRC_LOC=/path/to/source or SRC_SECRET_KEY=..., or pass --purge-undecryptable to delete."
+        )
+    else:
+        print(
+            f"✅ Encrypted settings reconciled (re-encrypted: {summary['reencrypted']}, "
+            f"overridden from env: {summary['overridden']}, cleared stale: {summary['cleared']})"
         )
     if summary["admin_synced"]:
         print(f"👤 Synced preview admin credentials for {summary['admin_email']}")

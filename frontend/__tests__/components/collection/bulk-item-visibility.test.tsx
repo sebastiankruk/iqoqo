@@ -121,4 +121,42 @@ describe("C128 Collection Visibility Filter & Bulk Visibility Toolbar", () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByTestId("bulk-visibility-menu")).not.toBeInTheDocument();
   });
+
+  it("opens bulk location popover, applies PATCH /items/bulk-location, clears location, and handles errors", async () => {
+    vi.mocked(apiClient.patch).mockResolvedValueOnce({
+      data: { success: true, data: { updated_count: 2, physical_location: "Studio / Rack 2", item_ids: [11, 22] } },
+    });
+    const onSuccess = vi.fn();
+
+    renderWithQueryClient(
+      <BulkItemVisibilityToolbar selectedItemIds={[11, 22]} onClearSelection={vi.fn()} onSuccess={onSuccess} />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "bulkLocationLabel" }));
+    const input = screen.getByPlaceholderText("bulkLocationPlaceholder");
+    fireEvent.change(input, { target: { value: "  Studio / Rack 2  " } });
+    fireEvent.click(screen.getByRole("button", { name: "bulkLocationApply" }));
+
+    await waitFor(() => {
+      expect(apiClient.patch).toHaveBeenCalledWith("/items/bulk-location", {
+        item_ids: [11, 22],
+        physical_location: "Studio / Rack 2",
+      });
+    });
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+
+    // Clear location to null
+    vi.mocked(apiClient.patch).mockResolvedValueOnce({
+      data: { success: true, data: { updated_count: 2, physical_location: null, item_ids: [11, 22] } },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "bulkLocationLabel" }));
+    fireEvent.click(screen.getByRole("button", { name: "bulkLocationClear" }));
+
+    await waitFor(() => {
+      expect(apiClient.patch).toHaveBeenLastCalledWith("/items/bulk-location", {
+        item_ids: [11, 22],
+        physical_location: null,
+      });
+    });
+  });
 });
