@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Canonical Graph LOD Node Deduplication & Contributor Anchors (C164)**:
+  - Updated `GraphService` in `app/core/graph_service.py` to normalize external LOD URIs (`_canonical_lod_uri`, `_canonical_lod_node_key`) into deterministic `lod:<digest>` node IDs and merge colliding `SemanticLink` rows onto a single canonical LOD node (preventing duplicate LOD nodes when expanding a `Person` across linked `Work`s or `http`/`https`/trailing-slash variants).
+  - Updated `_build_full_library_graph` to include `SemanticLink.entity_type == "contributor"` in LOD anchor prioritization alongside works, expressions, and manifestations.
 - **AWS S3 & Glacier Cold Archive Backup Repair (C163)**:
   - Fixed `Makefile` `archive-run` and `scripts/cloud_backup_cron.sh` (`archive-install`) to pass `--archive` without injecting `iqoqo-glacier:iqoqo-archive` when `S3_BACKEND=auto`, allowing S3-only hosts to archive cleanly without `rclone` hijacks.
   - Updated `scripts/cloud_backup.sh` and `scripts/cloud_backup_check.sh --archive` to initialize via `S3Service.from_environment("backup")` (preserving `S3_REGION_NAME`, `S3_ENDPOINT_URL`, `S3_ADDRESSING_STYLE`, and `AWS_SESSION_TOKEN`), support `S3_BUCKET_ARCHIVE`, `S3_ARCHIVE_PREFIX` (`archives/`), and `S3_ARCHIVE_STORAGE_CLASS` (`S3Service.upload_file(..., storage_class=...)`), and fall back to `rclone lsd` when `rclone about` is unsupported.
