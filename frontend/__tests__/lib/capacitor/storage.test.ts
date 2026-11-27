@@ -138,6 +138,52 @@ describe("Capacitor Split Storage Utility", () => {
       expect(Preferences.remove).toHaveBeenCalledWith({ key: INSTANCE_URL_KEY });
       expect(Preferences.remove).toHaveBeenCalledWith({ key: INSTANCE_NAME_KEY });
     });
+
+    it("namespaces native SecureStoragePlugin tokens and Preferences across multi-server profiles", async () => {
+      const prefMap = new Map<string, string>();
+      const secMap = new Map<string, string>();
+
+      vi.mocked(Preferences.get).mockImplementation(async ({ key }) => ({ value: prefMap.get(key) ?? null }));
+      vi.mocked(Preferences.set).mockImplementation(async ({ key, value }) => {
+        prefMap.set(key, value);
+      });
+      vi.mocked(Preferences.remove).mockImplementation(async ({ key }) => {
+        prefMap.delete(key);
+      });
+
+      vi.mocked(SecureStoragePlugin.get).mockImplementation(async ({ key }) => {
+        if (!secMap.has(key)) throw new Error("not found");
+        return { value: secMap.get(key)! };
+      });
+      vi.mocked(SecureStoragePlugin.set).mockImplementation(async ({ key, value }) => {
+        secMap.set(key, value);
+        return { value: true };
+      });
+      vi.mocked(SecureStoragePlugin.remove).mockImplementation(async ({ key }) => {
+        secMap.delete(key);
+        return { value: true };
+      });
+
+      const srvA = await saveServerProfile({ url: "https://one.iqoqo.cc", name: "One" }, true);
+      await setAuthToken("native-tok-1");
+      const srvB = await saveServerProfile({ url: "https://two.iqoqo.cc", name: "Two" }, true);
+      await setAuthToken("native-tok-2");
+
+      expect(await getAuthToken(srvA.id)).toBe("native-tok-1");
+      expect(await getAuthToken(srvB.id)).toBe("native-tok-2");
+
+      await switchActiveServer(srvA.id);
+      expect(await getActiveServerId()).toBe(srvA.id);
+      expect(await getAuthToken()).toBe("native-tok-1");
+
+      await removeServerProfile(srvB.id);
+      expect(await getAuthToken(srvB.id)).toBeNull();
+      expect(await getAuthToken(srvA.id)).toBe("native-tok-1");
+
+      await clearAllMobileStorage();
+      expect(await getSavedServers()).toEqual([]);
+      expect(await getAuthToken(srvA.id)).toBeNull();
+    });
   });
 
   describe("Web Browser Fallback Environment", () => {

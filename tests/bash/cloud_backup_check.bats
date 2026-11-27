@@ -452,6 +452,31 @@ RBEOF
   [[ "$output" =~ "[OK]  Rclone remote 'my-remote': reachable (listed root)" ]]
 }
 
+@test "cloud_backup_check.sh --archive warns at 38d and fails stale at 50d" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  export TEMP_ARCHIVE_CRON="${TEST_TEMP_DIR}/archive-cron-job"
+  echo "0 4 1 * * root ./scripts/cloud_backup.sh --archive" > "${TEMP_ARCHIVE_CRON}"
+  sed -i.bak "s|/etc/cron.d/iqoqo-archive|${TEMP_ARCHIVE_CRON}|g" "${CHECK_SCRIPT}"
+
+  export S3_BACKEND="s3"
+  export S3_BUCKET_ARCHIVE="my-cold-bucket"
+  export S3_ARCHIVE_PREFIX="archives/"
+
+  local stamp_warn
+  stamp_warn=$(/bin/date -d "912 hours ago" +"%Y%m%d_%H%M%S")
+  export STUB_LIST_KEYS="[\"archives/iqoqo_backup_${stamp_warn}.tar.gz\"]"
+  run bash "${CHECK_SCRIPT}" --archive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "[WARN] Last archive: 38d ago (over 35 days)" ]]
+
+  local stamp_stale
+  stamp_stale=$(/bin/date -d "1200 hours ago" +"%Y%m%d_%H%M%S")
+  export STUB_LIST_KEYS="[\"archives/iqoqo_backup_${stamp_stale}.tar.gz\"]"
+  run bash "${CHECK_SCRIPT}" --archive
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "[FAIL] Last archive: 50d ago (STALE)" ]]
+}
+
 # ── Duplicate cron, lock status, and configuration validation ───────────────
 
 @test "cloud_backup_check.sh warns on duplicate cron entries" {

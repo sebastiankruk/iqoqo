@@ -580,3 +580,20 @@ def test_catalog_graph_person_deduplicates_lod_nodes_by_canonical_uri(app, clien
         e["source"] == f"contributor:{king_id}" and e["target"] == lib_king_lods[0]["id"] and e["relation"] == "same_as"
         for e in lib_data["edges"]
     )
+
+    # 3. _merge_lod_node keeps lowest hop & upgrades fallback slug, and empty external_uri falls back safely
+    from app.core.graph_service import _canonical_lod_node_key, _merge_lod_node
+
+    existing_lod = {
+        "id": "lod:abc",
+        "hop": 2,
+        "label": "Stephen_King",
+        "authority": "dbpedia",
+        "external_uri": "https://dbpedia.org/resource/Stephen_King",
+    }
+    _merge_lod_node(existing_lod, {"hop": 1, "label": "Stephen King", "external_uri": "https://dbpedia.org/resource/Stephen_King"})
+    assert existing_lod["hop"] == 1
+    assert existing_lod["label"] == "Stephen King"
+
+    blank_link = SemanticLink(id=777, entity_type="contributor", entity_id=1, authority="dbpedia", external_uri="", status="accepted")
+    assert _canonical_lod_node_key(blank_link) == "lod:777"

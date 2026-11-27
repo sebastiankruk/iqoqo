@@ -15,6 +15,7 @@
 //
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { toast } from "sonner";
 import ScanPage from "@/app/scan/page";
 import * as hooks from "@/lib/api/hooks";
 import * as apiClient from "@/lib/api/client";
@@ -289,7 +290,6 @@ describe("ScanPage", () => {
       });
     });
 
-    const { toast } = await import("sonner");
     expect(toast.error).toHaveBeenCalledWith("Error: Physical items disabled in showcase mode");
     expect(mockEnqueueOffline).not.toHaveBeenCalled();
   });
@@ -316,11 +316,48 @@ describe("ScanPage", () => {
       await capturedOptions.onError(new Error("Network Error"));
     });
 
-    const { toast } = await import("sonner");
     expect(mockEnqueueOffline).toHaveBeenCalledWith(expect.objectContaining({ Title: "Offline Flea Market Book" }));
     expect(toast.info).toHaveBeenCalledWith(
       expect.stringContaining('Network unreachable: "Offline Flea Market Book" queued locally')
     );
+  });
+
+  it("keeps quick-lookup alive past 10s and triggers manual fallback at API_TIMEOUT_MS (15000ms)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(hooks.useAddManualItem).mockReturnValue({
+        mutate: vi.fn(),
+        isPending: false,
+      } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+      let capturedSignal: AbortSignal | undefined;
+      vi.mocked(apiClient.apiFetch).mockImplementation((_url, _opts, extra) => {
+        capturedSignal = extra?.signal;
+        return new Promise(() => {});
+      });
+
+      render(<ScanPage />);
+
+      fireEvent.change(screen.getByTestId("unified-lookup-input"), { target: { value: "9788329120463" } });
+      fireEvent.click(screen.getByTestId("unified-lookup-submit"));
+
+      // Still waiting past the old 10s timeout
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_500);
+      });
+      expect(capturedSignal?.aborted).toBe(false);
+      expect(screen.queryByText(/Manual Item Entry/i)).not.toBeInTheDocument();
+
+      // Aborts at API_TIMEOUT_MS (15_000ms) and opens manual entry fallback
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_600);
+      });
+      expect(capturedSignal?.aborted).toBe(true);
+      expect(screen.getByText(/Manual Item Entry/i)).toBeInTheDocument();
+      expect((screen.getByLabelText(/ISBN/i) as HTMLInputElement).value).toBe("9788329120463");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("initializes wishlist policy from ?policy=wishlist and includes collection_status on manual submit", () => {

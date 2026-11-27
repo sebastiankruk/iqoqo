@@ -2219,3 +2219,17 @@ def test_v1_1_1_norm_legacy_formats_uniform_mixed_case(app) -> None:
         assert reloaded.format == "vinyl"
         assert reloaded.format_type == "vinyl"
         assert reloaded.meta["format"] == "vinyl"
+
+
+def test_v1_2_0_item_physical_location_migration_contract(monkeypatch) -> None:
+    """Verify v1_2_0_item_physical_location revision length, lineage, and PostgreSQL schema-index helper."""
+    from importlib import import_module
+
+    mig = import_module("migrations.versions.v1_2_0_item_physical_location")
+    assert mig.revision == "v1_2_0_item_physical_location"
+    assert mig.down_revision == "v1_1_2_cross_media_work_links"
+    assert len(mig.revision) <= 32
+    monkeypatch.setattr(mig, "_inventory_schema", lambda: None)
+    assert mig._index_name() == "ix_items_physical_location"
+    monkeypatch.setattr(mig, "_inventory_schema", lambda: "inventory")
+    assert mig._index_name() == "ix_inventory_items_physical_location"

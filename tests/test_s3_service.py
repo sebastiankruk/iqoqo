@@ -360,11 +360,11 @@ def test_upload_file_passes_sse_and_content_type(monkeypatch) -> None:
 
 
 def test_upload_file_passes_storage_class_when_set(monkeypatch) -> None:
-    """Archive uploads must pass optional StorageClass (e.g. GLACIER) in ExtraArgs."""
+    """Archive uploads must pass optional StorageClass (e.g. GLACIER) in ExtraArgs, ignoring whitespace-only classes."""
     monkeypatch.delenv("S3_SSE", raising=False)
     service = _configured(BUCKET_BACKUP)
     client = RecordingClient()
-    service._client = client  # pylint: disable=protected-access
+    monkeypatch.setattr(service, "_client", client)
 
     service.upload_file(
         "/tmp/archive.tar.gz",
@@ -377,6 +377,15 @@ def test_upload_file_passes_storage_class_when_set(monkeypatch) -> None:
     assert kwargs["ExtraArgs"]["ContentType"] == "application/gzip"
     assert kwargs["ExtraArgs"]["StorageClass"] == "GLACIER"
 
+    service.upload_file(
+        "/tmp/archive2.tar.gz",
+        "archives/archive2.tar.gz",
+        content_type="application/gzip",
+        storage_class="   ",
+    )
+    _, _, kwargs_ws = client.calls[1]
+    assert kwargs_ws["ExtraArgs"] == {"ContentType": "application/gzip"}
+
 
 def test_from_environment_preserves_endpoint_region_and_style(monkeypatch) -> None:
     """S3Service.from_environment must preserve endpoint URL, region, addressing style, and session token."""
@@ -388,12 +397,25 @@ def test_from_environment_preserves_endpoint_region_and_style(monkeypatch) -> No
     monkeypatch.setenv("AWS_SESSION_TOKEN", "tok-test")
     monkeypatch.setenv("S3_BUCKET_BACKUP", "test-bucket")
 
+    captured: dict[str, object] = {}
+
+    def _fake_client(service_name: str, **kwargs):
+        captured["service_name"] = service_name
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("app.core.s3_service.boto3.client", _fake_client)
+
     service = S3Service.from_environment(BUCKET_BACKUP)
     assert service.endpoint_url == "https://minio.local:9000"
     assert service.region_name == "eu-central-1"
     assert service.addressing_style == "path"
     assert service.bucket == "test-bucket"
     assert service.is_configured() is True
+    service._get_client()
+    assert captured["aws_session_token"] == "tok-test"
+    assert captured["region_name"] == "eu-central-1"
+    assert captured["endpoint_url"] == "https://minio.local:9000"
 
 
 def test_cache_miss_returns_none_instead_of_raising() -> None:

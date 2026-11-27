@@ -449,4 +449,38 @@ describe("SidebarFilters — unauthenticated users", () => {
     fireEvent.click(screen.getByTestId("filter-expression-kind-live_performance"));
     expect(mockToggle).toHaveBeenCalledWith({ type: "expression_kind", value: "live_performance" });
   });
+
+  it("renders Physical Location facet only when logged in on items view and toggles location filters", () => {
+    const mockToggle = vi.fn();
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={mockToggle}
+          isLoggedIn={true}
+          viewMode="items"
+          locationCounts={{ "Study / Shelf 1": 4, "Living Room": 2 }}
+        />
+      </QueryClientProvider>
+    );
+
+    const locHeader = screen.getByText("Physical Location");
+    expect(locHeader).toBeInTheDocument();
+    fireEvent.click(locHeader);
+    fireEvent.click(screen.getByText("Study / Shelf 1"));
+    expect(mockToggle).toHaveBeenCalledWith({ type: "location", value: "Study / Shelf 1" });
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters
+          activeFilters={[]}
+          onToggleFilter={mockToggle}
+          isLoggedIn={false}
+          viewMode="items"
+          locationCounts={{ "Study / Shelf 1": 4 }}
+        />
+      </QueryClientProvider>
+    );
+    expect(screen.queryByText("Physical Location")).not.toBeInTheDocument();
+  });
 });

@@ -341,6 +341,7 @@ def get_items():
         )
 
         for row in results:
+            is_owner = str(row["owner_id"]) == str(g.user_id) if hasattr(g, "user_id") else False
             combined_items_data.append(
                 {
                     "id": row["item_id"],
@@ -350,6 +351,7 @@ def get_items():
                     "visibility": row.get("visibility"),
                     "is_hidden": row.get("is_hidden"),
                     "local_barcode": row.get("local_barcode"),
+                    "physical_location": row.get("physical_location") if is_owner else None,
                     "lent_to_user_id": row.get("lent_to_user_id"),
                     "lent_to_name": row.get("lent_to_name"),
                     "manifestation_id": row["manifestation_id"],

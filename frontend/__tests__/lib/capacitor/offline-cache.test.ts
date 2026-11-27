@@ -265,4 +265,26 @@ describe("offline-cache", () => {
     expect(res2.synced).toBe(1);
     expect(slowSubmit).toHaveBeenCalledTimes(1);
   });
+
+  it("isolates collection, wishlist, profile, and queue caches per active serverId (C156)", async () => {
+    const { saveServerProfile, switchActiveServer } = await import("@/lib/capacitor/storage");
+
+    const srvA = await saveServerProfile({ url: "https://srv-a.iqoqo.cc", name: "A" }, true);
+    await saveCollectionSnapshot([{ ...mockItems[0], id: 101, title: "Book From A" }]);
+    await saveWishlistSnapshot([{ ...mockWishlist[0], id: 201, title: "Wish From A" } as WishlistItem]);
+    await enqueueOfflineManualEntry({ Title: "Queue A", Authors: ["A"], Format: "book" });
+
+    const srvB = await saveServerProfile({ url: "https://srv-b.iqoqo.cc", name: "B" }, true);
+    expect(await getCachedCollectionSnapshot()).toBeNull();
+    expect(await getCachedWishlistSnapshot()).toBeNull();
+    expect(await getOfflineManualQueue()).toEqual([]);
+
+    await saveCollectionSnapshot([{ ...mockItems[0], id: 102, title: "Book From B" }]);
+    await switchActiveServer(srvA.id);
+
+    expect((await getCachedCollectionSnapshot())?.items.some(i => i.title === "Book From A")).toBe(true);
+    expect((await getCachedWishlistSnapshot())?.items[0].title).toBe("Wish From A");
+    expect((await getOfflineManualQueue())[0].payload.Title).toBe("Queue A");
+    expect((await getCachedCollectionSnapshot(srvB.id))?.items[0].title).toBe("Book From B");
+  });
 });

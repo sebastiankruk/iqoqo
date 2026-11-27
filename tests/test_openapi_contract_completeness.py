@@ -338,3 +338,32 @@ def test_v110_endpoints_present_in_openapi_spec(app):
     assert search_params["limit"]["schema"]["maximum"] == 25
     assert "get" in paths.get("/api/works/shelf", {})
     assert "post" in paths.get("/api/sharing", {}) or "post" in paths.get("/api/sharing/", {})
+
+
+def test_v120_endpoints_present_in_openapi_spec(app):
+    """Verify v1.2.0 contracts (Item.physical_location, bulk-location, stats envelope, images) in OpenAPI 3.1."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    item_props = spec["components"]["schemas"]["Item"]["properties"]
+    assert "physical_location" in item_props
+
+    paths = spec.get("paths", {})
+    items_params = {p["name"] for p in paths["/api/items"]["get"].get("parameters", []) if isinstance(p, dict)}
+    facets_params = {p["name"] for p in paths["/api/stats/facets"]["get"].get("parameters", []) if isinstance(p, dict)}
+    assert "location" in items_params
+    assert "location" in facets_params
+
+    bulk_loc_op = paths.get("/api/items/bulk-location", {}).get("patch", {})
+    assert "requestBody" in bulk_loc_op
+    assert "200" in bulk_loc_op.get("responses", {})
+    assert "403" in bulk_loc_op.get("responses", {})
+
+    stats_op = paths.get("/api/manifestations/{manifestation_id}/stats", {}).get("get", {})
+    stats_schema = stats_op["responses"]["200"]["content"]["application/json"]["schema"]
+    assert set(stats_schema["properties"].keys()) >= {"success", "data", "error"}
+    assert "popularity_over_time" in stats_schema["properties"]["data"]["properties"]
+
+    images_op = paths.get("/api/manifestations/{manifestation_id}/images", {}).get("get", {})
+    images_schema = images_op["responses"]["200"]["content"]["application/json"]["schema"]
+    assert images_schema["properties"]["data"]["type"] == "array"

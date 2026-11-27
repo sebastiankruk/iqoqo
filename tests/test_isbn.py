@@ -697,3 +697,20 @@ def test_polish_isbn_reserves_viable_bn_read_timeout():
     bn_timeout = mock_bn.call_args.kwargs.get("timeout")
     assert isinstance(bn_timeout, tuple)
     assert bn_timeout[1] >= 1.5
+
+
+def test_fetch_isbn_metadata_respects_monotonic_clock_budget_exhaustion():
+    """Advancing monotonic clock exhausts remaining budget cleanly and prevents runaway Open Library retries."""
+    gb_none = ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE, provider="google_books", error_detail="timeout")
+    # Simulated monotonic clock: 0.0 on deadline init, then 6.5 after Google Books (exceeds 6.0s deadline)
+    clock_ticks = iter([0.0, 6.5, 6.6, 6.7, 6.8])
+
+    with (
+        patch("app.utils.isbn.time.monotonic", side_effect=lambda: next(clock_ticks, 7.0)),
+        patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_none),
+        patch("app.utils.isbn._lookup_open_library_outcome") as mock_ol,
+    ):
+        result = fetch_isbn_metadata("9780553380163", max_duration=6.0)
+
+    assert result is None
+    mock_ol.assert_not_called()

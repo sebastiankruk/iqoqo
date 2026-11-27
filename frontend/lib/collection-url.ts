@@ -55,6 +55,7 @@ const MULTI_VALUE_PARAMS: ReadonlyArray<readonly [FilterType, string]> = [
   ["category", "category"],
   ["expression_kind", "expression_kind"],
   ["format", "format"],
+  ["location", "location"],
 ];
 
 /** Single-select facets, stored under their own parameter name. */

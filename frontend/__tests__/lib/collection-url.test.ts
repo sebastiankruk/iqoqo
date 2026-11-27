@@ -94,6 +94,7 @@ describe("buildCollectionUrl", () => {
       ["ownership", "ownership"],
       ["category", "category"],
       ["format", "format"],
+      ["location", "location"],
       ["visibility", "visibility"],
       ["has_map", "has_map"],
       ["lod_authority", "lod_authority"],
@@ -222,6 +223,7 @@ describe("round-trip", () => {
       { type: "ownership", value: "owned" },
       { type: "category", value: "Movies" },
       { type: "format", value: "dvd" },
+      { type: "location", value: "Study / Shelf B" },
       { type: "lod_authority", value: "viaf" },
       { type: "lod_status", value: "matched" },
     ];
@@ -230,18 +232,23 @@ describe("round-trip", () => {
   });
 
   it("survives every filter type independently", () => {
-    const types: ActiveFilter["type"][] = [
-      "status",
-      "tag",
-      "collection",
-      "genre",
-      "publisher",
-      "ownership",
-      "category",
-      "format",
-      "lod_authority",
-      "lod_status",
-    ];
+    const exhaustiveness: Record<ActiveFilter["type"], true> = {
+      status: true,
+      visibility: true,
+      tag: true,
+      collection: true,
+      genre: true,
+      publisher: true,
+      ownership: true,
+      category: true,
+      expression_kind: true,
+      format: true,
+      location: true,
+      lod_authority: true,
+      lod_status: true,
+      has_map: true,
+    };
+    const types = Object.keys(exhaustiveness) as ActiveFilter["type"][];
     for (const type of types) {
       const filters: ActiveFilter[] = [{ type, value: "x" }];
       expect(parseCollectionUrl(buildCollectionUrl(state({ activeFilters: filters }))), type).toEqual(filters);

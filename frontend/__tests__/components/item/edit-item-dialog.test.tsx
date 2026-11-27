@@ -125,4 +125,36 @@ describe("EditItemDialog", () => {
       });
     });
   });
+
+  it("submits updated physical_location and null when cleared", async () => {
+    const itemWithLoc = { ...mockItem, physical_location: "Shelf A1" };
+    render(<EditItemDialog item={itemWithLoc} isOpen={true} onOpenChange={vi.fn()} />);
+
+    const locInput = screen.getByLabelText(/Physical Location/i) as HTMLInputElement;
+    expect(locInput.value).toBe("Shelf A1");
+
+    fireEvent.change(locInput, { target: { value: "Archive / Box 9" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        local_barcode: "TAG-456",
+        condition: "Good",
+        visibility: "public",
+        physical_location: "Archive / Box 9",
+      });
+    });
+
+    fireEvent.change(locInput, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenLastCalledWith({
+        local_barcode: "TAG-456",
+        condition: "Good",
+        visibility: "public",
+        physical_location: null,
+      });
+    });
+  });
 });

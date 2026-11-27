@@ -680,7 +680,7 @@ class SearchService:
         """
         rows_sql = f"""
         SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
-               i.visibility, i.is_hidden,
+               i.visibility, i.is_hidden, i.physical_location,
                i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                m.publisher,
@@ -724,6 +724,9 @@ class SearchService:
         if filters.visibility and "non_public_visibility_filter" in params:
             count_stmt = count_stmt.bindparams(bindparam("non_public_visibility_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("non_public_visibility_filter", expanding=True))
+        if filters.locations and "location_filter" in params:
+            count_stmt = count_stmt.bindparams(bindparam("location_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("location_filter", expanding=True))
 
         total = int(db.session.execute(count_stmt, params).scalar() or 0)
         results = db.session.execute(rows_stmt, params).mappings().all()
@@ -898,6 +901,7 @@ class SearchService:
                     "collection_status": item.collection_status,
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
+                    "physical_location": item.physical_location,
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
                     "manifestation_id": manifestation.id,

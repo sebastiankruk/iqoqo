@@ -172,3 +172,55 @@ def test_manifestation_images_omits_uploader_identity(client, app):
     assert "user_id" not in images[0]
     assert "owner_id" not in images[0]
     assert "email" not in images[0]
+
+    empty_img_resp = client.get(f"/api/manifestations/{ids['empty_man_id']}/images")
+    assert empty_img_resp.status_code == 200
+    assert empty_img_resp.get_json()["data"] == []
+
+
+def test_manifestation_stats_friends_only_exclusion_media_statuses_and_12_month_cap(client, app):
+    """Stats exclude friends_only copies, count non-book completion statuses, and cap timeline at 12 months."""
+    with app.app_context():
+        u = User(email="media_stats@example.com", display_name="Media Fan", is_active=True)
+        u.set_password("Pass123!")
+        db.session.add(u)
+        db.session.flush()
+
+        w = Work(title="Multi-Media Concert")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="video", language="en")
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id, meta={"format": "blu-ray"})
+        db.session.add(m)
+        db.session.flush()
+
+        # Friends-only item must be excluded from public stats
+        db.session.add(Item(manifestation_id=m.id, owner_id=u.id, status="watched", visibility="friends_only"))
+        # 14 months of public items across non-book statuses
+        statuses = ["watched", "listened", "played", "built", "watching", "listening", "playing"]
+        base_dt = datetime(2025, 1, 15, tzinfo=UTC)
+        for idx in range(14):
+            month_dt = datetime(2025 + (idx // 12), (idx % 12) + 1, 15, tzinfo=UTC)
+            db.session.add(
+                Item(
+                    manifestation_id=m.id,
+                    owner_id=u.id,
+                    status=statuses[idx % len(statuses)],
+                    visibility="public",
+                    added_at=month_dt if month_dt >= base_dt else base_dt,
+                )
+            )
+        db.session.commit()
+        man_id = m.id
+
+    resp = client.get(f"/api/manifestations/{man_id}/stats")
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["total_items"] == 14
+    assert data["reader_count"] == 14
+    assert data["completed_count"] == 8
+    assert len(data["popularity_over_time"]) == 12
+    assert data["popularity_over_time"][0]["month"] == "2025-03"
+    assert data["popularity_over_time"][-1]["month"] == "2026-02"

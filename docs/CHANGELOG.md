@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Search, Facets, URL Round-Trip, OpenAPI Envelope & QA Hardening (C167)**:
+  - Fixed PostgreSQL FTS crash in `app/core/search_service.py` by binding `bindparam("location_filter", expanding=True)` and returning owner-scoped `physical_location` across FTS/ILIKE `GET /api/items?q=...` results.
+  - Fixed `app/core/data_manager.py` (`_compute_faceted_stats` -> `_build_item_ids_subq`) so `GET /api/stats/facets?location=...` honors `locations` filtering across facet groups and `location_counts` queries `loc_subq`.
+  - Fixed `frontend/lib/collection-url.ts` (`MULTI_VALUE_PARAMS`) to preserve `?location=...` on `/collection` URL serialization and hydration.
+  - Aligned `app/api/docs.py` OpenAPI 3.1 schemas (`Item.physical_location`, `?location=` on `/items` & `/stats/facets`, `PATCH /api/items/bulk-location` `200`/`403` schemas, and `{success, data, error}` response envelopes on `/api/manifestations/{id}/stats` and `/images`), and hardened backend, frontend, BATS, and Playwright E2E coverage across `v1.2.0`.
 - **Canonical Graph LOD Node Deduplication & Contributor Anchors (C164)**:
   - Updated `GraphService` in `app/core/graph_service.py` to normalize external LOD URIs (`_canonical_lod_uri`, `_canonical_lod_node_key`) into deterministic `lod:<digest>` node IDs and merge colliding `SemanticLink` rows onto a single canonical LOD node (preventing duplicate LOD nodes when expanding a `Person` across linked `Work`s or `http`/`https`/trailing-slash variants).
   - Updated `_build_full_library_graph` to include `SemanticLink.entity_type == "contributor"` in LOD anchor prioritization alongside works, expressions, and manifestations.

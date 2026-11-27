@@ -416,6 +416,24 @@ assert rec["extra"]["StorageClass"] == "GLACIER", rec
   [[ ! "$output" =~ "iqoqo-glacier:iqoqo-archive" ]]
 }
 
+@test "cloud_backup.sh --archive falls back to S3_BUCKET_BACKUP when S3_BUCKET_ARCHIVE is unset and aborts if both unset" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  export S3_BACKEND="s3"
+  export AWS_ACCESS_KEY_ID="test-archive-key"
+  export AWS_SECRET_ACCESS_KEY="test-archive-secret"
+  export S3_BUCKET_BACKUP="shared-fallback-bucket"
+  unset S3_BUCKET_ARCHIVE
+
+  run bash scripts/cloud_backup.sh --archive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "backend: s3, bucket: shared-fallback-bucket, prefix: archives/" ]]
+
+  unset S3_BUCKET_BACKUP
+  run bash scripts/cloud_backup.sh --archive
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "S3_BUCKET_ARCHIVE and S3_BUCKET_BACKUP are both unset" ]]
+}
+
 @test "cloud_backup.sh fails if rclone is selected but has no config" {
   export S3_BACKEND="rclone"
   rm -f "${HOME}/.config/rclone/rclone.conf"

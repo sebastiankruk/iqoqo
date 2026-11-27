@@ -13,7 +13,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
 import type { Item } from "@/types/frbr";
@@ -54,19 +55,33 @@ describe("TaxonomyEditor Physical Location & Tag Promotion (C157)", () => {
     meta: {},
   } as unknown as Item;
 
-  it("updates physical_location directly and promotes folksonomy tags to physical_location", () => {
-    render(<TaxonomyEditor item={baseItem} />);
+  it("updates, clears, and promotes non-empty folksonomy tags to physical_location", async () => {
+    const user = userEvent.setup();
+    render(<TaxonomyEditor item={{ ...baseItem, tags: ["loc:Living Room", "loc:   ", "sci-fi"] }} />);
 
     const locInput = screen.getByLabelText("Physical Location") as HTMLInputElement;
     expect(locInput.value).toBe("Study / Shelf 1");
 
-    fireEvent.change(locInput, { target: { value: "Bedroom / Shelf 3" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
+    await user.clear(locInput);
+    await user.type(locInput, "Bedroom / Shelf 3");
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(mockMutate).toHaveBeenCalledWith({ physical_location: "Bedroom / Shelf 3" }, expect.any(Object));
 
+    // Clearing saves physical_location: null
+    await user.clear(locInput);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(mockMutate).toHaveBeenCalledWith({ physical_location: null }, expect.any(Object));
+
     // Promote "loc:Living Room" tag to structured physical_location
-    fireEvent.click(screen.getByLabelText("Move loc:Living Room to Physical Location"));
-    expect(mockMutate).toHaveBeenCalledWith({ physical_location: "Living Room", tags: ["sci-fi"] }, expect.any(Object));
+    await user.click(screen.getByRole("button", { name: "Move loc:Living Room to Physical Location" }));
+    expect(mockMutate).toHaveBeenCalledWith(
+      { physical_location: "Living Room", tags: ["loc:   ", "sci-fi"] },
+      expect.any(Object)
+    );
+
+    // Guard blank "loc:   " tag promotion (no-op)
+    const callCountBefore = mockMutate.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Move loc: to Physical Location" }));
+    expect(mockMutate).toHaveBeenCalledTimes(callCountBefore);
   });
 });

@@ -14,12 +14,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import enMessages from "@/messages/en.json";
+import { apiClient } from "@/lib/api/client";
 import { ManifestationCoversGallery } from "@/components/manifestation/manifestation-covers-gallery";
 import { ManifestationStatsCard } from "@/components/manifestation/manifestation-stats-card";
-import type { ManifestationImage, ManifestationStats } from "@/types/frbr";
 
 vi.mock("next-intl", () => ({
   useTranslations: (namespace?: string) => {
@@ -30,57 +32,101 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("next/image", () => ({
-  // eslint-disable-next-line @next/next/no-img-element
-  default: ({ src, alt, ...props }: { src: string; alt: string }) => <img src={src} alt={alt} {...props} />,
+  default: ({ src, alt, className }: { src: string; alt: string; className?: string }) =>
+    React.createElement("span", { role: "img", "aria-label": alt, "data-src": src, className }),
 }));
 
-const mockUseManifestationImages = vi.fn<() => { data: ManifestationImage[] }>();
-const mockUseManifestationStats = vi.fn<() => { data: ManifestationStats | undefined; isLoading: boolean }>();
-
-vi.mock("@/lib/api/hooks/catalog", () => ({
-  useManifestationImages: () => mockUseManifestationImages(),
-  useManifestationStats: () => mockUseManifestationStats(),
+vi.mock("@/lib/api/client", () => ({
+  apiClient: {
+    get: vi.fn(),
+  },
 }));
+
+const renderWithQuery = (ui: React.ReactElement) => {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+};
 
 describe("ManifestationCoversGallery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("deduplicates primary cover, renders provenance badge, and opens/closes lightbox", () => {
-    mockUseManifestationImages.mockReturnValue({
-      data: [
-        {
-          id: 1,
-          url: "https://covers.example.org/primary.jpg",
-          label: "Primary",
-          source: "openlibrary",
-          added_at: null,
-        },
-        {
-          id: 2,
-          url: "https://covers.example.org/back-scan.jpg",
-          label: "Back Cover Scan",
-          source: "community",
-          added_at: "2026-03-01T10:00:00Z",
-        },
-      ],
+  it("loads images via real useManifestationImages hook, deduplicates primary, and handles lightbox open/close", async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          {
+            id: 1,
+            url: "https://covers.example.org/primary.jpg",
+            label: "Primary",
+            source: "openlibrary",
+            added_at: null,
+          },
+          {
+            id: 2,
+            url: "https://covers.example.org/back-scan.jpg",
+            label: "Back Cover Scan",
+            source: "community",
+            added_at: "2026-03-01T10:00:00Z",
+          },
+        ],
+      },
     });
 
-    render(
+    renderWithQuery(
       <ManifestationCoversGallery manifestationId={42} primaryCoverUrl="https://covers.example.org/primary.jpg" />
     );
 
-    expect(screen.getByTestId("manifestation-covers-gallery")).toBeInTheDocument();
-    expect(screen.queryByAltText("Primary")).not.toBeInTheDocument();
-    expect(screen.getByAltText("Back Cover Scan")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "Back Cover Scan" })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("img", { name: "Primary" })).not.toBeInTheDocument();
     expect(screen.getByText("community")).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith("/manifestations/42/images");
 
-    fireEvent.click(screen.getByAltText("Back Cover Scan").closest("button")!);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /community/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText("Close cover preview"));
+    await user.click(screen.getByRole("button", { name: "Close cover preview" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Backdrop click also closes dialog
+    await user.click(screen.getByRole("button", { name: /community/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("dialog"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing when all contributed images duplicate the primary cover", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          {
+            id: 1,
+            url: "https://covers.example.org/primary.jpg",
+            label: "Primary",
+            source: "openlibrary",
+            added_at: null,
+          },
+        ],
+      },
+    });
+
+    const { container } = renderWithQuery(
+      <ManifestationCoversGallery manifestationId={43} primaryCoverUrl="https://covers.example.org/primary.jpg" />
+    );
+
+    await waitFor(() => {
+      expect(apiClient.get).toHaveBeenCalledWith("/manifestations/43/images");
+    });
+    expect(container).toBeEmptyDOMElement();
   });
 });
 
@@ -89,50 +135,59 @@ describe("ManifestationStatsCard", () => {
     vi.clearAllMocks();
   });
 
-  it("renders KPI pills and popularity chart when activity is present", () => {
-    mockUseManifestationStats.mockReturnValue({
-      isLoading: false,
+  it("loads KPIs and popularity timeline via real useManifestationStats hook", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
       data: {
-        manifestation_id: 42,
-        total_items: 5,
-        reader_count: 4,
-        completed_count: 3,
-        avg_session_minutes: 45.5,
-        avg_reading_days: 7.0,
-        popularity_over_time: [
-          { month: "2026-02", added_count: 2, completed_count: 1 },
-          { month: "2026-03", added_count: 3, completed_count: 2 },
-        ],
+        success: true,
+        data: {
+          manifestation_id: 42,
+          total_items: 5,
+          reader_count: 4,
+          completed_count: 3,
+          avg_session_minutes: 45.5,
+          avg_reading_days: 7.0,
+          popularity_over_time: [
+            { month: "2026-02", added_count: 2, completed_count: 1 },
+            { month: "2026-03", added_count: 3, completed_count: 2 },
+          ],
+        },
       },
     });
 
-    render(<ManifestationStatsCard manifestationId={42} />);
+    renderWithQuery(<ManifestationStatsCard manifestationId={42} />);
 
-    expect(screen.getByTestId("manifestation-stats-card")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Reading Activity & Popularity")).toBeInTheDocument();
+    });
+    expect(apiClient.get).toHaveBeenCalledWith("/manifestations/42/stats");
     expect(screen.getByText("4")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("45.5m")).toBeInTheDocument();
     expect(screen.getByText("7d")).toBeInTheDocument();
-    expect(screen.getByTestId("popularity-chart")).toBeInTheDocument();
+    expect(screen.getByText("Popularity Over Time")).toBeInTheDocument();
   });
 
-  it("renders graceful empty state when manifestation has zero activity", () => {
-    mockUseManifestationStats.mockReturnValue({
-      isLoading: false,
+  it("renders graceful empty state when manifestation has zero activity", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
       data: {
-        manifestation_id: 42,
-        total_items: 0,
-        reader_count: 0,
-        completed_count: 0,
-        avg_session_minutes: null,
-        avg_reading_days: null,
-        popularity_over_time: [],
+        success: true,
+        data: {
+          manifestation_id: 42,
+          total_items: 0,
+          reader_count: 0,
+          completed_count: 0,
+          avg_session_minutes: null,
+          avg_reading_days: null,
+          popularity_over_time: [],
+        },
       },
     });
 
-    render(<ManifestationStatsCard manifestationId={42} />);
+    renderWithQuery(<ManifestationStatsCard manifestationId={42} />);
 
-    expect(screen.getByText("No community reading activity recorded yet.")).toBeInTheDocument();
-    expect(screen.queryByTestId("popularity-chart")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("No community reading activity recorded yet.")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Popularity Over Time")).not.toBeInTheDocument();
   });
 });
