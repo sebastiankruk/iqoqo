@@ -314,10 +314,16 @@ def test_item_update_preserves_derived_reading_totals_and_handles_dirty_meta(cli
         assert len(item.meta["reading_sessions"]) == 1
 
         # Legacy corrupted values do not break GET /api/items/<id> or subsequent session logging
-        item.meta["total_reading_minutes"] = "not-an-int"
-        item.meta["reading_sessions_count"] = "bad"
+        dirty_meta = dict(item.meta or {})
+        dirty_meta["total_reading_minutes"] = "not-an-int"
+        dirty_meta["reading_sessions_count"] = "bad"
+        item.meta = dirty_meta
         flag_modified(item, "meta")
         db.session.commit()
+
+    # Expire the outer fixture session so test_client reads the committed DB row instead of
+    # a retained identity-map object from the earlier PUT response.
+    db.session.expire_all()
 
     get_res = client.get(f"/api/items/{item_id}", headers=normal_user_headers)
     assert get_res.status_code == 200
