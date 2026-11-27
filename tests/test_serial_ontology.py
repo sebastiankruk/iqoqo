@@ -196,3 +196,51 @@ def test_serial_rdf_dict_forwards_publication_year_and_guards_non_numeric():
     assert (None, IQOQO.publicationYear, Literal(2025, datatype=XSD.integer)) in g
     assert (None, IQOQO.cumulativeIssueNumber, None) not in g
     assert (None, IQOQO.publicationMonth, None) not in g
+
+
+def test_serial_rdf_shacl_validation_positive_and_negative():
+    """SerialWorkShape and PublicationIssueShape accept valid serial graphs and reject invalid ISSN or month."""
+    from rdflib import XSD
+
+    from app.core.frbr_service import build_collection_rdf_graph
+    from app.core.shacl_service import validate_graph
+
+    valid_graph = build_collection_rdf_graph(
+        [
+            {
+                "id": 102,
+                "work_id": 202,
+                "manifestation_id": 302,
+                "title": "Wiedza i Zycie",
+                "issn": "0137-8929",
+                "work_kind": "serial",
+                "issue_number": "8",
+                "cumulative_issue_number": 980,
+                "publication_year": 2025,
+                "publication_month": 8,
+            }
+        ],
+        base_url="https://iqoqo.test",
+    )
+    assert (None, RDF.type, IQOQO.SerialWork) in valid_graph
+    assert (None, RDF.type, IQOQO.PublicationIssue) in valid_graph
+    conforms, _, report = validate_graph(valid_graph)
+    assert conforms, report
+
+    invalid_graph = build_collection_rdf_graph(
+        [
+            {
+                "id": 103,
+                "work_id": 203,
+                "manifestation_id": 303,
+                "title": "Bad Serial",
+                "issn": "NOT-ISSN",
+                "work_kind": "serial",
+                "publication_month": 15,
+            }
+        ],
+        base_url="https://iqoqo.test",
+    )
+    bad_conforms, _, bad_report = validate_graph(invalid_graph)
+    assert not bad_conforms
+    assert ("issn" in bad_report.lower()) or ("publicationmonth" in bad_report.lower())

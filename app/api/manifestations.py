@@ -1817,11 +1817,30 @@ def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Respon
     )
 
 
+def _is_valid_manifestation_semantic_link(manif: Any, link: Any) -> bool:
+    """Return True when ``link`` belongs to ``manif`` or its FRBR/Contributor graph."""
+    if link.entity_type == "manifestation":
+        return bool(link.entity_id == manif.id)
+    if link.entity_type == "expression":
+        return bool(manif.expression_id is not None and link.entity_id == manif.expression_id)
+    work_id = manif.expression.work_id if manif.expression else None
+    if link.entity_type == "work":
+        return bool(work_id is not None and link.entity_id == work_id)
+    if link.entity_type == "contributor":
+        contributor_ids: set[int] = {mc.contributor_id for mc in (manif.contributions or []) if mc.contributor_id}
+        if manif.expression:
+            contributor_ids.update(ec.contributor_id for ec in (manif.expression.contributions or []) if ec.contributor_id)
+            if manif.expression.work:
+                contributor_ids.update(wc.contributor_id for wc in (manif.expression.work.contributions or []) if wc.contributor_id)
+        return link.entity_id in contributor_ids
+    return False
+
+
 @api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["PATCH"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response, int]:
-    """Accept or reject a suggested semantic link associated with a manifestation or its work.
+    """Accept or reject a suggested semantic link associated with a manifestation hierarchy.
 
     Requires `write:metadata`. Payload must specify `status: 'accepted' | 'rejected'`.
     """
@@ -1835,12 +1854,7 @@ def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
     if not link:
         return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
 
-    work_id = manif.expression.work_id if manif.expression else None
-    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
-        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
-    )
-
-    if not is_valid_assoc:
+    if not _is_valid_manifestation_semantic_link(manif, link):
         return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
 
     payload = request.get_json(silent=True) or {}
@@ -1877,7 +1891,7 @@ def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
-    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+    """Dismiss or delete an incorrect semantic link associated with a manifestation hierarchy.
 
     Requires `write:metadata`: this is a catalog mutation, and a standard user
     who can reach it can remove links the reconciler established from any
@@ -1893,12 +1907,7 @@ def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
     if not link:
         return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
 
-    work_id = manif.expression.work_id if manif.expression else None
-    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
-        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
-    )
-
-    if not is_valid_assoc:
+    if not _is_valid_manifestation_semantic_link(manif, link):
         return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
 
     actor_id = getattr(g, "current_user", None).id if hasattr(g, "current_user") and g.current_user else None

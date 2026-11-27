@@ -19,6 +19,7 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix frbr: <http://purl.org/vocab/frbr/core#> .
 @prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
@@ -37,21 +38,25 @@
 
 :Work a owl:Class ;
     rdfs:subClassOf frbroo:F1_Work ;
+    owl:equivalentClass frbr:Work ;
     rdfs:label "Work" ;
     rdfs:comment "An abstract intellectual or artistic creation (catalog.works)." .
 
 :Expression a owl:Class ;
     rdfs:subClassOf frbroo:F2_Expression ;
+    owl:equivalentClass frbr:Expression ;
     rdfs:label "Expression" ;
     rdfs:comment "A specific realization of a Work (catalog.expressions)." .
 
 :Manifestation a owl:Class ;
     rdfs:subClassOf frbroo:F3_Manifestation_Product_Type ;
+    owl:equivalentClass frbr:Manifestation ;
     rdfs:label "Manifestation" ;
     rdfs:comment "A physical or digital embodiment of an Expression (catalog.manifestations)." .
 
 :Item a owl:Class ;
     rdfs:subClassOf frbroo:F5_Item ;
+    owl:equivalentClass frbr:Item ;
     rdfs:label "Item" ;
     rdfs:comment "A single exemplar of a Manifestation owned by a user (catalog.items)." .
 
@@ -213,6 +218,50 @@ iqoqo:mapImageUrl a owl:DatatypeProperty ;
     rdfs:label "MediaFormat" ;
     rdfs:comment "User-facing media format slug stored in Manifestation.meta.format. A sub-format may map to a parent MediaCategory." .
 
+:FormatAlias a owl:Class ;
+    rdfs:label "FormatAlias" ;
+    rdfs:comment "Format or media alias label resolving to a canonical MediaCategory in taxonomy.ttl." .
+
+:LookupStrategy a owl:Class ;
+    rdfs:label "LookupStrategy" ;
+    rdfs:comment "Ordered metadata lookup waterfall strategy mapped to a MediaCategory in taxonomy.ttl." .
+
+:belongsToCategory a owl:ObjectProperty ;
+    rdfs:label "belongs to category" ;
+    rdfs:comment "Maps a MediaFormat slug to its canonical parent MediaCategory." ;
+    rdfs:domain :MediaFormat ;
+    rdfs:range :MediaCategory .
+
+:resolvesToCategory a owl:ObjectProperty ;
+    rdfs:label "resolves to category" ;
+    rdfs:comment "Maps a FormatAlias to its canonical MediaCategory." ;
+    rdfs:domain :FormatAlias ;
+    rdfs:range :MediaCategory .
+
+:forCategory a owl:ObjectProperty ;
+    rdfs:label "for category" ;
+    rdfs:comment "Associates a LookupStrategy with a MediaCategory." ;
+    rdfs:domain :LookupStrategy ;
+    rdfs:range :MediaCategory .
+
+:defaultImageType a owl:DatatypeProperty ;
+    rdfs:label "default image type" ;
+    rdfs:comment "Default cover scan role for a MediaCategory (e.g. 'front')." ;
+    rdfs:domain :MediaCategory ;
+    rdfs:range xsd:string .
+
+:strategyClass a owl:DatatypeProperty ;
+    rdfs:label "strategy class" ;
+    rdfs:comment "Backend LookupStrategy Python class name." ;
+    rdfs:domain :LookupStrategy ;
+    rdfs:range xsd:string .
+
+:waterfallOrder a owl:DatatypeProperty ;
+    rdfs:label "waterfall order" ;
+    rdfs:comment "Priority order of a LookupStrategy in a category waterfall." ;
+    rdfs:domain :LookupStrategy ;
+    rdfs:range xsd:integer .
+
 # ---------------------------------------------------------------------------
 # Status and Progress Registry (v0.5.0)
 # ---------------------------------------------------------------------------
@@ -256,6 +305,18 @@ iqoqo:local_barcode a owl:DatatypeProperty ;
     rdfs:comment "Physical exemplar barcode or shelf inventory tag." ;
     rdfs:domain iqoqo:Item ;
     rdfs:range xsd:string .
+
+iqoqo:physicalLocation a owl:DatatypeProperty ;
+    rdfs:label "physical location" ;
+    rdfs:comment "Private physical storage location (room, bookcase, shelf) of an Item exemplar." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
+iqoqo:custodyHolder a owl:ObjectProperty ;
+    rdfs:label "custody holder" ;
+    rdfs:comment "Current borrower User holding physical custody of an Item on active loan." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range iqoqo:User .
 
 :applicableToCategory a owl:ObjectProperty ;
     rdfs:domain :ProgressStatus ;
@@ -392,6 +453,18 @@ iqoqo:aggregatedItem a owl:ObjectProperty ;
     rdfs:domain iqoqo:ContainerAggregation ;
     rdfs:range iqoqo:Item .
 
+iqoqo:componentName a owl:DatatypeProperty ;
+    rdfs:label "component name" ;
+    rdfs:comment "Human-readable name of a component aggregated inside an F16 Container Work." ;
+    rdfs:domain iqoqo:ContainerAggregation ;
+    rdfs:range xsd:string .
+
+iqoqo:quantity a owl:DatatypeProperty ;
+    rdfs:label "quantity" ;
+    rdfs:comment "Positive unit count of a component held inside an F16 Container Work." ;
+    rdfs:domain iqoqo:ContainerAggregation ;
+    rdfs:range xsd:integer .
+
 # ---------------------------------------------------------------------------
 # Boardgame Mechanics (v0.7.16)
 # ---------------------------------------------------------------------------
@@ -480,6 +553,30 @@ iqoqo:FeedbackComment a owl:Class ;
 :ImageScan a owl:Class ;
     rdfs:label "ImageScan" ;
     rdfs:comment "An ingested barcode or camera image scan (catalog.image_scans)." .
+
+iqoqo:scanManifestation a owl:ObjectProperty ;
+    rdfs:label "scan manifestation" ;
+    rdfs:comment "The Manifestation depicted by this contributed ImageScan." ;
+    rdfs:domain iqoqo:ImageScan ;
+    rdfs:range iqoqo:Manifestation .
+
+iqoqo:filePath a owl:DatatypeProperty ;
+    rdfs:label "file path" ;
+    rdfs:comment "Storage path of an uploaded or ingested ImageScan asset." ;
+    rdfs:domain iqoqo:ImageScan ;
+    rdfs:range xsd:string .
+
+iqoqo:scanType a owl:DatatypeProperty ;
+    rdfs:label "scan type" ;
+    rdfs:comment "Visual role of the ImageScan ('front', 'back', 'inlay', 'disc', 'other')." ;
+    rdfs:domain iqoqo:ImageScan ;
+    rdfs:range xsd:string .
+
+iqoqo:scanSource a owl:DatatypeProperty ;
+    rdfs:label "scan source" ;
+    rdfs:comment "Origin provider or ingestion channel for the ImageScan." ;
+    rdfs:domain iqoqo:ImageScan ;
+    rdfs:range xsd:string .
 
 # ---------------------------------------------------------------------------
 # User Work Intent (v0.7.18)
@@ -1042,5 +1139,11 @@ iqoqo:eanAddon a owl:DatatypeProperty ;
 iqoqo:fullBarcode a owl:DatatypeProperty ;
     rdfs:label "full barcode" ;
     rdfs:comment "Canonical concatenated 15-digit or 18-digit barcode combining 977 EAN-13 and EAN add-on." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:matrixRunout a owl:DatatypeProperty ;
+    rdfs:label "matrix runout" ;
+    rdfs:comment "Deadwax vinyl matrix runout or CD/SACD pressing identifier on a physical music Manifestation." ;
     rdfs:domain iqoqo:Manifestation ;
     rdfs:range xsd:string .

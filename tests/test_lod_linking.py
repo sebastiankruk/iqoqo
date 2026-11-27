@@ -410,13 +410,21 @@ def test_resolve_manifestation_links_pipeline(app):
             created = resolve_manifestation_links(manif.id)
             assert len(created) > 0
 
-            # Verify Work-level links (DBpedia Work, DBpedia Author, WordNet genres/tags)
-            work_links = work.get_semantic_links(status=None)
+            # Verify Work-level links exclude contributor links by default, while Contributor owns the author URI
+            work_links = work.get_semantic_links(status=None, include_contributors=False)
             assert any(link.authority == "dbpedia" and "Neuromancer" in link.external_uri for link in work_links)
-            assert any(link.authority == "dbpedia" and "William_Gibson" in link.external_uri for link in work_links)
+            assert not any(link.authority == "dbpedia" and "William_Gibson" in link.external_uri for link in work_links)
             assert any(link.authority == "wordnet" for link in work_links)
             assert not any(link.authority == "wordnet" and "dbpedia.org" in link.external_uri for link in work_links)
             assert any(link.authority == "dbpedia" and "Category:Cyberpunk" in link.external_uri for link in work_links)
+
+            # Verify author DBpedia link is stored strictly on Contributor and surfaced via include_contributors/Manifestation
+            work_with_contrib_links = work.get_semantic_links(status=None, include_contributors=True)
+            author_links = [
+                link for link in work_with_contrib_links if link.authority == "dbpedia" and "William_Gibson" in link.external_uri
+            ]
+            assert len(author_links) == 1
+            assert author_links[0].entity_type == "contributor"
 
             # Verify Manifestation-level links (GeoNames New York)
             manif_direct = manif.get_semantic_links(include_work=False, status=None)
@@ -424,9 +432,10 @@ def test_resolve_manifestation_links_pipeline(app):
             assert manif_direct[0].authority == "geonames"
             assert "5128581" in manif_direct[0].external_uri
 
-            # Verify scoped retrieval
+            # Verify scoped retrieval includes Manifestation, Work, and Contributor links
             all_links = manif.get_semantic_links(include_work=True, status=None)
             assert len(all_links) >= 4
+            assert any(link.entity_type == "contributor" and "William_Gibson" in link.external_uri for link in all_links)
 
             # Verify dictionary grouping
             grouped_dict = get_manifestation_semantic_links_dict(manif.id)

@@ -207,6 +207,34 @@ MAPPED_PROPERTY_CONTRACT: dict[str, tuple[URIRef, URIRef, URIRef]] = {
     "mapTitle": (OWL.DatatypeProperty, IQOQO.MapAttachment, XSD.string),
     "mapType": (OWL.DatatypeProperty, IQOQO.MapAttachment, XSD.string),
     "mapImageUrl": (OWL.DatatypeProperty, IQOQO.MapAttachment, XSD.string),
+    # Serials / Periodicals (v1.1.0 - C136)
+    "issn": (OWL.DatatypeProperty, IQOQO.Work, XSD.string),
+    "eissn": (OWL.DatatypeProperty, IQOQO.Work, XSD.string),
+    "workKind": (OWL.DatatypeProperty, IQOQO.Work, XSD.string),
+    "issueNumber": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "cumulativeIssueNumber": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.integer),
+    "volume": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "publicationYear": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.integer),
+    "publicationMonth": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.integer),
+    "eanAddon": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "fullBarcode": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    # Physical location, audio runout, custody, ContainerAggregation & ImageScan details (v1.2.0 - C169)
+    "physicalLocation": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
+    "matrixRunout": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "custodyHolder": (OWL.ObjectProperty, IQOQO.Item, IQOQO.User),
+    "componentName": (OWL.DatatypeProperty, IQOQO.ContainerAggregation, XSD.string),
+    "quantity": (OWL.DatatypeProperty, IQOQO.ContainerAggregation, XSD.integer),
+    "scanManifestation": (OWL.ObjectProperty, IQOQO.ImageScan, IQOQO.Manifestation),
+    "filePath": (OWL.DatatypeProperty, IQOQO.ImageScan, XSD.string),
+    "scanType": (OWL.DatatypeProperty, IQOQO.ImageScan, XSD.string),
+    "scanSource": (OWL.DatatypeProperty, IQOQO.ImageScan, XSD.string),
+    # Generated taxonomy.ttl predicates
+    "belongsToCategory": (OWL.ObjectProperty, IQOQO.MediaFormat, IQOQO.MediaCategory),
+    "resolvesToCategory": (OWL.ObjectProperty, IQOQO.FormatAlias, IQOQO.MediaCategory),
+    "forCategory": (OWL.ObjectProperty, IQOQO.LookupStrategy, IQOQO.MediaCategory),
+    "defaultImageType": (OWL.DatatypeProperty, IQOQO.MediaCategory, XSD.string),
+    "strategyClass": (OWL.DatatypeProperty, IQOQO.LookupStrategy, XSD.string),
+    "waterfallOrder": (OWL.DatatypeProperty, IQOQO.LookupStrategy, XSD.integer),
 }
 
 # Required shape identifier -> exact target class. This is selective: a shape
@@ -244,6 +272,8 @@ REQUIRED_SHAPE_CONTRACT: dict[str, URIRef | set[URIRef]] = {
     "MapAttachmentShape": IQOQO.MapAttachment,
     "CartographicManifestationShape": IQOQO.Manifestation,
     "CartographicItemShape": IQOQO.Item,
+    "SerialWorkShape": IQOQO.SerialWork,
+    "PublicationIssueShape": IQOQO.PublicationIssue,
 }
 
 

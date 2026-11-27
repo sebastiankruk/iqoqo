@@ -924,6 +924,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         "box_condition",
         "map_insert_present",
     }
+    _DISALLOWED_ITEM_META_KEYS = {"format", "Format", "type", "isbn", "isbn13", "publisher", "Publisher", "format_type"}
 
     item_meta = dict(item.meta or {})
     if payload.build_status is not None:
@@ -941,13 +942,12 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         if k in metadata:
             item_meta[k] = metadata[k]
 
-    # Only forward non-item-specific metadata to manifestation (FRBR F5 -> F3 boundary)
-    manifestation_meta = {k: v for k, v in metadata.items() if k not in _ITEM_ONLY_KEYS and k not in forbidden}
-    if manifestation_meta and item.manifestation:
-        item.manifestation.update_meta(**manifestation_meta)
-
-    # Persist all allowed metadata into item.meta as well
-    item_meta.update({k: v for k, v in metadata.items() if k not in forbidden})
+    # Persist item-scoped metadata strictly to Item; never mutate shared Manifestation.meta
+    # or copy carrier/format fields into item.meta (FRBR F5 <-> F3 boundary).
+    allowed_meta = {k: v for k, v in metadata.items() if k not in forbidden and k not in _DISALLOWED_ITEM_META_KEYS}
+    item_meta.update(allowed_meta)
+    for key in _DISALLOWED_ITEM_META_KEYS:
+        item_meta.pop(key, None)
     item.meta = item_meta
     flag_modified(item, "meta")
 

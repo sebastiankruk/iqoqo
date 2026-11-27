@@ -328,3 +328,127 @@ def test_admin_v1_lod_cleanup_endpoint(client, normal_user_headers, admin_header
     assert payload["success"] is True
     assert "total_evaluated" in payload["data"]
     assert "demoted" in payload["data"]
+
+
+def test_contributor_and_expression_semantic_links_api_filter_stats_cleanup(client, admin_headers, app):
+    """Verify contributor/expression curation, catalog LOD filtering, admin stats, and cleanup task."""
+    from app.api.filters import CatalogFilterBuilder
+    from app.core.lod_linking_service import get_manifestation_semantic_links_dict
+    from app.db.contributions import Contributor, WorkContribution
+
+    with app.app_context():
+        author_linked = Contributor(name="Ursula K. Le Guin", type="person")
+        unrelated_contrib = Contributor(name="Unrelated Creator", type="person")
+        work_a = Work(title="The Dispossessed", meta={"authors": ["Ursula K. Le Guin"]})
+        work_b = Work(title="Standalone Book", meta={})
+        db.session.add_all([author_linked, unrelated_contrib, work_a, work_b])
+        db.session.flush()
+
+        db.session.add(WorkContribution(work_id=work_a.id, contributor_id=author_linked.id, role="author", sequence=0))
+        expr_a = Expression(work_id=work_a.id, content_type="text", language="en")
+        expr_b = Expression(work_id=work_b.id, content_type="text", language="en")
+        db.session.add_all([expr_a, expr_b])
+        db.session.flush()
+
+        manif_a = Manifestation(expression_id=expr_a.id, isbn13="9780061054884")
+        manif_b = Manifestation(expression_id=expr_b.id, isbn13="9780000000002")
+        db.session.add_all([manif_a, manif_b])
+        db.session.flush()
+
+        contrib_link = SemanticLink(
+            entity_type="contributor",
+            entity_id=author_linked.id,
+            authority="dbpedia",
+            external_uri="http://dbpedia.org/resource/Ursula_K._Le_Guin",
+            pref_label="Ursula K. Le Guin",
+            confidence=0.92,
+            status="suggested",
+            attributes={"dbo_type": "dbo:Person", "comment": "Ursula Kroeber Le Guin was an American author."},
+            verified=False,
+        )
+        expr_link = SemanticLink(
+            entity_type="expression",
+            entity_id=expr_a.id,
+            authority="dbpedia",
+            external_uri="http://dbpedia.org/resource/The_Dispossessed_EN",
+            pref_label="The Dispossessed (English)",
+            confidence=0.9,
+            status="suggested",
+            verified=False,
+        )
+        stranger_link = SemanticLink(
+            entity_type="contributor",
+            entity_id=unrelated_contrib.id,
+            authority="dbpedia",
+            external_uri="http://dbpedia.org/resource/Unrelated_Creator",
+            pref_label="Unrelated Creator",
+            confidence=0.88,
+            status="accepted",
+            verified=True,
+        )
+        db.session.add_all([contrib_link, expr_link, stranger_link])
+        db.session.commit()
+
+        manif_a_id, manif_b_id = manif_a.id, manif_b.id
+        contrib_link_id, expr_link_id, stranger_link_id = contrib_link.id, expr_link.id, stranger_link.id
+
+        # Manifestation links dictionary surfaces contributor + expression links
+        grouped = get_manifestation_semantic_links_dict(manif_a_id)
+        assert {item["id"] for item in grouped["links"]} == {contrib_link_id, expr_link_id}
+
+    # PATCH accept contributor and expression links; reject unrelated contributor link
+    resp_patch_c = client.patch(
+        f"/api/manifestations/{manif_a_id}/semantic-links/{contrib_link_id}",
+        json={"status": "accepted"},
+        headers=admin_headers,
+    )
+    assert resp_patch_c.status_code == 200
+    assert resp_patch_c.get_json()["data"]["verified"] is True
+
+    resp_patch_e = client.patch(
+        f"/api/manifestations/{manif_a_id}/semantic-links/{expr_link_id}",
+        json={"status": "accepted"},
+        headers=admin_headers,
+    )
+    assert resp_patch_e.status_code == 200
+
+    resp_bad = client.patch(
+        f"/api/manifestations/{manif_a_id}/semantic-links/{stranger_link_id}",
+        json={"status": "accepted"},
+        headers=admin_headers,
+    )
+    assert resp_bad.status_code == 400
+
+    with app.app_context():
+        # Filter builder matches contributor/expression links via lod_authority & lod_status
+        base_q = Manifestation.query.join(Expression, Manifestation.expression_id == Expression.id).join(
+            Work, Expression.work_id == Work.id
+        )
+        linked_ids = {
+            m.id for m in CatalogFilterBuilder(base_q, root="manifestation").apply(lod_authority="dbpedia", lod_status="linked").all()
+        }
+        assert manif_a_id in linked_ids
+        assert manif_b_id not in linked_ids
+
+        unlinked_q = Manifestation.query.join(Expression, Manifestation.expression_id == Expression.id).join(
+            Work, Expression.work_id == Work.id
+        )
+        unlinked_ids = {m.id for m in CatalogFilterBuilder(unlinked_q, root="manifestation").apply(lod_status="unlinked").all()}
+        assert manif_b_id in unlinked_ids
+        assert manif_a_id not in unlinked_ids
+
+        # Cleanup task evaluates contributor-tier links without crashing or false-demoting valid authors
+        cleanup_res = cleanup_lod_links_task(dry_run=True)
+        assert cleanup_res["total_evaluated"] >= 2
+
+    # Admin LOD stats include contributor-linked manifestations
+    stats_resp = client.get("/api/admin/lod/stats", headers=admin_headers)
+    assert stats_resp.status_code == 200
+    assert stats_resp.get_json()["data"]["linked_manifestations"] >= 1
+
+    # DELETE contributor-tier link succeeds via manifestation route
+    del_resp = client.delete(
+        f"/api/manifestations/{manif_a_id}/semantic-links/{contrib_link_id}",
+        headers=admin_headers,
+    )
+    assert del_resp.status_code == 204

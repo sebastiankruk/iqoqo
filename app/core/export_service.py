@@ -129,6 +129,7 @@ class ExportService:
                     if holder and getattr(holder, "visibility", "private") == "public":
                         holder_name = getattr(holder, "public_username", None) or str(holder.id)
                         holder_uri = URIRef(f"{base_url}/u/{holder_name}")
+                        graph.add((holder_uri, RDF.type, IQOQO.User))
                         graph.add((URIRef(f"{base_url}/items/{item.id}"), IQOQO.custodyHolder, holder_uri))
 
         return graph
@@ -184,6 +185,7 @@ class ExportService:
                     for f_user in friends:
                         f_name = f_user.public_username or str(f_user.id)
                         f_uri = URIRef(f"{resolved_base_url}/u/{f_name}")
+                        graph.add((f_uri, RDF.type, IQOQO.User))
                         graph.add((user_uri, FOAF.knows, f_uri))
 
         return graph.serialize(format=export_format)

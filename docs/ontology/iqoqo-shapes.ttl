@@ -59,6 +59,11 @@ iqoqo:WorkShape a sh:NodeShape ;
         sh:path iqoqo:mapInsertPresent ;
         sh:maxCount 0 ;
         sh:message "iqoqo:mapInsertPresent cannot be attached to a Work; it belongs to an Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:physicalLocation ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:physicalLocation cannot be attached to a Work; it belongs to an Item." ;
     ] .
 
 # ---------------------------------------------------------------------------
@@ -135,6 +140,17 @@ iqoqo:ContainerAggregationShape a sh:NodeShape ;
         sh:class iqoqo:Item ;
         sh:message "aggregatedItem must be of type Item (F5_Item level)." ;
     ] ;
+    sh:property [
+        sh:path iqoqo:componentName ;
+        sh:datatype xsd:string ;
+        sh:message "componentName must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:quantity ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 1 ;
+        sh:message "quantity must be a positive integer." ;
+    ] ;
     sh:or (
         [ sh:property [ sh:path iqoqo:aggregatedWork ; sh:minCount 1 ] ]
         [ sh:property [ sh:path iqoqo:aggregatedItem ; sh:minCount 1 ] ]
@@ -200,7 +216,7 @@ iqoqo:FRBRExpressionShape a sh:NodeShape ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:nodeKind sh:IRI ;
-        sh:message "Expression must link to exactly one Work via frbr:expressionOf." ;
+        sh:message "Expression must link to exactly one Work via frbrer:expressionOf." ;
     ] .
 
 iqoqo:FRBRManifestationShape a sh:NodeShape ;
@@ -210,7 +226,7 @@ iqoqo:FRBRManifestationShape a sh:NodeShape ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:nodeKind sh:IRI ;
-        sh:message "Manifestation must link to exactly one Expression via frbr:embodimentOf." ;
+        sh:message "Manifestation must link to exactly one Expression via frbrer:embodimentOf." ;
     ] ;
     sh:property [
         sh:path schema:name ;
@@ -225,6 +241,11 @@ iqoqo:FRBRManifestationShape a sh:NodeShape ;
         sh:message "ISBN must be exactly 13 digits." ;
     ] ;
     sh:property [
+        sh:path iqoqo:matrixRunout ;
+        sh:datatype xsd:string ;
+        sh:message "matrixRunout must be a string." ;
+    ] ;
+    sh:property [
         sh:path iqoqo:buildStatus ;
         sh:maxCount 0 ;
         sh:message "iqoqo:buildStatus cannot be attached to a Manifestation; it belongs to an Item." ;
@@ -233,6 +254,11 @@ iqoqo:FRBRManifestationShape a sh:NodeShape ;
         sh:path iqoqo:mapInsertPresent ;
         sh:maxCount 0 ;
         sh:message "iqoqo:mapInsertPresent cannot be attached to a Manifestation; it belongs to an Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:physicalLocation ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:physicalLocation cannot be attached to a Manifestation; it belongs to an Item." ;
     ] .
 
 iqoqo:FRBRItemShape a sh:NodeShape ;
@@ -242,7 +268,17 @@ iqoqo:FRBRItemShape a sh:NodeShape ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:nodeKind sh:IRI ;
-        sh:message "Item must link to exactly one Manifestation via frbr:exemplarOf." ;
+        sh:message "Item must link to exactly one Manifestation via frbrer:exemplarOf." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:physicalLocation ;
+        sh:datatype xsd:string ;
+        sh:message "physicalLocation must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:custodyHolder ;
+        sh:class iqoqo:User ;
+        sh:message "custodyHolder must reference a User resource." ;
     ] .
 
 iqoqo:FRBRWorkShape a sh:NodeShape ;
@@ -267,6 +303,11 @@ iqoqo:FRBRWorkShape a sh:NodeShape ;
         sh:path iqoqo:mapInsertPresent ;
         sh:maxCount 0 ;
         sh:message "iqoqo:mapInsertPresent cannot be attached to a Work; it belongs to an Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:physicalLocation ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:physicalLocation cannot be attached to a Work; it belongs to an Item." ;
     ] .
 
 iqoqo:ContributorAgentShape a sh:NodeShape ;
@@ -576,8 +617,8 @@ iqoqo:SemanticLinkShape a sh:NodeShape ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:string ;
-        sh:in ( "work" "manifestation" "contributor" ) ;
-        sh:message "semanticEntityType must be one of: work, manifestation, contributor." ;
+        sh:in ( "work" "expression" "manifestation" "contributor" ) ;
+        sh:message "semanticEntityType must be one of: work, expression, manifestation, contributor." ;
     ] ;
     sh:property [
         sh:path iqoqo:semanticEntityId ;
@@ -886,4 +927,85 @@ iqoqo:MapInsertPresentTargetShape a sh:NodeShape ;
         [ sh:class frbr:Item ]
     ) ;
     sh:message "iqoqo:mapInsertPresent cannot be attached to a Work or Manifestation; it belongs exclusively to an Item." .
+
+# ---------------------------------------------------------------------------
+# Serials / Periodicals & Item Physical Location Shapes (v1.2.0 - C169)
+# ---------------------------------------------------------------------------
+
+iqoqo:SerialWorkShape a sh:NodeShape ;
+    sh:targetClass iqoqo:SerialWork ;
+    sh:name "FRBRoo F18 Serial Work shape" ;
+    sh:description "Validates serial/periodical identifiers (ISSN, eISSN, workKind) on an F18 Serial Work." ;
+    sh:property [
+        sh:path iqoqo:issn ;
+        sh:datatype xsd:string ;
+        sh:pattern "^\\d{4}-\\d{3}[\\dX]$" ;
+        sh:message "issn must match normalized XXXX-XXXX format." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:eissn ;
+        sh:datatype xsd:string ;
+        sh:pattern "^\\d{4}-\\d{3}[\\dX]$" ;
+        sh:message "eissn must match normalized XXXX-XXXX format." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:workKind ;
+        sh:datatype xsd:string ;
+        sh:message "workKind must be a string." ;
+    ] .
+
+iqoqo:PublicationIssueShape a sh:NodeShape ;
+    sh:targetClass iqoqo:PublicationIssue ;
+    sh:name "Periodical Publication Issue shape" ;
+    sh:description "Validates periodical issue enumeration, dates, and GS1-977 barcode metadata on a Manifestation." ;
+    sh:property [
+        sh:path iqoqo:issueNumber ;
+        sh:datatype xsd:string ;
+        sh:message "issueNumber must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:cumulativeIssueNumber ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 1 ;
+        sh:message "cumulativeIssueNumber must be a positive integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:volume ;
+        sh:datatype xsd:string ;
+        sh:message "volume must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:publicationYear ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 1400 ;
+        sh:maxInclusive 2100 ;
+        sh:message "publicationYear must be a four-digit integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:publicationMonth ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 1 ;
+        sh:maxInclusive 12 ;
+        sh:message "publicationMonth must be an integer between 1 and 12." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:eanAddon ;
+        sh:datatype xsd:string ;
+        sh:message "eanAddon must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:fullBarcode ;
+        sh:datatype xsd:string ;
+        sh:message "fullBarcode must be a string." ;
+    ] .
+
+iqoqo:PhysicalLocationTargetShape a sh:NodeShape ;
+    sh:targetSubjectsOf iqoqo:physicalLocation ;
+    sh:name "physicalLocation subject restriction" ;
+    sh:description "iqoqo:physicalLocation may only be attached to an Item exemplar." ;
+    sh:or (
+        [ sh:class iqoqo:Item ]
+        [ sh:class frbr:Item ]
+    ) ;
+    sh:message "iqoqo:physicalLocation cannot be attached to a Work or Manifestation; it belongs exclusively to an Item." .
 

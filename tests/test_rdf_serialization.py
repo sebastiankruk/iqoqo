@@ -1109,3 +1109,130 @@ def test_export_service_export_rdf_social_and_custody(app):
 
         assert (u1_uri, FOAF.knows, u2_uri) in g
         assert (item_uri, IQOQO.custodyHolder, u2_uri) in g
+        assert (u2_uri, RDF.type, IQOQO.User) in g
+
+
+def test_author_lod_attaches_to_contributor_iri_without_cross_work_collapse(app):
+    """Contributor IRIs carry author owl:sameAs while distinct Works keep independent identities and conform to SHACL."""
+    from rdflib import BNode
+
+    from app.core.shacl_service import validate_graph
+
+    with app.app_context():
+        king = Contributor(name="Stephen King", type="person")
+        work_shining = Work(title="The Shining", meta={"authors": ["Stephen King"]})
+        work_it = Work(title="It", meta={"authors": ["Stephen King"]})
+        db.session.add_all([king, work_shining, work_it])
+        db.session.flush()
+
+        db.session.add_all(
+            [
+                WorkContribution(work_id=work_shining.id, contributor_id=king.id, role="author", sequence=0),
+                WorkContribution(work_id=work_it.id, contributor_id=king.id, role="author", sequence=0),
+            ]
+        )
+        e1 = Expression(work_id=work_shining.id, content_type="text", language="en")
+        e2 = Expression(work_id=work_it.id, content_type="text", language="en")
+        db.session.add_all([e1, e2])
+        db.session.flush()
+
+        m1 = Manifestation(expression_id=e1.id, isbn13="9780385121675")
+        m2 = Manifestation(expression_id=e2.id, isbn13="9780670813025")
+        db.session.add_all([m1, m2])
+        db.session.flush()
+
+        king_dbpedia = URIRef("http://dbpedia.org/resource/Stephen_King")
+        db.session.add(
+            SemanticLink(
+                entity_type="contributor",
+                entity_id=king.id,
+                authority="dbpedia",
+                external_uri=str(king_dbpedia),
+                pref_label="Stephen King",
+                confidence=0.96,
+                status="accepted",
+                verified=True,
+            )
+        )
+        db.session.commit()
+
+        ttl = serialize_collection_to_rdf([m1, m2], "http://testserver", output_format="turtle")
+        g = Graph()
+        g.parse(data=ttl, format="turtle")
+
+        conforms, _, results_text = validate_graph(g)
+        assert conforms, results_text
+
+        c_uri = URIRef(f"http://testserver/contributors/{king.id}")
+        w1_uri = URIRef(f"http://testserver/works/{work_shining.id}")
+        w2_uri = URIRef(f"http://testserver/works/{work_it.id}")
+
+        assert (c_uri, RDF.type, IQOQO.Contributor) in g
+        assert (c_uri, OWL.sameAs, king_dbpedia) in g
+        assert (c_uri, SCHEMA.sameAs, king_dbpedia) in g
+        assert (w1_uri, OWL.sameAs, king_dbpedia) not in g
+        assert (w2_uri, OWL.sameAs, king_dbpedia) not in g
+        assert (w1_uri, RDF.type, IQOQO.Work) in g
+        assert (URIRef(f"http://testserver/manifestations/{m1.id}"), RDF.type, IQOQO.Manifestation) in g
+        # Covered WorkContribution authors must not emit fallback BNode duplicates
+        bnode_creators = [
+            obj for obj in g.objects(w1_uri, Namespace("http://iflastandards.info/ns/frbr/frbrer/").creator) if isinstance(obj, BNode)
+        ]
+        assert bnode_creators == []
+
+
+def test_container_aggregation_and_image_scan_reification_and_shacl(app):
+    """ContainerAggregation and full-profile ImageScan emit typed reified nodes passing SHACL."""
+    from app.core.shacl_service import validate_graph
+    from app.db.games import ContainerAggregation
+
+    with app.app_context():
+        user = User(email="reify@iqoqo.local", display_name="Reify", visibility="public")
+        box_work = Work(title="Catan Big Box")
+        rulebook_work = Work(title="Catan Rules")
+        db.session.add_all([user, box_work, rulebook_work])
+        db.session.flush()
+
+        expr = Expression(work_id=box_work.id, content_type="board_game", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, isbn13="9780000000019")
+        db.session.add(manif)
+        db.session.flush()
+
+        item = Item(owner_id=user.id, manifestation_id=manif.id, status="available", physical_location="Living Room / Kallax A1")
+        db.session.add(item)
+        db.session.flush()
+
+        agg = ContainerAggregation(
+            container_work_id=box_work.id,
+            aggregated_type="work",
+            aggregated_work_id=rulebook_work.id,
+            component_name="Base Rulebook",
+            quantity=1,
+        )
+        scan = ImageScan(manifestation_id=manif.id, file_path="uploads/catan-front.jpg", scan_type="front", source="user_upload")
+        db.session.add_all([agg, scan])
+        db.session.commit()
+
+        # Public profile omits ImageScan and physicalLocation
+        pub_ttl = serialize_collection_to_rdf([item], "http://testserver", output_format="turtle", enrichment_profile="public")
+        pub_g = Graph().parse(data=pub_ttl, format="turtle")
+        assert (None, RDF.type, IQOQO.ImageScan) not in pub_g
+        assert (None, IQOQO.physicalLocation, None) not in pub_g
+
+        # Full profile emits reified ImageScan, ContainerAggregation, and Item.physicalLocation
+        full_ttl = serialize_collection_to_rdf([item], "http://testserver", output_format="turtle", enrichment_profile="full")
+        full_g = Graph().parse(data=full_ttl, format="turtle")
+        conforms, _, results_text = validate_graph(full_g)
+        assert conforms, results_text
+
+        agg_uri = URIRef(f"http://testserver/container-aggregations/{agg.id}")
+        scan_uri = URIRef(f"http://testserver/image-scans/{scan.id}")
+        assert (agg_uri, RDF.type, IQOQO.ContainerAggregation) in full_g
+        assert (agg_uri, IQOQO.componentName, Literal("Base Rulebook")) in full_g
+        assert (agg_uri, IQOQO.quantity, Literal(1, datatype=XSD.integer)) in full_g
+        assert (scan_uri, RDF.type, IQOQO.ImageScan) in full_g
+        assert (scan_uri, IQOQO.filePath, Literal("uploads/catan-front.jpg")) in full_g
+        assert (URIRef(f"http://testserver/items/{item.id}"), IQOQO.physicalLocation, Literal("Living Room / Kallax A1")) in full_g

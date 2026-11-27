@@ -714,7 +714,9 @@
     },
     "levels": {
       "work": "Poziom dzieła",
-      "manifestation": "Poziom wydania"
+      "expression": "Poziom ekspresji",
+      "manifestation": "Poziom wydania",
+      "contributor": "Poziom twórcy"
     }
   },
   "LodReconciliation": {

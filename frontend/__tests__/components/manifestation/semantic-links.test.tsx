@@ -35,7 +35,9 @@ vi.mock("next-intl", () => ({
       deleteLink: "Remove link",
       linkDeleted: "Semantic link removed.",
       "levels.work": "Work Level",
+      "levels.expression": "Expression Level",
       "levels.manifestation": "Edition Level",
+      "levels.contributor": "Contributor Level",
     };
     if (key === "confidence" && params?.score !== undefined) {
       return `${params.score}% confidence`;
@@ -190,5 +192,52 @@ describe("SemanticLinks Component", () => {
     expect(screen.getByTestId("semantic-links-compact")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Scan External LOD/i })).toBeInTheDocument();
     expect(screen.getByText("No external Linked Open Data authorities linked yet.")).toBeInTheDocument();
+  });
+
+  it("renders Contributor Level badge and supports delete action for contributor-tier links", () => {
+    const contribLinks = [
+      {
+        id: 201,
+        entity_type: "contributor",
+        entity_id: 42,
+        authority: "dbpedia",
+        external_uri: "http://dbpedia.org/resource/Stephen_King",
+        pref_label: "Stephen King",
+        confidence: 0.96,
+        verified: false,
+        status: "accepted",
+      },
+      {
+        id: 202,
+        entity_type: "expression",
+        entity_id: 7,
+        authority: "dbpedia",
+        external_uri: "http://dbpedia.org/resource/The_Shining_audiobook",
+        pref_label: "The Shining (Audiobook)",
+        confidence: 0.88,
+        verified: true,
+        status: "accepted",
+      },
+    ];
+
+    vi.mocked(hooks.useSemanticLinks).mockReturnValue({
+      data: {
+        manifestation_id: 4,
+        total: 2,
+        links: contribLinks,
+        grouped: { dbpedia: contribLinks },
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useSemanticLinks>);
+
+    render(<SemanticLinks manifestationId={4} canEdit={true} />);
+
+    expect(screen.getByText("Contributor Level")).toBeInTheDocument();
+    expect(screen.getByText("Expression Level")).toBeInTheDocument();
+    expect(screen.getByText("Stephen King")).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole("button", { name: "Remove link" });
+    fireEvent.click(deleteButtons[0]);
+    expect(mockDeleteMutate).toHaveBeenCalledWith(201, expect.any(Object));
   });
 });

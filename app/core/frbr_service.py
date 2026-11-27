@@ -1639,12 +1639,6 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         if manif.expression:
             category = FORMAT_TO_CATEGORY.get(format) or FORMAT_ALIAS_TO_CATEGORY.get(format) or format
             manif.expression.content_type = category
-            if manif.expression.work:
-                w_meta = dict(manif.expression.work.meta or {})
-                w_meta["type"] = category
-                w_meta["format"] = category
-                w_meta["Format"] = category
-                manif.expression.work.meta = w_meta
     if label is not None:
         manif.label = label
     if barcode is not None:
@@ -1668,12 +1662,6 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
             if manif.expression:
                 category = FORMAT_TO_CATEGORY.get(new_type) or FORMAT_ALIAS_TO_CATEGORY.get(new_type) or new_type
                 manif.expression.content_type = category
-                if manif.expression.work:
-                    w_meta = dict(manif.expression.work.meta or {})
-                    w_meta["type"] = category
-                    w_meta["format"] = category
-                    w_meta["Format"] = category
-                    manif.expression.work.meta = w_meta
 
         if "format_type" in meta and format_type is None and meta["format_type"]:
             manif.format_type = str(meta["format_type"]).strip().lower()[:50]
@@ -2327,15 +2315,26 @@ def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) ->
     return carrier
 
 
-def _sync_manifestation_items_type(manifestation_id: int, carrier: str, new_type: str) -> None:
-    """Propagate type and carrier format updates down to child Items' metadata."""
+_CARRIER_TYPE_DRIFT_KEYS = ("format", "Format", "type")
+
+
+def _prune_carrier_type_keys(entity: Any) -> None:
+    """Strip carrier/type drift keys from Work, Expression, or Item metadata."""
+    raw_meta = getattr(entity, "meta", None)
+    if not isinstance(raw_meta, dict) or not raw_meta:
+        return
+    if any(k in raw_meta for k in _CARRIER_TYPE_DRIFT_KEYS):
+        cleaned = dict(raw_meta)
+        for key in _CARRIER_TYPE_DRIFT_KEYS:
+            cleaned.pop(key, None)
+        entity.meta = cleaned
+
+
+def _sync_manifestation_items_type(manifestation_id: int) -> None:
+    """Strip stale carrier/format keys from child Items instead of duplicating Manifestation carrier data."""
     child_items = db.session.execute(select(Item).where(Item.manifestation_id == manifestation_id)).scalars().all()
     for item in child_items:
-        if item.meta:
-            i_meta = dict(item.meta)
-            if any(k in i_meta for k in ("format", "Format", "type")):
-                _sync_type_meta(i_meta, carrier, new_type)
-                item.meta = i_meta
+        _prune_carrier_type_keys(item)
 
 
 def update_frbr_entity_type(
@@ -2344,45 +2343,33 @@ def update_frbr_entity_type(
     new_type: str,
 ) -> Any:
     """
-    Update the type of a FRBR entity and adapt parent/child entities to maintain consistency.
+    Update the type of a FRBR entity and adapt parent/child entities without polluting Work or Item meta.
 
-    Carrier formats (``bluray``, ``vinyl`` …) on Manifestations and child Items
-    are preserved when they stay valid for the new type; only invalid or type-like format
-    values degrade to the category's ``unknown_*`` placeholder.
+    Carrier formats (``bluray``, ``vinyl`` …) live exclusively on Manifestations;
+    valid carriers survive category changes while invalid or type-like values degrade
+    to the category's ``unknown_*`` placeholder.  Stale ``type``/``format``/``Format``
+    keys on Work, Expression, and Item metadata are pruned rather than duplicated.
     """
     entity = db.session.get(entity_class, entity_id)
     if not entity:
         raise ValueError(f"{entity_class.__name__} with id {entity_id} not found")
 
-    if hasattr(entity, "meta"):
-        current_meta = dict(entity.meta or {})
-        carrier = _sync_type_meta(
-            current_meta,
-            entity.format if hasattr(entity, "format") else None,
-            new_type,
-        )
-        entity.meta = current_meta
-        if hasattr(entity, "format"):
-            entity.format = carrier
-
     if entity_class == Manifestation:
-        _sync_manifestation_items_type(entity.id, carrier, new_type)
+        current_meta = dict(entity.meta or {})
+        carrier = _sync_type_meta(current_meta, entity.format, new_type)
+        entity.meta = current_meta
+        entity.format = carrier
+        _sync_manifestation_items_type(entity.id)
         if entity.expression:
             entity.expression.content_type = new_type
+            _prune_carrier_type_keys(entity.expression)
             if entity.expression.work:
-                w_meta = dict(entity.expression.work.meta or {})
-                w_meta["type"] = new_type
-                w_meta["format"] = new_type
-                w_meta["Format"] = new_type
-                entity.expression.work.meta = w_meta
+                _prune_carrier_type_keys(entity.expression.work)
     elif entity_class == Expression:
         entity.content_type = new_type
+        _prune_carrier_type_keys(entity)
         if entity.work:
-            w_meta = dict(entity.work.meta or {})
-            w_meta["type"] = new_type
-            w_meta["format"] = new_type
-            w_meta["Format"] = new_type
-            entity.work.meta = w_meta
+            _prune_carrier_type_keys(entity.work)
         child_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == entity.id)).scalars().all()
         for m in child_manifs:
             m_meta = dict(m.meta or {})
@@ -2390,16 +2377,13 @@ def update_frbr_entity_type(
             m.meta = m_meta
             if hasattr(m, "format"):
                 m.format = carrier
-            _sync_manifestation_items_type(m.id, carrier, new_type)
+            _sync_manifestation_items_type(m.id)
     elif entity_class == Work:
-        w_meta = dict(entity.meta or {})
-        w_meta["type"] = new_type
-        w_meta["format"] = new_type
-        w_meta["Format"] = new_type
-        entity.meta = w_meta
+        _prune_carrier_type_keys(entity)
         child_exprs = db.session.execute(select(Expression).where(Expression.work_id == entity.id)).scalars().all()
         for sub_expr in child_exprs:
             sub_expr.content_type = new_type
+            _prune_carrier_type_keys(sub_expr)
             sub_manifs = db.session.execute(select(Manifestation).where(Manifestation.expression_id == sub_expr.id)).scalars().all()
             for m in sub_manifs:
                 m_meta = dict(m.meta or {})
@@ -2407,7 +2391,7 @@ def update_frbr_entity_type(
                 m.meta = m_meta
                 if hasattr(m, "format"):
                     m.format = carrier
-                _sync_manifestation_items_type(m.id, carrier, new_type)
+                _sync_manifestation_items_type(m.id)
 
     db.session.commit()
     return entity
@@ -2586,12 +2570,23 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
         if link_status == "accepted":
             ext_uri = link.get("external_uri") if isinstance(link, dict) else getattr(link, "external_uri", None)
             e_type = link.get("entity_type") if isinstance(link, dict) else getattr(link, "entity_type", "manifestation")
+            e_id = link.get("entity_id") if isinstance(link, dict) else getattr(link, "entity_id", None)
             if ext_uri:
                 safe_link = _safe_iri(str(ext_uri))
                 if safe_link:
-                    target_uri = w_uri if e_type == "work" else m_uri
-                    g.add((target_uri, OWL.sameAs, URIRef(safe_link)))
-                    g.add((target_uri, SCHEMA.sameAs, URIRef(safe_link)))
+                    target_uri: URIRef | None
+                    if e_type == "contributor":
+                        target_uri = _related_uri("contributors", e_id, base_url) if e_id else None
+                    elif e_type == "work":
+                        target_uri = w_uri
+                    elif e_type == "expression":
+                        expr_id = item.get("expression_id", m_id)
+                        target_uri = _frbr_uri("expression", expr_id, base_url)
+                    else:
+                        target_uri = m_uri
+                    if target_uri is not None:
+                        g.add((target_uri, OWL.sameAs, URIRef(safe_link)))
+                        g.add((target_uri, SCHEMA.sameAs, URIRef(safe_link)))
 
     for sm in item.get("series_memberships", []):
         series_id = sm.get("series_work_id") if isinstance(sm, dict) else getattr(sm, "series_work_id", None)
@@ -2664,6 +2659,7 @@ def _enrich_graph_from_db(
     seen_expressions: set[int] = set()
     seen_manifestations: set[int] = set()
     seen_items: set[int] = set()
+    seen_contributors: set[int] = set()
 
     for item in items:
         if isinstance(item, dict):
@@ -2717,8 +2713,10 @@ def _enrich_graph_from_db(
                 .all()
             )
             for wc in contribs:
+                seen_contributors.add(wc.contributor_id)
                 w_uri = _frbr_uri("work", wc.work_id, base_url)
                 c_uri = _related_uri("contributors", wc.contributor_id, base_url)
+                g.add((c_uri, RDF.type, IQOQO.Contributor))
                 g.add((c_uri, RDF.type, SCHEMA.Person if wc.contributor and wc.contributor.type == "person" else SCHEMA.Organization))
                 if wc.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(wc.contributor.name)))
@@ -2739,8 +2737,10 @@ def _enrich_graph_from_db(
                 .all()
             )
             for ec in expr_contribs:
+                seen_contributors.add(ec.contributor_id)
                 e_uri = _frbr_uri("expression", ec.expression_id, base_url)
                 c_uri = _related_uri("contributors", ec.contributor_id, base_url)
+                g.add((c_uri, RDF.type, IQOQO.Contributor))
                 g.add((c_uri, RDF.type, SCHEMA.Person if ec.contributor and ec.contributor.type == "person" else SCHEMA.Organization))
                 if ec.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(ec.contributor.name)))
@@ -2759,8 +2759,10 @@ def _enrich_graph_from_db(
                 .all()
             )
             for mc in m_contribs:
+                seen_contributors.add(mc.contributor_id)
                 m_uri = _frbr_uri("manifestation", mc.manifestation_id, base_url)
                 c_uri = _related_uri("contributors", mc.contributor_id, base_url)
+                g.add((c_uri, RDF.type, IQOQO.Contributor))
                 g.add((c_uri, RDF.type, SCHEMA.Person if mc.contributor and mc.contributor.type == "person" else SCHEMA.Organization))
                 if mc.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(mc.contributor.name)))
@@ -2778,12 +2780,22 @@ def _enrich_graph_from_db(
         # ImageScans - only include in full profile (authenticated exports)
         if enrichment_profile == "full" and seen_manifestations:
             scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
+            clean_base = base_url.rstrip("/")
             for scan in scans:
                 m_uri = _frbr_uri("manifestation", scan.manifestation_id, base_url)
                 encoded_path = _safe_iri(str(scan.file_path))
                 if encoded_path is not None:
-                    img_uri = URIRef(f"{base_url}/{encoded_path}")
+                    img_uri = URIRef(f"{clean_base}/{encoded_path.lstrip('/')}")
                     g.add((m_uri, SCHEMA.image, img_uri))
+                    scan_uri = URIRef(f"{clean_base}/image-scans/{scan.id}")
+                    g.add((scan_uri, RDF.type, IQOQO.ImageScan))
+                    g.add((scan_uri, IQOQO.scanManifestation, m_uri))
+                    g.add((scan_uri, IQOQO.filePath, Literal(str(scan.file_path))))
+                    g.add((scan_uri, SCHEMA.contentUrl, img_uri))
+                    if scan.scan_type:
+                        g.add((scan_uri, IQOQO.scanType, Literal(str(scan.scan_type))))
+                    if scan.source:
+                        g.add((scan_uri, IQOQO.scanSource, Literal(str(scan.source))))
                 else:
                     _logger_frbr.warning("Skipping malformed ImageScan path for manifestation %s", scan.manifestation_id)
 
@@ -2855,27 +2867,8 @@ def _enrich_graph_from_db(
                             g.add((contributor_uri, SCHEMA.name, Literal(contributor.name)))
                         g.add((m_uri, SCHEMA.performer, contributor_uri))
 
-        # SemanticLinks (accepted external LOD links for Manifestation and Work)
+        # OpenCollections / legacy meta URIs for Manifestation and Work
         if seen_manifestations:
-            m_links = (
-                db.session.execute(
-                    select(SemanticLink).where(
-                        SemanticLink.entity_type == "manifestation",
-                        SemanticLink.entity_id.in_(seen_manifestations),
-                        SemanticLink.status == "accepted",
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            for link in m_links:
-                m_uri = _frbr_uri("manifestation", link.entity_id, base_url)
-                ext_iri = _safe_iri(str(link.external_uri))
-                if ext_iri is not None:
-                    ext_ref = URIRef(ext_iri)
-                    g.add((m_uri, OWL.sameAs, ext_ref))
-                    g.add((m_uri, SCHEMA.sameAs, ext_ref))
-
             m_rows = db.session.execute(select(Manifestation).where(Manifestation.id.in_(seen_manifestations))).scalars().all()
             for m_obj in m_rows:
                 lod_links = (m_obj.meta or {}).get("lod_links") if isinstance(m_obj.meta, dict) else None
@@ -2889,25 +2882,6 @@ def _enrich_graph_from_db(
                     g.add((m_uri, RDFS.seeAlso, oc_ref))
 
         if seen_works:
-            w_links = (
-                db.session.execute(
-                    select(SemanticLink).where(
-                        SemanticLink.entity_type == "work",
-                        SemanticLink.entity_id.in_(seen_works),
-                        SemanticLink.status == "accepted",
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            for link in w_links:
-                w_uri = _frbr_uri("work", link.entity_id, base_url)
-                ext_iri = _safe_iri(str(link.external_uri))
-                if ext_iri is not None:
-                    ext_ref = URIRef(ext_iri)
-                    g.add((w_uri, OWL.sameAs, ext_ref))
-                    g.add((w_uri, SCHEMA.sameAs, ext_ref))
-
             w_rows = db.session.execute(select(Work).where(Work.id.in_(seen_works))).scalars().all()
             for w_obj in w_rows:
                 lod_links = (w_obj.meta or {}).get("lod_links") if isinstance(w_obj.meta, dict) else None
@@ -2970,18 +2944,32 @@ def _enrich_graph_from_db(
                 .scalars()
                 .all()
             )
+            clean_base = base_url.rstrip("/")
             for agg in aggs:
                 c_uri = _frbr_uri("work", agg.container_work_id, base_url)
+                agg_uri = URIRef(f"{clean_base}/container-aggregations/{agg.id}")
+                g.add((agg_uri, RDF.type, IQOQO.ContainerAggregation))
+                g.add((agg_uri, RDF.type, FRBROO.F16_Container_Work))
+                g.add((agg_uri, IQOQO.containerWork, c_uri))
+                g.add((c_uri, RDF.type, IQOQO.Work))
+                if agg.component_name:
+                    g.add((agg_uri, IQOQO.componentName, Literal(str(agg.component_name))))
+                if agg.quantity is not None:
+                    g.add((agg_uri, IQOQO.quantity, Literal(int(agg.quantity), datatype=XSD.integer)))
                 if agg.aggregated_type == "work" and agg.aggregated_work_id:
                     t_uri = _frbr_uri("work", agg.aggregated_work_id, base_url)
                     g.add((c_uri, SCHEMA.hasPart, t_uri))
                     g.add((t_uri, SCHEMA.isPartOf, c_uri))
+                    g.add((agg_uri, IQOQO.aggregatedWork, t_uri))
+                    g.add((t_uri, RDF.type, IQOQO.Work))
                 elif agg.aggregated_type == "item" and agg.aggregated_item_id:
                     t_uri = _frbr_uri("item", agg.aggregated_item_id, base_url)
                     g.add((c_uri, SCHEMA.hasPart, t_uri))
                     g.add((t_uri, SCHEMA.isPartOf, c_uri))
+                    g.add((agg_uri, IQOQO.aggregatedItem, t_uri))
+                    g.add((t_uri, RDF.type, IQOQO.Item))
 
-        # Accepted SemanticLinks for Work, Expression, and Manifestation
+        # Accepted SemanticLinks for Work, Expression, Manifestation, and Contributor
         sem_clauses = []
         if seen_works:
             sem_clauses.append((SemanticLink.entity_type == "work") & (SemanticLink.entity_id.in_(seen_works)))
@@ -2989,13 +2977,18 @@ def _enrich_graph_from_db(
             sem_clauses.append((SemanticLink.entity_type == "expression") & (SemanticLink.entity_id.in_(seen_expressions)))
         if seen_manifestations:
             sem_clauses.append((SemanticLink.entity_type == "manifestation") & (SemanticLink.entity_id.in_(seen_manifestations)))
+        if seen_contributors:
+            sem_clauses.append((SemanticLink.entity_type == "contributor") & (SemanticLink.entity_id.in_(seen_contributors)))
         if sem_clauses:
             sem_links = db.session.execute(select(SemanticLink).where(SemanticLink.status == "accepted", or_(*sem_clauses))).scalars().all()
             for sl in sem_links:
                 safe_ext = _safe_iri(sl.external_uri)
                 if safe_ext is None:
                     continue
-                subj_uri = _frbr_uri(sl.entity_type, sl.entity_id, base_url)
+                if sl.entity_type == "contributor":
+                    subj_uri = _related_uri("contributors", sl.entity_id, base_url)
+                else:
+                    subj_uri = _frbr_uri(sl.entity_type, sl.entity_id, base_url)
                 ext_ref = URIRef(safe_ext)
                 g.add((subj_uri, OWL.sameAs, ext_ref))
                 g.add((subj_uri, SCHEMA.sameAs, ext_ref))
@@ -3190,6 +3183,7 @@ def _emit_serial_rdf_triples(
     is_serial = work_kind == "serial" or bool(issn) or bool(eissn)
     if is_serial:
         g.add((w_uri, RDF.type, FRBROO.F18_Serial_Work))
+        g.add((w_uri, RDF.type, IQOQO.SerialWork))
         g.add((w_uri, RDF.type, SCHEMA.Periodical))
         if work_kind:
             g.add((w_uri, IQOQO.workKind, Literal(str(work_kind))))
@@ -3236,6 +3230,7 @@ def _emit_serial_rdf_triples(
         return
 
     g.add((m_uri, RDF.type, SCHEMA.PublicationIssue))
+    g.add((m_uri, RDF.type, IQOQO.PublicationIssue))
     if issue_number:
         g.add((m_uri, SCHEMA.issueNumber, Literal(str(issue_number))))
         g.add((m_uri, IQOQO.issueNumber, Literal(str(issue_number))))
@@ -3271,6 +3266,61 @@ def _safe_optional_int(value: Any) -> int | None:
         return None
 
 
+def _load_work_contributor_names(items: list[Any]) -> dict[int, set[str]]:
+    """Pre-load normalized contributor names per Work to avoid emitting redundant BNode creators."""
+    work_ids: set[int] = set()
+    for it in items:
+        if isinstance(it, dict):
+            wid = it.get("work_id")
+            if isinstance(wid, int):
+                work_ids.add(wid)
+        elif hasattr(it, "manifestation_id") and hasattr(it, "manifestation"):
+            m = it.manifestation
+            if m and getattr(m, "expression", None) and m.expression.work_id:
+                work_ids.add(int(m.expression.work_id))
+        elif hasattr(it, "expression_id") and getattr(it, "expression", None) and it.expression.work_id:
+            work_ids.add(int(it.expression.work_id))
+        elif hasattr(it, "work_id") and getattr(it, "work_id", None):
+            work_ids.add(int(it.work_id))
+        elif (hasattr(it, "expressions") or isinstance(it, Work)) and getattr(it, "id", None):
+            work_ids.add(int(it.id))
+
+    if not work_ids:
+        return {}
+    try:
+        rows = (
+            db.session.execute(
+                select(WorkContribution).options(joinedload(WorkContribution.contributor)).where(WorkContribution.work_id.in_(work_ids))
+            )
+            .scalars()
+            .all()
+        )
+    except (SQLAlchemyError, RuntimeError):
+        return {}
+
+    names_by_work: dict[int, set[str]] = {}
+    for wc in rows:
+        if wc.contributor and wc.contributor.name:
+            names_by_work.setdefault(int(wc.work_id), set()).add(wc.contributor.name.strip().lower())
+    return names_by_work
+
+
+def _emit_bnode_authors(g: Graph, w_uri: URIRef, authors: list[Any], covered_names: set[str]) -> None:
+    """Emit fallback BNode creator/author resources only for authors lacking Contributor rows."""
+    for author in authors:
+        author_name = author.get("name") if isinstance(author, dict) else author
+        if not author_name:
+            continue
+        clean_name = str(author_name).strip()
+        if not clean_name or clean_name.lower() in covered_names:
+            continue
+        author_node = BNode()
+        g.add((author_node, RDF.type, SCHEMA.Person))
+        g.add((author_node, SCHEMA.name, Literal(clean_name)))
+        g.add((w_uri, FRBRER.creator, author_node))
+        g.add((w_uri, SCHEMA.author, author_node))
+
+
 def build_collection_rdf_graph(
     items: list[Any],
     base_url: str,
@@ -3298,6 +3348,7 @@ def build_collection_rdf_graph(
     g.bind("iqoqo", IQOQO)
     g.bind("owl", OWL)
     g.bind("xsd", XSD)
+    covered_contributors_by_work = _load_work_contributor_names(items)
 
     for item in items:
         # Resolve whether dict or db object
@@ -3397,24 +3448,21 @@ def build_collection_rdf_graph(
                 w_uri = _frbr_uri("work", work_id, base_url)
                 e_uri = _frbr_uri("expression", expression_id, base_url)
                 g.add((w_uri, RDF.type, FRBR.Work))
+                g.add((w_uri, RDF.type, IQOQO.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(w_title)))
-                for author in authors:
-                    author_node = BNode()
-                    g.add((author_node, RDF.type, SCHEMA.Person))
-                    g.add((author_node, SCHEMA.name, Literal(author)))
-                    g.add((w_uri, FRBRER.creator, author_node))
-                    g.add((w_uri, SCHEMA.author, author_node))
+                _emit_bnode_authors(g, w_uri, authors, covered_contributors_by_work.get(int(work_id), set()))
                 g.add((e_uri, RDF.type, FRBR.Expression))
+                g.add((e_uri, RDF.type, IQOQO.Expression))
                 g.add((e_uri, FRBRER.expressionOf, w_uri))
 
                 for m_elem in getattr(item, "manifestations", []):
                     m_uri = _frbr_uri("manifestation", m_elem.id, base_url)
                     g.add((m_uri, RDF.type, FRBR.Manifestation))
+                    g.add((m_uri, RDF.type, IQOQO.Manifestation))
                     g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
                     g.add((m_uri, FRBRER.embodimentOf, e_uri))
-                    if m_elem.title:
-                        g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
+                    g.add((m_uri, SCHEMA.name, Literal(m_elem.title or w_title)))
                     if m_elem.isbn13:
                         g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                     _emit_serial_rdf_triples(
@@ -3443,27 +3491,24 @@ def build_collection_rdf_graph(
 
                 w_uri = _frbr_uri("work", work_id, base_url)
                 g.add((w_uri, RDF.type, FRBR.Work))
+                g.add((w_uri, RDF.type, IQOQO.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(title)))
                 _emit_serial_rdf_triples(g, w_uri, None, work_obj=item)
-                for author in authors:
-                    author_node = BNode()
-                    g.add((author_node, RDF.type, SCHEMA.Person))
-                    g.add((author_node, SCHEMA.name, Literal(author)))
-                    g.add((w_uri, FRBRER.creator, author_node))
-                    g.add((w_uri, SCHEMA.author, author_node))
+                _emit_bnode_authors(g, w_uri, authors, covered_contributors_by_work.get(int(work_id), set()))
 
                 for expr_elem in getattr(item, "expressions", []):
                     e_uri = _frbr_uri("expression", expr_elem.id, base_url)
                     g.add((e_uri, RDF.type, FRBR.Expression))
+                    g.add((e_uri, RDF.type, IQOQO.Expression))
                     g.add((e_uri, FRBRER.expressionOf, w_uri))
                     for m_elem in getattr(expr_elem, "manifestations", []):
                         m_uri = _frbr_uri("manifestation", m_elem.id, base_url)
                         g.add((m_uri, RDF.type, FRBR.Manifestation))
+                        g.add((m_uri, RDF.type, IQOQO.Manifestation))
                         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
                         g.add((m_uri, FRBRER.embodimentOf, e_uri))
-                        if m_elem.title:
-                            g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
+                        g.add((m_uri, SCHEMA.name, Literal(m_elem.title or title)))
                         if m_elem.isbn13:
                             g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                         _emit_serial_rdf_triples(g, w_uri, m_uri, work_obj=item, manif_obj=m_elem, meta_dict=getattr(m_elem, "meta", None))
@@ -3543,10 +3588,13 @@ def build_collection_rdf_graph(
         e_uri = _frbr_uri("expression", expression_id, base_url)
         w_uri = _frbr_uri("work", work_id, base_url)
 
-        # FRBR Core Declarations
+        # FRBR + iqoqo Core Declarations
         g.add((m_uri, RDF.type, FRBR.Manifestation))
+        g.add((m_uri, RDF.type, IQOQO.Manifestation))
         g.add((e_uri, RDF.type, FRBR.Expression))
+        g.add((e_uri, RDF.type, IQOQO.Expression))
         g.add((w_uri, RDF.type, FRBR.Work))
+        g.add((w_uri, RDF.type, IQOQO.Work))
 
         # Manifestation embodies Expression, Expression is expression of Work
         g.add((m_uri, FRBRER.embodimentOf, e_uri))
@@ -3669,15 +3717,8 @@ def build_collection_rdf_graph(
         if m_format == "cartographic_map":
             g.add((m_uri, RDF.type, SCHEMA.Map))
 
-        for author in authors:
-            author_name = author.get("name") if isinstance(author, dict) else author
-            if not author_name:
-                continue
-            author_node = BNode()
-            g.add((author_node, RDF.type, SCHEMA.Person))
-            g.add((author_node, SCHEMA.name, Literal(str(author_name))))
-            g.add((w_uri, FRBRER.creator, author_node))
-            g.add((w_uri, SCHEMA.author, author_node))
+        covered_names = covered_contributors_by_work.get(int(work_id), set()) if isinstance(work_id, int) else set()
+        _emit_bnode_authors(g, w_uri, authors, covered_names)
 
         # SIOC Semantics for Tagging / Folksonomy categorization
         for tag in tags:
@@ -3687,6 +3728,7 @@ def build_collection_rdf_graph(
         if item_id:
             i_uri = _frbr_uri("item", item_id, base_url)
             g.add((i_uri, RDF.type, FRBR.Item))
+            g.add((i_uri, RDF.type, IQOQO.Item))
             g.add((i_uri, FRBRER.exemplarOf, m_uri))
             if status:
                 g.add((i_uri, IQOQO.status, Literal(status)))

@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Author LOD Contributor Ownership, OWL/SHACL Synchronization & Tier Purity Guards (C169)**:
+  - Fixed `owl:sameAs` author/work identity collapse by moving author DBpedia `SemanticLink` attachment onto `Contributor` (`app/core/lod_linking_service.py`), updating retrieval, curation (`PATCH`/`DELETE /api/manifestations/<id>/semantic-links`), filters, admin stats, cleanup tasks, and frontend badges (`Contributor Level` / `Poziom twórcy`, `Expression Level` / `Poziom ekspresji`), and adding idempotent backfill script [`scripts/migrate_author_lod_to_contributors.py`](../scripts/migrate_author_lod_to_contributors.py).
+  - Updated `app/core/frbr_service.py` and `app/core/export_service.py` to emit dereferenceable `<BASE_URL>/contributors/<id>` IRIs instead of duplicate `BNode` creators, dual `FRBR.*`/`iqoqo:*` types, `iqoqo:SerialWork`/`iqoqo:PublicationIssue`, `iqoqo:User` types on custody/friend IRIs, and reified `iqoqo:ContainerAggregation` and full-profile `iqoqo:ImageScan` nodes.
+  - Synchronized `docs/ontology/iqoqo.ttl`, `docs/ontology/iqoqo-shapes.ttl` (`SerialWorkShape`, `PublicationIssueShape`, `iqoqo:physicalLocation` restrictions, `SemanticLinkShape` `"expression"`, `frbrer:` message fixes), `scripts/sync_ontology.py`, and `docs/SEMANTIC_WEB.md`.
+  - Removed carrier/type meta duplication onto `Work.meta`/`Item.meta` in `update_manifestation`, `_sync_manifestation_items_type`, and `update_frbr_entity_type`, and prevented `PUT /api/items/<id>` from mutating shared `Manifestation.meta`.
 - **Search, Facets, URL Round-Trip, OpenAPI Envelope & QA Hardening (C167)**:
   - Fixed PostgreSQL FTS crash in `app/core/search_service.py` by binding `bindparam("location_filter", expanding=True)` and returning owner-scoped `physical_location` across FTS/ILIKE `GET /api/items?q=...` results.
   - Fixed `app/core/data_manager.py` (`_compute_faceted_stats` -> `_build_item_ids_subq`) so `GET /api/stats/facets?location=...` honors `locations` filtering across facet groups and `location_counts` queries `loc_subq`.

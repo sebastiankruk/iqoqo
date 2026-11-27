@@ -42,11 +42,13 @@ def test_update_frbr_entity_type_upward_propagation(app):
         # Verify Manifestation is updated
         assert updated_manif.meta["type"] == "Board Game"
 
-        # Verify upward propagation to Expression and Work
+        # Verify upward propagation to Expression without polluting Work.meta with carrier keys
         db.session.refresh(expr)
         db.session.refresh(work)
         assert expr.content_type == "Board Game"
-        assert work.meta["type"] == "Board Game"
+        assert "type" not in (work.meta or {})
+        assert "format" not in (work.meta or {})
+        assert "Format" not in (work.meta or {})
 
         # item assertions removed
 
@@ -256,20 +258,20 @@ def test_item_level_metadata_is_not_propagated(app):
     with app.app_context():
         manifest = db.session.get(Manifestation, manif_id)
         physical = db.session.get(Item, item_id)
+        work = manifest.expression.work
 
         # The Manifestation -- the structural authority -- is updated correctly.
         assert manifest.format == "unknown_audio"
         assert manifest.meta["type"] == "music"
         assert manifest.meta["format"] == "unknown_audio"
 
-        # The Item's denormalised copy is updated to match Manifestation carrier
-        assert physical.meta["format"] == "unknown_audio"
-        assert physical.meta["Format"] == "unknown_audio"
-        assert physical.meta["type"] == "music"
-        assert physical.meta["format"] == manifest.meta["format"]
+        # C169 tier purity: carrier/format/type keys are pruned from Item.meta and Work.meta
+        for drift_key in ("format", "Format", "type"):
+            assert drift_key not in (physical.meta or {})
+            assert drift_key not in (work.meta or {})
 
-        # Export boundary serializes updated metadata consistently
+        # Export boundary excludes stale carrier/format metadata from Item rows
         from app.core.data_manager import _export_item_row
 
         exported = _export_item_row(physical)
-        assert exported["meta"]["format"] == "unknown_audio"
+        assert "format" not in (exported["meta"] or {})

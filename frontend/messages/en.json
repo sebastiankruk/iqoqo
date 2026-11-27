@@ -714,7 +714,9 @@
     },
     "levels": {
       "work": "Work Level",
-      "manifestation": "Edition Level"
+      "expression": "Expression Level",
+      "manifestation": "Edition Level",
+      "contributor": "Contributor Level"
     }
   },
   "LodReconciliation": {
