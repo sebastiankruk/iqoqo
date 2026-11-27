@@ -12,5 +12,5 @@
 ## 3. Architecture Blueprint Spec & SVG Sync
 
 - [x] 3.1 Update `.context/notes/docs/docs-iqoqo-architecture-blueprints.md` with exact `v1.2.0` deltas for the 10 drifted SVGs (`01`–`08`, `10`, `12`, prioritizing `03`, `08`, `10`, `12`)
-- [ ] 3.2 Prompt human to regenerate drifted `.svg` files; once supplied, sync byte-identical AGPL-headered SVGs across `docs/images/architecture/` and `frontend/public/images/help/`
+- [x] 3.2 Prompt human to regenerate drifted `.svg` files; once supplied, sync byte-identical AGPL-headered SVGs across `docs/images/architecture/` and `frontend/public/images/help/`
 - [x] 3.3 Run `IQOQO_AI_MODE=1 make lint-markdown`, `./scripts/check_license.sh`, and `IQOQO_AI_MODE=1 make test-scripts-bash`

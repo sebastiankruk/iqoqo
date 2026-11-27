@@ -15,321 +15,302 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp3-title bp3-desc">
-            <title id="bp3-title">iqoqo v1.2.0 — PostgreSQL 18 Multi-Schema Physical Database &amp; Merge Integrity (Blueprint 3)</title>
-            <desc id="bp3-desc">Physical ER and schema boundary diagram for PostgreSQL 18 showing auth, catalog, inventory, social, public, and config schemas alongside the frbr_merge.py consolidation map.</desc>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later | iqoqo v1.2.0 Architecture Blueprint -->
+<svg id="svg-bp3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp3-title bp3-desc">
+            <title id="bp3-title">03 · PostgreSQL 18 Multi-Schema Physical DB &amp; Merge Integrity — iqoqo v1.2.0</title>
+            <desc id="bp3-desc">Physical ER and schema boundary diagram for PostgreSQL 18 in iqoqo v1.2.0 showing all 7 schemas (auth, catalog, inventory, social, dedicated federation, config, public) and the frbr_merge.py consolidation map (20 Work, 8 Expression, 10 Manifestation ref-points).</desc>
             <style>
-              .canvas-bg { fill: #FDFBF7; }
-              .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 22px; font-weight: 700; fill: #2B3D4F; }
-              .subtitle-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 500; fill: #5A6B7C; }
-              .header-pill-bg { fill: #EFE9DD; stroke: #D8CFC0; stroke-width: 1; }
-              .header-pill-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 600; fill: #2B3D4F; }
+              .bg { fill: #FDFBF7; }
+              .title { font-family: Georgia, 'Merriweather', serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
+              .sub { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.2px; font-weight: 500; fill: #5A6776; }
+              .ver-pill { fill: #2B3D4F; }
+              .ver-pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 11px; font-weight: 700; fill: #FDFBF7; }
+              .ver-dot { fill: #D15400; }
 
-              .schema-box { stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .schema-auth { fill: #EEF2F6; stroke: #8FA3B8; }
-              .schema-catalog { fill: #F4EFE6; stroke: #B8AD99; }
-              .schema-social { fill: #EDF5F4; stroke: #85B5B0; }
-              .schema-inventory { fill: #F3F5F8; stroke: #8FA3B8; }
-              .schema-sys { fill: #F4EFE6; stroke: #C9BFA9; }
-              .schema-merge { fill: #FCF3EC; stroke: #DF9E74; }
+              .sch { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .sch-indigo { fill: #F1F4F7; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .sch-teal { fill: #EFF8F6; stroke: #0F766E; stroke-width: 1.6; stroke-dasharray: 6 4; }
+              .sch-clay { fill: #FEF6F0; stroke: #D15400; stroke-width: 1.6; stroke-dasharray: 6 4; }
 
-              .badge-indigo { fill: #2B3D4F; }
-              .badge-clay { fill: #D15400; }
-              .badge-teal { fill: #0F766E; }
-              .badge-muted { fill: #64748B; }
-              .badge-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.5px; font-weight: 600; fill: #FFFFFF; }
-              .schema-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-              .schema-meta { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 600; fill: #64748B; }
+              .sch-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
+              .sch-meta { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #5A6776; }
 
-              .card-bg { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.25; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.6; }
-              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.4; }
-              .card-sub { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1; }
+              .card { fill: #FFFDF9; stroke: #E6DFD3; stroke-width: 1.5; }
+              .card-indigo { fill: #FFFDF9; stroke: #2B3D4F; stroke-width: 1.6; }
+              .card-clay { fill: #FFFDF9; stroke: #D15400; stroke-width: 1.8; }
+              .card-teal { fill: #FFFDF9; stroke: #0F766E; stroke-width: 1.6; }
+              .card-sub { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1; }
+              .card-crimson { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 1.4; stroke-dasharray: 4 3; }
 
-              .tbl-title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 700; fill: #1E293B; }
-              .tbl-list { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.4px; font-weight: 500; fill: #2B3D4F; }
-              .tbl-body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 400; fill: #475569; }
-              .tbl-clay { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 600; fill: #B84700; }
-              .tbl-teal { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 10.2px; font-weight: 600; fill: #0F766E; }
+              .b-indigo { fill: #2B3D4F; }
+              .b-clay { fill: #D15400; }
+              .b-teal { fill: #0F766E; }
+              .b-crimson { fill: #B91C1C; }
+              .b-muted { fill: #64748B; }
+              .b-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.8px; font-weight: 700; fill: #FFFFFF; }
 
-              .pill-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-              .pill-indigo-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #2B3D4F; }
-              .pill-clay { fill: #FFF1E6; stroke: #F5B88E; stroke-width: 1; }
-              .pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
+              .c-title { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 12.6px; font-weight: 700; fill: #2B3D4F; }
+              .c-body { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.4px; font-weight: 400; fill: #475569; }
+              .c-mono { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.5px; font-weight: 500; fill: #2B3D4F; }
+              .c-clay { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.5px; font-weight: 700; fill: #D15400; }
+              .c-teal { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.5px; font-weight: 600; fill: #0F766E; }
+              .c-crimson { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.4px; font-weight: 600; fill: #B91C1C; }
+
+              .pill { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #2B3D4F; }
+              .pill-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-clay-txt { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #B84700; }
 
               .edge-fk { fill: none; stroke: #2B3D4F; stroke-width: 1.8; stroke-linejoin: round; }
-              .edge-merge { fill: none; stroke: #D15400; stroke-width: 2.1; stroke-linejoin: round; }
-              .edge-poly { fill: none; stroke: #0F766E; stroke-width: 1.6; stroke-dasharray: 5 4; stroke-linejoin: round; }
+              .edge-m { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
               .mk-fk { fill: #2B3D4F; }
-              .mk-merge { fill: #D15400; }
-              .mk-poly { fill: #0F766E; }
+              .mk-m { fill: #D15400; }
 
-              .edge-pill-bg { fill: #FDFBF7; stroke: #CBD5E1; stroke-width: 1; }
-              .edge-pill-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #2B3D4F; }
-              .edge-pill-clay { fill: #FFF4EC; stroke: #E5A073; stroke-width: 1; }
-              .edge-pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 9.5px; font-weight: 600; fill: #B84700; }
-
-              .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
-              .legend-heading { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
-              .legend-text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; fill: #334155; }
+              .legend-bg { fill: #F6F2EA; stroke: #E6DFD3; stroke-width: 1.4; }
+              .legend-h { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-t { font-family: system-ui, -apple-system, 'Inter', sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
             </style>
             <defs>
               <pattern id="b3-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
+                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD3" stroke-width="0.6" opacity="0.5"/>
               </pattern>
-              <filter id="b3-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+              <filter id="b3-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b3-mk-fk" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-fk"/>
-              </marker>
-              <marker id="b3-mk-merge" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-merge"/>
-              </marker>
-              <marker id="b3-mk-poly" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-poly"/>
-              </marker>
+              <marker id="b3-mk-fk" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-fk"/></marker>
+              <marker id="b3-mk-m" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-m"/></marker>
             </defs>
 
             <!-- Background -->
-            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
-            <rect x="0" y="0" width="1440" height="980" fill="url(#b3-grid)"/>
+            <rect x="0" y="0" width="1440" height="940" class="bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b3-grid)"/>
 
             <!-- Header -->
-            <text x="32" y="38" class="title-text">iqoqo v1.2.0 — PostgreSQL 18 Multi-Schema Database &amp; Merge Integrity</text>
-            <text x="32" y="60" class="subtitle-text">Blueprint 3 of 12  •  Schema Partitioning (auth, catalog, inventory, social, public), GIN FTS &amp; frbr_merge.py</text>
-            <rect x="1152" y="18" width="256" height="34" rx="8" class="header-pill-bg"/>
-            <text x="1280" y="39" text-anchor="middle" class="header-pill-text">Physical ER / Schema Boundaries</text>
+            <text x="32" y="34" class="title">03 · PostgreSQL 18 Multi-Schema Physical DB &amp; Merge Integrity</text>
+            <text x="32" y="55" class="sub">Blueprint 3 of 12  •  7 Schemas (auth, catalog, inventory, social, federation, config, public), GIN FTS &amp; frbr_merge.py</text>
+            <rect x="1256" y="16" width="152" height="32" rx="16" class="ver-pill"/>
+            <circle cx="1276" cy="32" r="4" class="ver-dot"/>
+            <text x="1338" y="36" text-anchor="middle" class="ver-pill-txt">iqoqo v1.2.0</text>
 
-            <!-- ==================== TOP ROW SCHEMAS ==================== -->
-            <!-- Schema: auth -->
-            <g id="bp3-auth">
-              <rect x="32" y="84" width="332" height="354" rx="14" class="schema-box schema-auth"/>
-              <rect x="46" y="96" width="46" height="20" rx="5" class="badge-indigo"/>
-              <text x="69" y="110" text-anchor="middle" class="badge-text">auth</text>
-              <text x="100" y="110" class="schema-title">IDENTITY, RBAC &amp; TOKENS</text>
+            <!-- ==================== ROW 1: AUTH, CATALOG, INVENTORY ==================== -->
+            <!-- 1. auth (11 tables) -->
+            <rect x="32" y="74" width="340" height="278" rx="12" class="sch-indigo"/>
+            <rect x="44" y="84" width="44" height="18" rx="4" class="b-indigo"/>
+            <text x="66" y="96" text-anchor="middle" class="b-txt">auth</text>
+            <text x="96" y="97" class="sch-title">IDENTITY &amp; RBAC</text>
+            <text x="358" y="96" text-anchor="end" class="sch-meta">11 TABLES</text>
 
-              <rect x="46" y="126" width="304" height="108" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="58" y="146" class="tbl-title">Core Identity &amp; Access</text>
-              <text x="58" y="166" class="tbl-list">users • roles • permissions</text>
-              <text x="58" y="184" class="tbl-list">user_roles • role_permissions</text>
-              <text x="58" y="204" class="tbl-body">Scrypt hashes, apple_id (JWKS),</text>
-              <text x="58" y="220" class="tbl-body">Fernet-encrypted TOTP 2FA secrets</text>
+            <g filter="url(#b3-sh)">
+              <rect x="44" y="110" width="316" height="106" rx="8" class="card"/>
+              <text x="54" y="128" class="c-title">Core Accounts &amp; RBAC</text>
+              <text x="54" y="146" class="c-mono">users (Scrypt, apple_id, TOTP)</text>
+              <text x="54" y="163" class="c-mono">roles • permissions</text>
+              <text x="54" y="180" class="c-mono">user_roles • role_permissions</text>
+              <text x="54" y="201" class="c-teal">UUID PKs (users.id → owner_id FKs)</text>
 
-              <rect x="46" y="246" width="304" height="178" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="58" y="266" class="tbl-title">Tokens, Consent &amp; Friends</text>
-              <text x="58" y="286" class="tbl-list">personal_access_tokens (iqo_ SHA-256)</text>
-              <text x="58" y="304" class="tbl-list">token_blocklist (JWT jti revocation)</text>
-              <text x="58" y="322" class="tbl-list">oauth_exchange_codes (single-use)</text>
-              <text x="58" y="340" class="tbl-list">account_action_tokens</text>
-              <text x="58" y="358" class="tbl-list">user_consents (GDPR Telemetry/Fed)</text>
-              <text x="58" y="376" class="tbl-list">user_friendships (mutual accept)</text>
-              <text x="58" y="404" class="tbl-teal">UUID PKs on users.id (owner_id FKs)</text>
+              <rect x="44" y="226" width="316" height="114" rx="8" class="card"/>
+              <text x="54" y="244" class="c-title">Tokens, Consent &amp; Friends</text>
+              <text x="54" y="262" class="c-mono">personal_access_tokens (iqo_ SHA-256)</text>
+              <text x="54" y="279" class="c-mono">token_blocklist • user_consents</text>
+              <text x="54" y="296" class="c-mono">account_action_tokens</text>
+              <text x="54" y="313" class="c-mono">oauth_exchange_codes</text>
+              <text x="54" y="330" class="c-mono">user_friendships (mutual accept)</text>
             </g>
 
-            <!-- Schema: catalog -->
-            <g id="bp3-catalog">
-              <rect x="384" y="84" width="636" height="354" rx="14" class="schema-box schema-catalog"/>
-              <rect x="398" y="96" width="64" height="20" rx="5" class="badge-indigo"/>
-              <text x="430" y="110" text-anchor="middle" class="badge-text">catalog</text>
-              <text x="470" y="110" class="schema-title">SHARED BIBLIOGRAPHIC GRAPH</text>
-              <text x="1006" y="110" text-anchor="end" class="schema-meta">IMMUTABLE-BY-DEFAULT</text>
+            <!-- 2. catalog (18 tables) -->
+            <rect x="390" y="74" width="536" height="278" rx="12" class="sch"/>
+            <rect x="402" y="84" width="60" height="18" rx="4" class="b-indigo"/>
+            <text x="432" y="96" text-anchor="middle" class="b-txt">catalog</text>
+            <text x="470" y="97" class="sch-title">SHARED BIBLIOGRAPHIC GRAPH</text>
+            <text x="912" y="96" text-anchor="end" class="sch-meta">18 TABLES</text>
 
-              <!-- Core WEMI Tables -->
-              <rect x="398" y="126" width="296" height="140" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="410" y="146" class="tbl-title">Core FRBR Tables</text>
-              <text x="410" y="166" class="tbl-list">works (PK id, issn, work_kind)</text>
-              <text x="410" y="184" class="tbl-list">expressions (FK work_id, language)</text>
-              <text x="410" y="202" class="tbl-list">manifestations (FK expression_id,</text>
-              <text x="410" y="218" class="tbl-list">  isbn13, ean, upc, full_barcode)</text>
-              <text x="410" y="244" class="tbl-teal">GIN Indexes: ix_works_fts,</text>
-              <text x="410" y="258" class="tbl-teal">ix_manifestations_fts, search_vector</text>
+            <g filter="url(#b3-sh)">
+              <rect x="402" y="110" width="250" height="148" rx="8" class="card"/>
+              <text x="412" y="128" class="c-title">Core WEMI &amp; Relations</text>
+              <text x="412" y="146" class="c-mono">works • expressions • manifestations</text>
+              <text x="412" y="163" class="c-mono">contributors</text>
+              <text x="412" y="180" class="c-mono">work/expr/manif_contributions</text>
+              <text x="412" y="197" class="c-mono">work_parts • work_series_memberships</text>
+              <text x="412" y="214" class="c-mono">work_expansion_links</text>
+              <text x="412" y="233" class="c-clay">work_relations (v1.2.0 NEW)</text>
 
-              <!-- Contributions & Complex Works -->
-              <rect x="708" y="126" width="298" height="140" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="720" y="146" class="tbl-title">FRBRoo Relations &amp; Credits</text>
-              <text x="720" y="166" class="tbl-list">contributors</text>
-              <text x="720" y="184" class="tbl-list">work_contributions</text>
-              <text x="720" y="202" class="tbl-list">expression_contributions</text>
-              <text x="720" y="220" class="tbl-list">manifestation_contributions</text>
-              <text x="720" y="238" class="tbl-list">work_parts • work_series_memberships</text>
-              <text x="720" y="256" class="tbl-list">work_expansion_links • container_aggs</text>
+              <rect x="662" y="110" width="252" height="148" rx="8" class="card"/>
+              <text x="672" y="128" class="c-title">Containers, Gallery &amp; Tags</text>
+              <text x="672" y="146" class="c-mono">boardgame_mechanics</text>
+              <text x="672" y="163" class="c-mono">container_aggregations</text>
+              <text x="672" y="180" class="c-mono">semantic_links (polymorphic LOD)</text>
+              <text x="672" y="197" class="c-teal">image_scans (cover gallery)</text>
+              <text x="672" y="214" class="c-mono">reading_roadmaps • roadmap_items</text>
+              <text x="672" y="233" class="c-mono">tags</text>
 
-              <!-- Curation, Dedupe & LOD -->
-              <rect x="398" y="278" width="608" height="146" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="410" y="298" class="tbl-title">Curation, Deduplication, Taxonomies &amp; LOD</text>
-              <text x="410" y="320" class="tbl-list">semantic_links             → Polymorphic (entity_type, entity_id) LOD URIs</text>
-              <text x="410" y="340" class="tbl-list">duplicate_candidates       → resolution_source, nullable confidence</text>
-              <text x="410" y="360" class="tbl-list">entity_audit_logs          → Work / Expression / Manifestation curator ledger</text>
-              <text x="410" y="380" class="tbl-list">metadata_refetch_logs      → Provider provenance &amp; gap-fill history</text>
-              <text x="410" y="400" class="tbl-list">boardgame_mechanics        → Canonical BGG controlled taxonomy</text>
+              <rect x="402" y="268" width="512" height="72" rx="8" class="card-teal"/>
+              <text x="412" y="286" class="c-title">PostgreSQL 18 Full-Text &amp; JSONB Indexing</text>
+              <text x="412" y="305" class="c-teal">GIN FTS: ix_works_fts • ix_manifestations_fts • search_vector</text>
+              <text x="412" y="324" class="c-body">Immutable-by-default shared catalog decoupled from tenant inventory copies</text>
             </g>
 
-            <!-- Schema: social -->
-            <g id="bp3-social">
-              <rect x="1040" y="84" width="368" height="354" rx="14" class="schema-box schema-social"/>
-              <rect x="1054" y="96" width="56" height="20" rx="5" class="badge-teal"/>
-              <text x="1082" y="110" text-anchor="middle" class="badge-text">social</text>
-              <text x="1118" y="110" class="schema-title">TICKETS, LOANS &amp; AP S2S</text>
+            <!-- 3. inventory (19 tables) -->
+            <rect x="944" y="74" width="464" height="278" rx="12" class="sch-indigo"/>
+            <rect x="956" y="84" width="74" height="18" rx="4" class="b-indigo"/>
+            <text x="993" y="96" text-anchor="middle" class="b-txt">inventory</text>
+            <text x="1038" y="97" class="sch-title">TENANT COPIES &amp; QUEUES</text>
+            <text x="1394" y="96" text-anchor="end" class="sch-meta">19 TABLES</text>
 
-              <rect x="1054" y="126" width="340" height="128" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="1066" y="146" class="tbl-title">Tickets, Escalations &amp; Lending</text>
-              <text x="1066" y="166" class="tbl-list">feedback_items (target_entity JSONB)</text>
-              <text x="1066" y="184" class="tbl-list">feedback_comments • notifications</text>
-              <text x="1066" y="202" class="tbl-list">escalation_requests • loan_requests</text>
-              <text x="1066" y="224" class="tbl-body">DELETION_REQUEST, METADATA_FIX,</text>
-              <text x="1066" y="240" class="tbl-body">DUPLICATE_REPORT, NEW_MEDIA_TYPE</text>
+            <g filter="url(#b3-sh)">
+              <rect x="956" y="110" width="440" height="106" rx="8" class="card"/>
+              <text x="966" y="128" class="c-title">Physical Copies &amp; Curation Ledgers</text>
+              <text x="966" y="146" class="c-clay">items (physical_location — v1.2.0 owner-gated)</text>
+              <text x="966" y="163" class="c-mono">item_status_logs • item_custody_events • entity_audit_logs</text>
+              <text x="966" y="180" class="c-mono">duplicate_candidates • escalation_requests • loan_requests</text>
+              <text x="966" y="197" class="c-clay">work_link_candidates (NEW) • metadata_refetch_logs</text>
 
-              <rect x="1054" y="266" width="340" height="158" rx="9" class="card-teal" filter="url(#b3-shadow)"/>
-              <text x="1066" y="286" class="tbl-title">ActivityPub Federation State</text>
-              <text x="1066" y="308" class="tbl-list">federation_instances (trust_level)</text>
-              <text x="1066" y="328" class="tbl-list">federation_actors (RSA publicKeyPem)</text>
-              <text x="1066" y="348" class="tbl-list">federation_followers</text>
-              <text x="1066" y="368" class="tbl-list">federation_activities (Inbox/Outbox)</text>
-              <text x="1066" y="388" class="tbl-list">federation_consents (opt-in gates)</text>
-              <text x="1066" y="410" class="tbl-teal">S2S HTTP Signatures • 3-Tier Trust</text>
+              <rect x="956" y="226" width="440" height="114" rx="8" class="card"/>
+              <text x="966" y="244" class="c-title">Collections, Shares, Notes &amp; Telemetry</text>
+              <text x="966" y="262" class="c-mono">item_tags • user_collections • user_collection_items</text>
+              <text x="966" y="279" class="c-mono">user_work_intents • shared_collections • shared_collection_items</text>
+              <text x="966" y="296" class="c-mono">social_feedbacks • social_notes</text>
+              <text x="966" y="317" class="c-teal">llm_telemetry • scan_telemetry (AI &amp; Vision audit)</text>
             </g>
 
-            <!-- ==================== CROSS-SCHEMA EDGES ==================== -->
-            <!-- inventory.items -> auth.users -->
-            <path d="M 190 486 L 190 440" class="edge-fk" marker-end="url(#b3-mk-fk)"/>
-            <rect x="104" y="452" width="172" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="190" y="465" text-anchor="middle" class="edge-pill-text">owner_id / lent_to_user_id</text>
+            <!-- Cross-schema FK hints -->
+            <path d="M 944 162 L 928 162" class="edge-fk" marker-end="url(#b3-mk-fk)"/>
+            <path d="M 390 162 L 374 162" class="edge-fk" marker-end="url(#b3-mk-fk)"/>
 
-            <!-- inventory.items -> catalog.manifestations -->
-            <path d="M 464 486 L 464 440" class="edge-fk" marker-end="url(#b3-mk-fk)"/>
-            <rect x="380" y="452" width="168" height="20" rx="5" class="edge-pill-bg"/>
-            <text x="464" y="465" text-anchor="middle" class="edge-pill-text">manifestation_id / work_id</text>
-
-            <!-- social -> catalog (polymorphic target_entity) -->
-            <path d="M 1040 190 L 1022 190" class="edge-poly" marker-end="url(#b3-mk-poly)"/>
-
-            <!-- frbr_merge.py -> catalog (Re-point & Consolidate) -->
-            <path d="M 964 486 L 964 440" class="edge-merge" marker-end="url(#b3-mk-merge)"/>
-            <rect x="862" y="452" width="204" height="20" rx="5" class="edge-pill-clay"/>
-            <text x="964" y="465" text-anchor="middle" class="edge-pill-clay-text">frbr_merge.py Re-Point Map</text>
-
-            <!-- frbr_merge.py -> inventory (Preserve Items & Wishlists) -->
-            <path d="M 900 794 L 890 794 L 890 908 L 598 908 L 598 892" class="edge-merge" marker-end="url(#b3-mk-merge)"/>
-
-            <!-- ==================== BOTTOM ROW SCHEMAS ==================== -->
-            <!-- Schema: inventory -->
-            <g id="bp3-inventory">
-              <rect x="32" y="486" width="574" height="418" rx="14" class="schema-box schema-inventory"/>
-              <rect x="46" y="498" width="76" height="20" rx="5" class="badge-indigo"/>
-              <text x="84" y="512" text-anchor="middle" class="badge-text">inventory</text>
-              <text x="130" y="512" class="schema-title">TENANT COPIES, WISHLISTS &amp; TELEMETRY</text>
-
-              <rect x="46" y="528" width="546" height="114" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="58" y="548" class="tbl-title">Physical Copies &amp; Append-Only Custody History</text>
-              <text x="58" y="568" class="tbl-list">items (FK manifestation_id, owner_id, visibility, is_hidden, local_barcode)</text>
-              <text x="58" y="588" class="tbl-list">item_status_logs • item_custody_events (CIDOC CRM E10 transfer ledger)</text>
-              <text x="58" y="610" class="tbl-body">Append-only audit trail for physical possession, lending, location &amp; condition changes.</text>
-              <text x="58" y="628" class="tbl-teal">Strictly decoupled from catalog.entity_audit_logs (conceptual metadata).</text>
-
-              <rect x="46" y="654" width="266" height="122" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="58" y="674" class="tbl-title">Collections &amp; Intents</text>
-              <text x="58" y="694" class="tbl-list">user_collections</text>
-              <text x="58" y="712" class="tbl-list">user_collection_items</text>
-              <text x="58" y="730" class="tbl-list">user_work_intents (Wishlist)</text>
-              <text x="58" y="748" class="tbl-list">shared_collections (token)</text>
-              <text x="58" y="766" class="tbl-list">tags • item_tags</text>
-
-              <rect x="326" y="654" width="266" height="122" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="338" y="674" class="tbl-title">Roadmaps &amp; Social Notes</text>
-              <text x="338" y="694" class="tbl-list">reading_roadmaps</text>
-              <text x="338" y="712" class="tbl-list">roadmap_items</text>
-              <text x="338" y="730" class="tbl-list">social_feedbacks</text>
-              <text x="338" y="748" class="tbl-list">social_notes</text>
-              <text x="338" y="766" class="tbl-body">Single-tier FRBR links</text>
-
-              <rect x="46" y="788" width="546" height="100" rx="9" class="card-sub"/>
-              <text x="58" y="808" class="tbl-title">AI, Vision &amp; Scanner Execution Telemetry</text>
-              <text x="58" y="828" class="tbl-list">llm_telemetry • scan_telemetry • image_scans</text>
-              <text x="58" y="848" class="tbl-body">Authoritative log of Gemini / Ollama / Tesseract runs, costs, latency &amp; errors.</text>
-              <text x="58" y="868" class="tbl-teal">Audited via: python scripts/llm_usage_report.py --docker &lt;env&gt; --hours 24</text>
+            <!-- ==================== ROW 2: SOCIAL, FEDERATION (NEW), CONFIG, PUBLIC ==================== -->
+            <!-- 4. social (3 tables) -->
+            <rect x="32" y="376" width="294" height="196" rx="12" class="sch"/>
+            <rect x="44" y="386" width="52" height="18" rx="4" class="b-indigo"/>
+            <text x="70" y="398" text-anchor="middle" class="b-txt">social</text>
+            <text x="104" y="399" class="sch-title">TICKETS &amp; ALERTS</text>
+            <text x="312" y="398" text-anchor="end" class="sch-meta">3 TABLES</text>
+            <g filter="url(#b3-sh)">
+              <rect x="44" y="414" width="270" height="144" rx="8" class="card"/>
+              <text x="54" y="434" class="c-title">In-App Feedback &amp; Bell</text>
+              <text x="54" y="456" class="c-mono">• feedback_items</text>
+              <text x="54" y="476" class="c-mono">• feedback_comments</text>
+              <text x="54" y="496" class="c-mono">• notifications</text>
+              <text x="54" y="524" class="c-body">Threaded ticket comments &amp;</text>
+              <text x="54" y="540" class="c-body">persistent notification center</text>
             </g>
 
-            <!-- Schema: public + config -->
-            <g id="bp3-sys">
-              <rect x="626" y="486" width="254" height="418" rx="14" class="schema-box schema-sys"/>
-              <rect x="640" y="498" width="56" height="20" rx="5" class="badge-muted"/>
-              <text x="668" y="512" text-anchor="middle" class="badge-text">public</text>
-              <text x="704" y="512" class="schema-title">META &amp; CONFIG</text>
-
-              <rect x="640" y="528" width="226" height="114" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="652" y="548" class="tbl-title">public.alembic_version</text>
-              <text x="652" y="570" class="tbl-body">Strictly linear single-head</text>
-              <text x="652" y="588" class="tbl-body">Alembic migration DAG.</text>
-              <text x="652" y="612" class="tbl-list">len(revision) &lt;= 32</text>
-              <text x="652" y="628" class="tbl-body">Gated by N6 migration init</text>
-
-              <rect x="640" y="654" width="226" height="122" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="652" y="674" class="tbl-title">instance_settings</text>
-              <text x="652" y="694" class="tbl-body">config / fallback schema</text>
-              <text x="652" y="714" class="tbl-body">Fernet-encrypted operator</text>
-              <text x="652" y="732" class="tbl-body">overrides (SECRET_KEY).</text>
-              <text x="652" y="756" class="tbl-clay">Masked in Admin UI</text>
-
-              <rect x="640" y="788" width="226" height="100" rx="9" class="card-sub"/>
-              <text x="652" y="808" class="tbl-title">SQLite Test Mode</text>
-              <text x="652" y="828" class="tbl-body">When DATABASE_URL does</text>
-              <text x="652" y="844" class="tbl-body">not start with postgresql,</text>
-              <text x="652" y="860" class="tbl-body">named schemas collapse to</text>
-              <text x="652" y="876" class="tbl-list">schema = None</text>
+            <!-- 5. federation (NEW dedicated schema, 5 tables) -->
+            <rect x="344" y="376" width="412" height="196" rx="12" class="sch-teal"/>
+            <rect x="356" y="386" width="76" height="18" rx="4" class="b-teal"/>
+            <text x="394" y="398" text-anchor="middle" class="b-txt">federation</text>
+            <rect x="438" y="386" width="72" height="18" rx="4" class="b-clay"/>
+            <text x="474" y="398" text-anchor="middle" class="b-txt">NEW SCHEMA</text>
+            <text x="742" y="398" text-anchor="end" class="sch-meta">5 TABLES</text>
+            <g filter="url(#b3-sh)">
+              <rect x="356" y="414" width="388" height="144" rx="8" class="card-teal"/>
+              <text x="368" y="434" class="c-title">Dedicated ActivityPub S2S State Schema</text>
+              <text x="368" y="456" class="c-mono">• federation_instances (3-tier trust_level)</text>
+              <text x="368" y="474" class="c-mono">• federation_actors (RSA publicKeyPem)</text>
+              <text x="368" y="492" class="c-mono">• federation_followers</text>
+              <text x="368" y="510" class="c-mono">• federation_activities (Inbox/Outbox audit)</text>
+              <text x="368" y="528" class="c-mono">• federation_consents (opt-in privacy gates)</text>
+              <text x="368" y="548" class="c-teal">Cleanly isolated from social tickets in v1.2.0</text>
             </g>
 
-            <!-- frbr_merge.py Consolidation Map -->
-            <g id="bp3-merge">
-              <rect x="900" y="486" width="508" height="418" rx="14" class="schema-box schema-merge"/>
-              <rect x="914" y="498" width="56" height="20" rx="5" class="badge-clay"/>
-              <text x="942" y="512" text-anchor="middle" class="badge-text">MERGE</text>
-              <text x="978" y="512" class="schema-title">frbr_merge.py CONSOLIDATION MAP</text>
-
-              <!-- Tier 1: Work -->
-              <rect x="914" y="528" width="480" height="66" rx="9" class="card-clay" filter="url(#b3-shadow)"/>
-              <text x="928" y="549" class="tbl-title">Work → Work</text>
-              <rect x="1246" y="535" width="136" height="20" rx="5" class="pill-clay"/>
-              <text x="1314" y="549" text-anchor="middle" class="pill-clay-text">14 Total Ref-Points</text>
-              <text x="928" y="570" class="tbl-body">13 real FKs across 10 tables + polymorphic SemanticLink (entity_type='work')</text>
-              <text x="928" y="585" class="tbl-list">Collapsed unique natural-key collisions; old IRI emits Tombstone / 301</text>
-
-              <!-- Tier 2: Expression -->
-              <rect x="914" y="604" width="480" height="58" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="928" y="625" class="tbl-title">Expression → Expression</text>
-              <rect x="1254" y="611" width="128" height="20" rx="5" class="pill-indigo"/>
-              <text x="1318" y="625" text-anchor="middle" class="pill-indigo-text">8 Total Ref-Points</text>
-              <text x="928" y="647" class="tbl-body">7 real FKs + SemanticLink • Re-parents Manifestations &amp; Expression credits</text>
-
-              <!-- Tier 3: Manifestation -->
-              <rect x="914" y="672" width="480" height="64" rx="9" class="card-bg" filter="url(#b3-shadow)"/>
-              <text x="928" y="693" class="tbl-title">Manifestation → Manifestation</text>
-              <rect x="1246" y="679" width="136" height="20" rx="5" class="pill-indigo"/>
-              <text x="1314" y="693" text-anchor="middle" class="pill-indigo-text">10 Total Ref-Points</text>
-              <text x="928" y="714" class="tbl-body">9 real FKs across 9 tables + SemanticLink • Zero orphaned Items;</text>
-              <text x="928" y="728" class="tbl-body">preserves lending histories, UserWorkIntents &amp; reading roadmaps</text>
-
-              <!-- Mechanical Invariants -->
-              <rect x="914" y="748" width="480" height="140" rx="9" class="card-sub"/>
-              <text x="928" y="769" class="tbl-title">Mechanical Integrity Invariants (PostgreSQL Verified)</text>
-              <text x="928" y="791" class="tbl-body">1. Both ON DELETE CASCADE &amp; SET NULL FKs are explicitly re-pointed</text>
-              <text x="928" y="807" class="tbl-body">   so merges never silently wipe wishlists or orphan user records.</text>
-              <text x="928" y="827" class="tbl-body">2. Source removal uses row-level SQL DELETE (never ORM cascade).</text>
-              <text x="928" y="847" class="tbl-body">3. Reflects SQLAlchemy metadata via tests/test_frbr_merge_coverage.py</text>
-              <text x="928" y="871" class="tbl-clay">CI Gate: make test-merge-integrity-pg (fails on unmapped FK column)</text>
+            <!-- 6. config (1 table) -->
+            <rect x="774" y="376" width="282" height="196" rx="12" class="sch"/>
+            <rect x="786" y="386" width="54" height="18" rx="4" class="b-indigo"/>
+            <text x="813" y="398" text-anchor="middle" class="b-txt">config</text>
+            <text x="848" y="399" class="sch-title">SETTINGS</text>
+            <text x="1042" y="398" text-anchor="end" class="sch-meta">1 TABLE</text>
+            <g filter="url(#b3-sh)">
+              <rect x="786" y="414" width="258" height="144" rx="8" class="card"/>
+              <text x="796" y="434" class="c-title">instance_settings</text>
+              <text x="796" y="458" class="c-body">Fernet-encrypted operator</text>
+              <text x="796" y="474" class="c-body">configuration overrides</text>
+              <text x="796" y="490" class="c-body">keyed from SECRET_KEY.</text>
+              <text x="796" y="520" class="c-clay">Row keys masked in Admin UI</text>
+              <text x="796" y="540" class="c-mono">Drift checked by make status</text>
             </g>
 
-            <!-- Legend -->
-            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="947" class="legend-heading">LEGEND:</text>
-            <line x1="128" y1="943" x2="174" y2="943" class="edge-fk" marker-end="url(#b3-mk-fk)"/>
-            <text x="184" y="947" class="legend-text">Cross-Schema Foreign Key</text>
-            <line x1="388" y1="943" x2="434" y2="943" class="edge-merge" marker-end="url(#b3-mk-merge)"/>
-            <text x="444" y="947" class="legend-text">frbr_merge.py Non-Destructive Re-Point</text>
-            <line x1="744" y1="943" x2="790" y2="943" class="edge-poly" marker-end="url(#b3-mk-poly)"/>
-            <text x="800" y="947" class="legend-text">Polymorphic / JSONB Reference</text>
-            <rect x="1044" y="933" width="18" height="18" rx="4" class="badge-indigo"/>
-            <text x="1070" y="947" class="legend-text">PG 18 Schema Boundary</text>
-            <rect x="1248" y="933" width="18" height="18" rx="4" class="badge-clay"/>
-            <text x="1274" y="947" class="legend-text">Merge Guard</text>
+            <!-- 7. public (1 table + SQLite note) -->
+            <rect x="1074" y="376" width="334" height="196" rx="12" class="sch"/>
+            <rect x="1086" y="386" width="52" height="18" rx="4" class="b-muted"/>
+            <text x="1112" y="398" text-anchor="middle" class="b-txt">public</text>
+            <text x="1146" y="399" class="sch-title">MIGRATIONS &amp; SQLITE</text>
+            <text x="1394" y="398" text-anchor="end" class="sch-meta">1 TABLE</text>
+            <g filter="url(#b3-sh)">
+              <rect x="1086" y="414" width="310" height="78" rx="8" class="card"/>
+              <text x="1096" y="432" class="c-title">public.alembic_version</text>
+              <text x="1096" y="450" class="c-body">Linear single-head DAG (len(rev) &lt;= 32)</text>
+              <text x="1096" y="470" class="c-clay">Head: v1_2_0_item_physical_location</text>
+
+              <rect x="1086" y="500" width="310" height="58" rx="8" class="card-sub"/>
+              <text x="1096" y="518" class="c-title">SQLite Unit Test Collapse</text>
+              <text x="1096" y="536" class="c-mono">Non-postgresql DATABASE_URL → schema=None</text>
+            </g>
+
+            <!-- ==================== BOTTOM BAND: frbr_merge.py CONSOLIDATION MAP ==================== -->
+            <rect x="32" y="600" width="1376" height="270" rx="14" class="sch-clay"/>
+            <rect x="46" y="612" width="60" height="19" rx="5" class="b-clay"/>
+            <text x="76" y="625" text-anchor="middle" class="b-txt">MERGE</text>
+            <text x="116" y="626" class="sch-title">frbr_merge.py NON-DESTRUCTIVE CONSOLIDATION MAP (v1.2.0)</text>
+            <rect x="1056" y="611" width="336" height="20" rx="5" class="card-crimson"/>
+            <text x="1224" y="624" text-anchor="middle" class="c-crimson">CI Gate: make test-merge-integrity-pg (PostgreSQL FK)</text>
+
+            <!-- Merge Card 1: Work -> Work -->
+            <g filter="url(#b3-sh)">
+              <rect x="46" y="644" width="438" height="210" rx="10" class="card-clay"/>
+              <text x="60" y="666" class="c-title">Work → Work</text>
+              <rect x="316" y="652" width="154" height="20" rx="5" class="pill-clay"/>
+              <text x="393" y="665" text-anchor="middle" class="pill-clay-txt">20 Total Ref-Points</text>
+              <text x="60" y="690" class="c-clay">19 real FKs across 13 tables + SemanticLink</text>
+              <text x="60" y="710" class="c-body">• Includes WorkRelation &amp; WorkLinkCandidate (v1.2.0)</text>
+              <text x="60" y="728" class="c-body">• Re-points BOTH ON DELETE CASCADE &amp; SET NULL</text>
+              <text x="60" y="746" class="c-body">• Collapses natural-key unique collisions onto survivor</text>
+              <text x="60" y="764" class="c-body">• Row-level SQL DELETE (never ORM cascade wipeout)</text>
+              <rect x="60" y="782" width="410" height="56" rx="7" class="card-sub"/>
+              <text x="70" y="801" class="c-mono">Retired Work IRI emits ActivityStreams Tombstone</text>
+              <text x="70" y="819" class="c-mono">&amp; HTTP 301 permanent redirect to surviving Work</text>
+            </g>
+
+            <!-- Merge Card 2: Expression -> Expression -->
+            <g filter="url(#b3-sh)">
+              <rect x="502" y="644" width="436" height="210" rx="10" class="card-indigo"/>
+              <text x="516" y="666" class="c-title">Expression → Expression</text>
+              <rect x="780" y="652" width="144" height="20" rx="5" class="pill"/>
+              <text x="852" y="665" text-anchor="middle" class="pill-txt">8 Total Ref-Points</text>
+              <text x="516" y="690" class="c-mono">7 real FKs across 7 tables + SemanticLink</text>
+              <text x="516" y="712" class="c-body">• Re-parents all child Manifestations atomically</text>
+              <text x="516" y="732" class="c-body">• Migrates UserWorkIntent wishlist bindings</text>
+              <text x="516" y="752" class="c-body">• Preserves ExpressionContribution performance credits</text>
+              <text x="516" y="772" class="c-body">• Re-points polymorphic SemanticLink (entity_type='expr')</text>
+              <rect x="516" y="792" width="408" height="46" rx="7" class="card-sub"/>
+              <text x="526" y="812" class="c-teal">Mechanical Coverage: tests/test_frbr_merge_coverage.py</text>
+              <text x="526" y="828" class="c-body">Fails build if any new FK column is unmapped</text>
+            </g>
+
+            <!-- Merge Card 3: Manifestation -> Manifestation -->
+            <g filter="url(#b3-sh)">
+              <rect x="956" y="644" width="436" height="210" rx="10" class="card-indigo"/>
+              <text x="970" y="666" class="c-title">Manifestation → Manifestation</text>
+              <rect x="1228" y="652" width="150" height="20" rx="5" class="pill"/>
+              <text x="1303" y="665" text-anchor="middle" class="pill-txt">10 Total Ref-Points</text>
+              <text x="970" y="690" class="c-mono">9 real FKs across 9 tables + SemanticLink</text>
+              <text x="970" y="712" class="c-body">• Guarantees zero orphaned physical Items</text>
+              <text x="970" y="732" class="c-body">• Preserves lending histories &amp; ItemCustodyEvents</text>
+              <text x="970" y="752" class="c-teal">• Migrates contributed ImageScan gallery records</text>
+              <text x="970" y="772" class="c-body">• Preserves UserWorkIntent wishlists &amp; reading roadmaps</text>
+              <rect x="970" y="792" width="408" height="46" rx="7" class="card-sub"/>
+              <text x="980" y="812" class="c-mono">Single Shared Map: Manual Merge + Duplicate Queue</text>
+              <text x="980" y="828" class="c-body">Eliminates drift between curator workflows</text>
+            </g>
+
+            <!-- Legend Bar -->
+            <rect x="32" y="886" width="1376" height="40" rx="10" class="legend-bg"/>
+            <text x="50" y="910" class="legend-h">LEGEND:</text>
+            <rect x="126" y="897" width="18" height="18" rx="4" class="b-indigo"/>
+            <text x="152" y="910" class="legend-t">PostgreSQL 18 Schema Boundary</text>
+            <rect x="394" y="897" width="18" height="18" rx="4" class="b-clay"/>
+            <text x="420" y="910" class="legend-t">v1.2.0 New Table / Schema / Merge Update</text>
+            <rect x="720" y="897" width="18" height="18" rx="4" class="b-teal"/>
+            <text x="746" y="910" class="legend-t">Dedicated Federation / GIN FTS / Gallery</text>
+            <line x1="1048" y1="906" x2="1092" y2="906" class="edge-fk" marker-end="url(#b3-mk-fk)"/>
+            <text x="1102" y="910" class="legend-t">Cross-Schema FK</text>
+            <rect x="1238" y="897" width="18" height="18" rx="4" class="b-crimson"/>
+            <text x="1264" y="910" class="legend-t">CI Integrity Gate</text>
           </svg>

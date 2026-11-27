@@ -15,295 +15,312 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp9" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="1440" height="960" role="img" aria-labelledby="bp9-title bp9-desc">
-            <title id="bp9-title">09 · ActivityPub S2S Federation, 3-Tier Trust &amp; Cross-Instance Lending</title>
-            <desc id="bp9-desc">Modern Athenaeum architecture diagram for iqoqo v1.2.0 showing Node A local discovery, RSA-2048 Fernet key storage, outbound Valkey federation queue, Node B inbound HTTP Signature gate, 3-tier unilateral trust matrix, and 4-step peer-to-peer lending sequence.</desc>
-            <style>
-              .bg { fill: #FDFBF7; }
-              .title { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
-              .sub { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 500; fill: #5A6776; }
-              .hdr-pill { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.2; }
-              .hdr-pill-txt { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #2B3D4F; }
-
-              .zone { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-teal { fill: #EEF9F7; stroke: #0F766E; stroke-width: 1.4; stroke-dasharray: 6 4; }
-              .zone-title { font-family: 'Merriweather', Georgia, serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
-              .zone-meta { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 600; fill: #5A6776; }
-
-              .card { fill: #FFFFFF; stroke: #D6CFC5; stroke-width: 1.5; }
-              .card-indigo { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.6; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.6; }
-              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
-              .card-crimson { fill: #FFFFFF; stroke: #991B1B; stroke-width: 1.9; }
-              .card-tint-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1.1; }
-              .card-tint-teal { fill: #EEF9F7; stroke: #5EEAD4; stroke-width: 1.1; }
-              .card-tint-crimson { fill: #FEF2F2; stroke: #FCA5A5; stroke-width: 1.1; }
-
-              .badge-indigo { fill: #2B3D4F; }
-              .badge-clay { fill: #D15400; }
-              .badge-teal { fill: #0F766E; }
-              .badge-crimson { fill: #991B1B; }
-              .badge-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
-
-              .c-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
-              .c-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.8px; font-weight: 400; fill: #475569; }
-              .c-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.8px; font-weight: 500; fill: #2B3D4F; }
-              .c-clay { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #D15400; }
-              .c-teal { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #0F766E; }
-              .c-crimson { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #991B1B; }
-
-              .tbl-hdr { fill: #2B3D4F; }
-              .tbl-hdr-txt { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.5px; font-weight: 700; fill: #FFFFFF; }
-              .tbl-cell { fill: #FFFFFF; stroke: #D6CFC5; stroke-width: 1; }
-              .tbl-cell-alt { fill: #FDFBF7; stroke: #D6CFC5; stroke-width: 1; }
-
-              .edge-indigo { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
-              .edge-clay { fill: none; stroke: #D15400; stroke-width: 2.1; stroke-linejoin: round; }
-              .edge-teal { fill: none; stroke: #0F766E; stroke-width: 2; stroke-linejoin: round; }
-              .edge-crimson { fill: none; stroke: #991B1B; stroke-width: 2; stroke-dasharray: 5 3; stroke-linejoin: round; }
-              .mk-indigo { fill: #2B3D4F; }
-              .mk-clay { fill: #D15400; }
-              .mk-teal { fill: #0F766E; }
-              .mk-crimson { fill: #991B1B; }
-
-              .e-pill { fill: #FDFBF7; stroke: #CBC3B7; stroke-width: 1; }
-              .e-pill-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
-              .e-pill-clay { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
-              .e-pill-clay-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; font-weight: 700; fill: #D15400; }
-
-              .legend-bg { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.25; }
-              .legend-h { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-              .legend-t { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
-            </style>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg id="svg-bp9" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp9-title bp9-desc">
+            <title id="bp9-title">Blueprint 9: ActivityPub S2S Federation, 3-Tier Trust &amp; Cross-Instance Lending</title>
+            <desc id="bp9-desc">Modern Athenaeum architecture diagram for iqoqo v1.2.0 showing Node Alpha discovery, RSA-2048 Fernet key hygiene, FederationConsent and FEDERATION_HEAD_MODE, outbound Valkey federation pipeline, Node Beta Crimson inbound security perimeter, dedicated federation schema, 3-tier trust matrix, and 4-step cross-instance lending sequence.</desc>
             <defs>
-              <pattern id="b9-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD5" stroke-width="0.6" opacity="0.45"/>
+              <style>
+                .b9-bg { fill: #FDFBF7; }
+                .b9-frame { fill: none; stroke: #E5DFD3; stroke-width: 2; }
+                .b9-title { font-family: Georgia, 'Merriweather', serif; font-size: 19.5px; font-weight: 700; fill: #2B3D4F; }
+                .b9-sub { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 500; fill: #475569; }
+                .b9-pill-ver { fill: #2B3D4F; }
+                .b9-pill-ver-t { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; font-weight: 600; fill: #FDFBF7; }
+
+                .b9-z-indigo { fill: #EEF2F6; stroke: #2B3D4F; stroke-width: 1.4; stroke-dasharray: 6 4; }
+                .b9-z-teal { fill: #ECFDF5; stroke: #0F766E; stroke-width: 1.4; stroke-dasharray: 6 4; }
+                .b9-z-crimson { fill: #FEF2F2; stroke: #991B1B; stroke-width: 2; stroke-dasharray: 6 4; }
+                .b9-z-title { font-family: Georgia, 'Merriweather', serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
+                .b9-z-title-r { font-family: Georgia, 'Merriweather', serif; font-size: 12.2px; font-weight: 700; fill: #991B1B; }
+                .b9-z-meta { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #64748B; }
+
+                .b9-card { fill: #FFFFFF; stroke: #CBD5E1; stroke-width: 1.3; }
+                .b9-card-i { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.6; }
+                .b9-card-c { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.7; }
+                .b9-card-t { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
+                .b9-card-r { fill: #FFFFFF; stroke: #991B1B; stroke-width: 1.7; }
+
+                .b9-b-i { fill: #2B3D4F; }
+                .b9-b-c { fill: #D15400; }
+                .b9-b-t { fill: #0F766E; }
+                .b9-b-r { fill: #991B1B; }
+                .b9-b-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; font-weight: 700; fill: #FFFFFF; }
+
+                .b9-ct { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12.2px; font-weight: 700; fill: #2B3D4F; }
+                .b9-cb { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.2px; font-weight: 400; fill: #475569; }
+                .b9-cm { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 500; fill: #2B3D4F; }
+                .b9-cc { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #D15400; }
+                .b9-cl { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #0F766E; }
+                .b9-cr { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #991B1B; }
+
+                .b9-p-i { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+                .b9-p-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
+                .b9-p-t { fill: #ECFDF5; stroke: #0F766E; stroke-width: 1; }
+                .b9-p-r { fill: #FEF2F2; stroke: #991B1B; stroke-width: 1; }
+                .b9-pt-i { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 600; fill: #2B3D4F; }
+                .b9-pt-c { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #D15400; }
+                .b9-pt-t { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #0F766E; }
+                .b9-pt-r { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #991B1B; }
+
+                .b9-th { fill: #2B3D4F; }
+                .b9-th-t { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.2px; font-weight: 700; fill: #FFFFFF; }
+                .b9-tc { fill: #FFFFFF; stroke: #E5DFD3; stroke-width: 1; }
+                .b9-ta { fill: #FDFBF7; stroke: #E5DFD3; stroke-width: 1; }
+
+                .b9-ei { fill: none; stroke: #2B3D4F; stroke-width: 1.9; stroke-linejoin: round; }
+                .b9-ec { fill: none; stroke: #D15400; stroke-width: 2.1; stroke-linejoin: round; }
+                .b9-et { fill: none; stroke: #0F766E; stroke-width: 1.9; stroke-linejoin: round; }
+                .b9-er { fill: none; stroke: #991B1B; stroke-width: 1.9; stroke-dasharray: 5 3; stroke-linejoin: round; }
+
+                .b9-leg { fill: #F6F2EA; stroke: #E5DFD3; stroke-width: 1.3; }
+                .b9-leg-h { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+                .b9-leg-t { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.6px; font-weight: 500; fill: #2B3D4F; }
+              </style>
+              <pattern id="b9-dots" width="22" height="22" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="0.9" fill="#E5DFD3"/>
               </pattern>
-              <filter id="b9-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2B3D4F" flood-opacity="0.08"/>
+              <filter id="b9-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b9-mk-indigo" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-indigo"/>
-              </marker>
-              <marker id="b9-mk-clay" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-clay"/>
-              </marker>
-              <marker id="b9-mk-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-teal"/>
-              </marker>
-              <marker id="b9-mk-crimson" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-crimson"/>
-              </marker>
+              <marker id="b9-mki" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#2B3D4F"/></marker>
+              <marker id="b9-mkc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#D15400"/></marker>
+              <marker id="b9-mkt" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#0F766E"/></marker>
+              <marker id="b9-mkr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#991B1B"/></marker>
             </defs>
 
-            <!-- Background -->
-            <rect x="0" y="0" width="1440" height="960" class="bg"/>
-            <rect x="0" y="0" width="1440" height="960" fill="url(#b9-grid)"/>
+            <!-- Background & Border -->
+            <rect x="0" y="0" width="1440" height="940" class="b9-bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b9-dots)"/>
+            <rect x="1" y="1" width="1438" height="938" class="b9-frame"/>
 
-            <!-- Header -->
-            <text x="32" y="36" class="title">09 · ActivityPub S2S Federation, 3-Tier Trust &amp; Cross-Instance Lending</text>
-            <text x="32" y="57" class="sub">iqoqo v1.2.0  •  Server-to-Server Only (No C2S), HTTP Signatures, Unilateral Trust Graph &amp; CIDOC CRM Custody</text>
-            <rect x="1174" y="16" width="234" height="32" rx="8" class="hdr-pill"/>
-            <text x="1291" y="36" text-anchor="middle" class="hdr-pill-txt">Distributed S2S &amp; Trust State</text>
+            <!-- Top Header Bar -->
+            <rect x="36" y="17" width="102" height="22" rx="5" class="b9-b-i"/>
+            <text x="87" y="32" text-anchor="middle" class="b9-b-txt">BLUEPRINT 09</text>
+            <text x="150" y="35" class="b9-title">Blueprint 9: ActivityPub S2S Federation, 3-Tier Trust &amp; Cross-Instance Lending</text>
+            <text x="36" y="57" class="b9-sub">Server-to-Server ActivityStreams 2.0 • RSA-2048 HTTP Signatures • Dedicated federation Schema • CIDOC CRM Custody</text>
+            <rect x="1152" y="17" width="252" height="30" rx="15" class="b9-pill-ver"/>
+            <circle cx="1170" cy="32" r="4" fill="#D15400"/>
+            <text x="1284" y="36" text-anchor="middle" class="b9-pill-ver-t">iqoqo v1.2.0 • Modern Athenaeum</text>
+            <line x1="36" y1="71" x2="1404" y2="71" stroke="#E5DFD3" stroke-width="1.2"/>
 
-            <!-- ==================== TOP-LEFT ZONE: NODE A ==================== -->
-            <rect x="32" y="76" width="644" height="552" rx="14" class="zone"/>
-            <rect x="46" y="88" width="64" height="20" rx="5" class="badge-indigo"/>
-            <text x="78" y="102" text-anchor="middle" class="badge-txt">NODE A</text>
-            <text x="120" y="103" class="zone-title">Local iqoqo Instance</text>
-            <text x="662" y="102" text-anchor="end" class="zone-meta">ORIGIN / BORROWER</text>
+            <!-- ==================== LEFT ZONE: NODE ALPHA ==================== -->
+            <rect x="36" y="84" width="648" height="562" rx="14" class="b9-z-indigo"/>
+            <rect x="50" y="95" width="84" height="19" rx="5" class="b9-b-i"/>
+            <text x="92" y="108" text-anchor="middle" class="b9-b-txt">NODE ALPHA</text>
+            <text x="144" y="109" class="b9-z-title">Outbound Origin &amp; Discovery</text>
+            <text x="670" y="108" text-anchor="end" class="b9-z-meta">BORROWER / PEER</text>
 
             <!-- Card 1: Discovery & Actors -->
-            <g filter="url(#b9-shadow)">
-              <rect x="48" y="118" width="612" height="168" rx="10" class="card-indigo"/>
-              <text x="62" y="140" class="c-title">Discovery &amp; ActivityStreams 2.0 Actors</text>
-              <rect x="514" y="126" width="134" height="19" rx="5" class="card-tint-teal"/>
-              <text x="581" y="139" text-anchor="middle" class="c-teal">WebFinger + NodeInfo</text>
-              <text x="62" y="162" class="c-mono">GET /.well-known/webfinger  •  GET /.well-known/nodeinfo</text>
-              <text x="62" y="179" class="c-mono">GET /api/federation/nodeinfo/2.1  (protocols: ["activitypub"])</text>
-              <text x="62" y="196" class="c-mono">GET /api/federation/actor (Application)  •  /actor/u/&lt;uuid&gt; (Person)</text>
-              <rect x="62" y="210" width="584" height="62" rx="7" class="card-tint-clay"/>
-              <text x="74" y="228" class="c-clay">Cryptographic Key Hygiene (app/core/federation_keys.py):</text>
-              <text x="74" y="245" class="c-body">• RSA-2048 private keys encrypted at rest with symmetric Fernet (SECRET_KEY)</text>
-              <text x="74" y="261" class="c-mono">• Exposes publicKeyPem + SHA256:... DER key fingerprints in Admin UI</text>
+            <g filter="url(#b9-sh)">
+              <rect x="50" y="122" width="620" height="104" rx="9" class="b9-card-i"/>
+              <text x="62" y="142" class="b9-ct">Discovery &amp; ActivityStreams 2.0 Actors</text>
+              <rect x="530" y="129" width="128" height="18" rx="4" class="b9-p-t"/>
+              <text x="594" y="141" text-anchor="middle" class="b9-pt-t">RFC 7033 + NodeInfo</text>
+              <text x="62" y="164" class="b9-cm">/.well-known/webfinger (JRD)  •  /.well-known/nodeinfo</text>
+              <text x="62" y="182" class="b9-cm">/api/federation/nodeinfo/2.1  (protocols: ["activitypub"])</text>
+              <text x="62" y="200" class="b9-cm">/api/federation/actor (Application)  •  /api/federation/actor/u/&lt;uuid&gt; (Person)</text>
+              <text x="62" y="217" class="b9-cb">Server-to-Server (S2S) only — no C2S endpoints; Next.js uses REST/JSON</text>
             </g>
 
-            <!-- Card 2: Outbound Pipeline -->
-            <g filter="url(#b9-shadow)">
-              <rect x="48" y="302" width="612" height="150" rx="10" class="card-clay"/>
-              <text x="62" y="324" class="c-title">Asynchronous Outbound Delivery Pipeline</text>
-              <rect x="510" y="310" width="138" height="19" rx="5" class="card-tint-clay"/>
-              <text x="579" y="323" text-anchor="middle" class="c-clay">Valkey: federation Q</text>
-              <text x="62" y="348" class="c-mono">app/core/federation_dispatch.py  →  Celery (federation queue)</text>
-              <text x="62" y="370" class="c-body">• Signs outbound POST &amp; Authorized Fetch GET via draft-cavage-http-signatures-12</text>
-              <text x="62" y="389" class="c-mono">• Signed Headers: (request-target), host, date, digest (SHA-256)</text>
-              <text x="62" y="408" class="c-body">• Dispatched through SSRF-blocking federation_client</text>
-              <text x="62" y="427" class="c-teal">• FEDERATION_ALLOW_LOOPBACK=true permitted only in local dev pair tests</text>
+            <!-- Card 2: Cryptographic Key Hygiene -->
+            <g filter="url(#b9-sh)">
+              <rect x="50" y="236" width="620" height="96" rx="9" class="b9-card-c"/>
+              <text x="62" y="256" class="b9-ct">Cryptographic Key Hygiene</text>
+              <rect x="498" y="243" width="160" height="18" rx="4" class="b9-p-c"/>
+              <text x="578" y="255" text-anchor="middle" class="b9-pt-c">app/core/federation_keys.py</text>
+              <text x="62" y="278" class="b9-cb">• RSA-2048 private keys encrypted at rest via symmetric Fernet (SECRET_KEY)</text>
+              <text x="62" y="296" class="b9-cm">• Publishes publicKeyPem + SHA256:... DER key fingerprints</text>
+              <text x="62" y="314" class="b9-cb">• Fingerprint pinning &amp; verification surfaced in Admin Settings</text>
             </g>
 
-            <!-- Card 3: User Privacy & Showcase Mode -->
-            <g filter="url(#b9-shadow)">
-              <rect x="48" y="468" width="612" height="144" rx="10" class="card-teal"/>
-              <text x="62" y="490" class="c-title">User Consent &amp; Read-Only Showcase Hub Mode</text>
-              <rect x="526" y="476" width="122" height="19" rx="5" class="card-tint-teal"/>
-              <text x="587" y="489" text-anchor="middle" class="c-teal">Opt-In Sovereign</text>
-              <text x="62" y="514" class="c-mono">FederationConsent: federated_profile | federated_collection | auto_accept_follows</text>
-              <text x="62" y="534" class="c-body">• User shelf never federates unless explicitly opted in via /profile</text>
-              <rect x="62" y="546" width="584" height="52" rx="7" class="card-tint-crimson"/>
-              <text x="74" y="564" class="c-crimson">FEDERATION_HEAD_MODE (Read-Only Showcase Hub):</text>
-              <text x="74" y="582" class="c-body">Allows federated catalog discovery &amp; wishlists; rejects physical Item writes (HTTP 403)</text>
+            <!-- Card 3: User Privacy & Showcase Hub -->
+            <g filter="url(#b9-sh)">
+              <rect x="50" y="342" width="620" height="122" rx="9" class="b9-card-t"/>
+              <text x="62" y="362" class="b9-ct">User Privacy &amp; Showcase Hub Mode</text>
+              <rect x="536" y="349" width="122" height="18" rx="4" class="b9-p-t"/>
+              <text x="597" y="361" text-anchor="middle" class="b9-pt-t">Sovereign Opt-In</text>
+              <text x="62" y="384" class="b9-cm">FederationConsent: federated_profile | federated_collection | auto_accept_follows</text>
+              <text x="62" y="402" class="b9-cb">• User shelf never federates unless explicitly opted in via /profile</text>
+              <rect x="62" y="412" width="596" height="40" rx="6" class="b9-p-r"/>
+              <text x="72" y="429" class="b9-cr">FEDERATION_HEAD_MODE (Read-Only Showcase Hub):</text>
+              <text x="72" y="444" class="b9-cb">Permits federated discovery &amp; wishlists; blocks physical Item writes at API layer</text>
             </g>
 
-            <!-- ==================== TOP-RIGHT ZONE: NODE B ==================== -->
-            <rect x="764" y="76" width="644" height="552" rx="14" class="zone"/>
-            <rect x="778" y="88" width="64" height="20" rx="5" class="badge-teal"/>
-            <text x="810" y="102" text-anchor="middle" class="badge-txt">NODE B</text>
-            <text x="852" y="103" class="zone-title">Remote Peer Instance</text>
-            <text x="1394" y="102" text-anchor="end" class="zone-meta">CUSTODIAN / OWNER</text>
-
-            <!-- Card 1: Inbound Inbox Gate (Crimson Security Border) -->
-            <g filter="url(#b9-shadow)">
-              <rect x="780" y="118" width="612" height="176" rx="10" class="card-crimson"/>
-              <rect x="794" y="130" width="94" height="19" rx="5" class="badge-crimson"/>
-              <text x="841" y="143" text-anchor="middle" class="badge-txt">SECURITY GATE</text>
-              <text x="898" y="144" class="c-title">Inbound ActivityPub Inbox Gate</text>
-              <rect x="1218" y="130" width="160" height="19" rx="5" class="card-tint-crimson"/>
-              <text x="1298" y="143" text-anchor="middle" class="c-crimson">60/min • 100KB → 413</text>
-              <text x="794" y="168" class="c-mono">POST /api/federation/inbox</text>
-              <text x="794" y="190" class="c-body">1. Verifies RSA-SHA256 HTTP Signature against dereferenced actor publicKeyPem</text>
-              <text x="794" y="210" class="c-crimson">2. ±300s clock-skew replay defense + strict payload_actor == actor_uri check</text>
-              <text x="794" y="230" class="c-body">3. Evaluates local FederationInstance.trust_level (blocked dropped at gate)</text>
-              <text x="794" y="250" class="c-body">4. Sanitizes all inbound bibliographic metadata via bleach.clean()</text>
-              <text x="794" y="274" class="c-teal">5. Enqueues verified activity onto local Celery worker for SHACL-validated sync</text>
+            <!-- Card 4: Outbound Pipeline -->
+            <g filter="url(#b9-sh)">
+              <rect x="50" y="474" width="620" height="158" rx="9" class="b9-card-c"/>
+              <text x="62" y="494" class="b9-ct">Asynchronous Outbound Pipeline</text>
+              <rect x="506" y="481" width="152" height="18" rx="4" class="b9-p-c"/>
+              <text x="582" y="493" text-anchor="middle" class="b9-pt-c">Valkey: federation Q</text>
+              <text x="62" y="516" class="b9-cm">app/core/federation_dispatch.py → Celery (federation queue)</text>
+              <text x="62" y="536" class="b9-cb">• Dispatched via SSRF-blocking federation_client</text>
+              <text x="62" y="554" class="b9-cm">• Signs POST &amp; Authorized Fetch GET: draft-cavage-http-signatures-12</text>
+              <text x="62" y="572" class="b9-cc">• Signed Headers: (request-target), host, date, digest (SHA-256)</text>
+              <rect x="62" y="584" width="596" height="36" rx="6" class="b9-p-i"/>
+              <text x="72" y="606" class="b9-cm">FEDERATION_ALLOW_LOOPBACK=true permitted strictly for local dev-pair tests</text>
             </g>
 
-            <!-- Card 2: 3-Tier Instance Trust Matrix -->
-            <g filter="url(#b9-shadow)">
-              <rect x="780" y="310" width="612" height="302" rx="10" class="card"/>
-              <text x="794" y="332" class="c-title">3-Tier Instance Trust Matrix (FederationInstance.trust_level)</text>
-              <text x="794" y="349" class="c-body">Evaluated unilaterally by each instance's local policy (peering is asymmetric by default):</text>
+            <!-- ==================== RIGHT ZONE: NODE BETA ==================== -->
+            <rect x="756" y="84" width="648" height="562" rx="14" class="b9-z-indigo"/>
+            <rect x="770" y="95" width="80" height="19" rx="5" class="b9-b-t"/>
+            <text x="810" y="108" text-anchor="middle" class="b9-b-txt">NODE BETA</text>
+            <text x="860" y="109" class="b9-z-title">Inbound Security Gate &amp; Trust Matrix</text>
+            <text x="1390" y="108" text-anchor="end" class="b9-z-meta">CUSTODIAN / OWNER</text>
+
+            <!-- Crimson Dashed Security Perimeter -->
+            <rect x="770" y="120" width="620" height="202" rx="11" class="b9-z-crimson"/>
+            <rect x="782" y="130" width="136" height="18" rx="4" class="b9-b-r"/>
+            <text x="850" y="142" text-anchor="middle" class="b9-b-txt">SECURITY PERIMETER</text>
+            <text x="928" y="143" class="b9-z-title-r">POST /api/federation/inbox</text>
+            <rect x="1224" y="130" width="154" height="18" rx="4" class="b9-p-r"/>
+            <text x="1301" y="142" text-anchor="middle" class="b9-pt-r">60/min • 100KB → 413</text>
+
+            <g filter="url(#b9-sh)">
+              <rect x="782" y="156" width="596" height="94" rx="8" class="b9-card-r"/>
+              <text x="794" y="176" class="b9-cr">1. Verifies RSA-SHA256 HTTP Signature against actor publicKeyPem</text>
+              <text x="794" y="195" class="b9-cb">2. ±300s clock-skew replay defense + strict payload_actor == actor_uri check</text>
+              <text x="794" y="214" class="b9-cb">3. Evaluates local FederationInstance.trust_level (blocked dropped at gate)</text>
+              <text x="794" y="233" class="b9-cm">4. Sanitizes all inbound bibliographic metadata via bleach.clean()</text>
+            </g>
+
+            <!-- Dedicated PostgreSQL federation Schema Badge -->
+            <rect x="782" y="260" width="596" height="50" rx="8" class="b9-p-t"/>
+            <rect x="792" y="270" width="124" height="18" rx="4" class="b9-b-t"/>
+            <text x="854" y="282" text-anchor="middle" class="b9-b-txt">PG federation SCHEMA</text>
+            <text x="926" y="282" class="b9-cl">Dedicated v1.2.0 Schema</text>
+            <text x="792" y="301" class="b9-cm">federation_instances • federation_actors • federation_followers • federation_activities • federation_consents</text>
+
+            <!-- 3-Tier Unilateral Trust Matrix Table -->
+            <g filter="url(#b9-sh)">
+              <rect x="770" y="334" width="620" height="298" rx="10" class="b9-card-i"/>
+              <text x="784" y="355" class="b9-ct">3-Tier Unilateral Trust Matrix (FederationInstance.trust_level)</text>
 
               <!-- Table Header -->
-              <rect x="794" y="362" width="118" height="28" rx="4" class="tbl-hdr"/>
-              <text x="853" y="380" text-anchor="middle" class="tbl-hdr-txt">Trust Level</text>
-              <rect x="912" y="362" width="466" height="28" rx="4" class="tbl-hdr"/>
-              <text x="1145" y="380" text-anchor="middle" class="tbl-hdr-txt">Catalog Sync, Follows &amp; Cross-Instance Loan Policy</text>
+              <rect x="784" y="366" width="150" height="26" rx="4" class="b9-th"/>
+              <text x="859" y="383" text-anchor="middle" class="b9-th-t">Trust Tier / Mode</text>
+              <rect x="934" y="366" width="442" height="26" rx="4" class="b9-th"/>
+              <text x="1155" y="383" text-anchor="middle" class="b9-th-t">Catalog Sync, Follows &amp; Loan Policy</text>
 
-              <!-- Row 1: trusted -->
-              <rect x="794" y="390" width="118" height="90" class="tbl-cell"/>
-              <rect x="814" y="424" width="78" height="22" rx="5" class="badge-teal"/>
-              <text x="853" y="439" text-anchor="middle" class="badge-txt">trusted</text>
-              <rect x="912" y="390" width="466" height="90" class="tbl-cell"/>
-              <text x="924" y="410" class="c-teal">Bilateral Trusted:</text>
-              <text x="924" y="426" class="c-body">• Auto SHACL-validated catalog sync (local curator locks always win)</text>
-              <text x="924" y="442" class="c-body">• Direct Follow delivery &amp; Cross-Instance Loans enabled</text>
-              <text x="924" y="464" class="c-mono">Unilateral Outbound: Enriches local catalog; peer policy governs loans</text>
+              <!-- Row 1: trusted (Bilateral) -->
+              <rect x="784" y="392" width="150" height="62" class="b9-tc"/>
+              <rect x="796" y="405" width="126" height="19" rx="4" class="b9-b-t"/>
+              <text x="859" y="418" text-anchor="middle" class="b9-b-txt">trusted (Bilateral)</text>
+              <text x="859" y="442" text-anchor="middle" class="b9-cb">Reciprocal Peers</text>
+              <rect x="934" y="392" width="442" height="62" class="b9-tc"/>
+              <text x="946" y="413" class="b9-cl">Auto bibliographic sync (SHACL-validated; local curator locks win)</text>
+              <text x="946" y="432" class="b9-cb">Direct Follow delivery &amp; Cross-Instance Loans enabled</text>
 
-              <!-- Row 2: untrusted -->
-              <rect x="794" y="480" width="118" height="62" class="tbl-cell-alt"/>
-              <rect x="810" y="500" width="86" height="22" rx="5" class="badge-clay"/>
-              <text x="853" y="515" text-anchor="middle" class="badge-txt">untrusted</text>
-              <rect x="912" y="480" width="466" height="62" class="tbl-cell-alt"/>
-              <text x="924" y="504" class="c-body">• Public catalog discovery only; NO automatic catalog synchronization</text>
-              <text x="924" y="524" class="c-body">• Inbound Follow &amp; Loan requests held for manual custodian review</text>
+              <!-- Row 2: trusted (Unilateral Outbound) -->
+              <rect x="784" y="454" width="150" height="60" class="b9-ta"/>
+              <rect x="796" y="466" width="126" height="19" rx="4" class="b9-b-i"/>
+              <text x="859" y="479" text-anchor="middle" class="b9-b-txt">trusted (Outbound)</text>
+              <text x="859" y="502" text-anchor="middle" class="b9-cb">Unilateral Peer</text>
+              <rect x="934" y="454" width="442" height="60" class="b9-ta"/>
+              <text x="946" y="476" class="b9-cb">Enriches local catalog from peer &amp; sends Follow requests;</text>
+              <text x="946" y="494" class="b9-cm">Peer's own local policy governs loan acceptance</text>
 
-              <!-- Row 3: blocked -->
-              <rect x="794" y="542" width="118" height="56" class="tbl-cell"/>
-              <rect x="814" y="559" width="78" height="22" rx="5" class="badge-crimson"/>
-              <text x="853" y="574" text-anchor="middle" class="badge-txt">blocked</text>
-              <rect x="912" y="542" width="466" height="56" class="tbl-cell"/>
-              <text x="924" y="566" class="c-crimson">• Rejected immediately at HTTP Signature gate</text>
-              <text x="924" y="584" class="c-body">• Follow requests, catalog sync &amp; loan offers dropped silently</text>
+              <!-- Row 3: untrusted -->
+              <rect x="784" y="514" width="150" height="56" class="b9-tc"/>
+              <rect x="814" y="532" width="90" height="19" rx="4" class="b9-b-c"/>
+              <text x="859" y="545" text-anchor="middle" class="b9-b-txt">untrusted</text>
+              <rect x="934" y="514" width="442" height="56" class="b9-tc"/>
+              <text x="946" y="536" class="b9-cb">Public catalog discovery only; NO automatic catalog sync</text>
+              <text x="946" y="554" class="b9-cc">Follow &amp; Loan requests held for manual custodian review</text>
+
+              <!-- Row 4: blocked -->
+              <rect x="784" y="570" width="150" height="50" class="b9-ta"/>
+              <rect x="818" y="585" width="82" height="19" rx="4" class="b9-b-r"/>
+              <text x="859" y="598" text-anchor="middle" class="b9-b-txt">blocked</text>
+              <rect x="934" y="570" width="442" height="50" class="b9-ta"/>
+              <text x="946" y="591" class="b9-cr">Rejected immediately at HTTP Signature gate</text>
+              <text x="946" y="608" class="b9-cb">All activities, follows &amp; loan offers dropped silently</text>
             </g>
 
-            <!-- S2S Connector: Node A Outbound -> Node B Inbox Gate -->
-            <path d="M 660 376 L 720 376 L 720 206 L 778 206" class="edge-clay" marker-end="url(#b9-mk-clay)"/>
-            <rect x="668" y="274" width="104" height="32" rx="5" class="e-pill-clay"/>
-            <text x="720" y="287" text-anchor="middle" class="e-pill-clay-txt">Signed S2S</text>
-            <text x="720" y="299" text-anchor="middle" class="e-pill-clay-txt">HTTPS POST</text>
+            <!-- S2S Connector: Node Alpha Outbound -> Node Beta Inbox Gate -->
+            <path d="M 670 552 L 720 552 L 720 202 L 780 202" class="b9-ec" marker-end="url(#b9-mkc)"/>
+            <rect x="676" y="346" width="88" height="32" rx="5" class="b9-p-c"/>
+            <text x="720" y="360" text-anchor="middle" class="b9-pt-c">Signed S2S</text>
+            <text x="720" y="372" text-anchor="middle" class="b9-pt-c">HTTPS POST</text>
 
-            <!-- Node B Inbox Gate -> Trust Matrix -->
-            <path d="M 1086 294 L 1086 308" class="edge-crimson" marker-end="url(#b9-mk-crimson)"/>
+            <!-- Inbox Gate -> Trust Matrix -->
+            <path d="M 1080 322 L 1080 332" class="b9-er" marker-end="url(#b9-mkr)"/>
 
-            <!-- ==================== BOTTOM SWIMLANE: P2P LENDING SEQUENCE ==================== -->
-            <rect x="32" y="650" width="1376" height="238" rx="14" class="zone-teal"/>
-            <rect x="46" y="662" width="84" height="20" rx="5" class="badge-teal"/>
-            <text x="88" y="676" text-anchor="middle" class="badge-txt">SEQUENCE</text>
-            <text x="140" y="677" class="zone-title">Cross-Instance Peer-to-Peer Lending Sequence (CIDOC CRM Custody)</text>
-            <text x="1394" y="676" text-anchor="end" class="zone-meta">NODE A (BORROWER) ↔ NODE B (CUSTODIAN / OWNER)</text>
+            <!-- ==================== BOTTOM BAND: 4-STEP LENDING SEQUENCE ==================== -->
+            <rect x="36" y="662" width="1368" height="216" rx="14" class="b9-z-teal"/>
+            <rect x="50" y="673" width="88" height="19" rx="5" class="b9-b-t"/>
+            <text x="94" y="686" text-anchor="middle" class="b9-b-txt">LENDING S2S</text>
+            <text x="148" y="687" class="b9-z-title">4-Step Cross-Instance Lending Sequence (Node Alpha ↔ Node Beta)</text>
+            <text x="1390" y="686" text-anchor="end" class="b9-z-meta">CIDOC CRM CUSTODY (ItemCustodyEvent)</text>
 
             <!-- Step 1 -->
-            <g filter="url(#b9-shadow)">
-              <rect x="48" y="696" width="310" height="174" rx="10" class="card"/>
-              <rect x="60" y="708" width="52" height="19" rx="5" class="badge-indigo"/>
-              <text x="86" y="721" text-anchor="middle" class="badge-txt">STEP 1</text>
-              <text x="120" y="722" class="c-title">Discover &amp; Request</text>
-              <text x="60" y="746" class="c-mono">Actor: Borrower on Node A</text>
-              <text x="60" y="768" class="c-body">• Locates public Item hosted on</text>
-              <text x="60" y="784" class="c-body">  federated Peer (Node B)</text>
-              <text x="60" y="808" class="c-body">• Clicks Request Loan on item view</text>
-              <text x="60" y="832" class="c-teal">• Enforces mutual friend / public</text>
-              <text x="60" y="848" class="c-teal">  visibility rules before dispatch</text>
+            <g filter="url(#b9-sh)">
+              <rect x="50" y="704" width="316" height="158" rx="9" class="b9-card-i"/>
+              <rect x="62" y="715" width="48" height="18" rx="4" class="b9-b-i"/>
+              <text x="86" y="727" text-anchor="middle" class="b9-b-txt">STEP 1</text>
+              <text x="118" y="728" class="b9-ct">Discover &amp; Offer</text>
+              <text x="62" y="751" class="b9-cm">Node Alpha → Node Beta /inbox</text>
+              <text x="62" y="772" class="b9-cb">• Borrower discovers public Item on Peer</text>
+              <text x="62" y="790" class="b9-cb">• Sends signed ActivityStreams Offer</text>
+              <text x="62" y="808" class="b9-cb">  to Owner's federated inbox</text>
+              <text x="62" y="840" class="b9-cc">Signed with RSA-2048 HTTP Signature</text>
             </g>
 
             <!-- Step 2 -->
-            <g filter="url(#b9-shadow)">
-              <rect x="392" y="696" width="310" height="174" rx="10" class="card-clay"/>
-              <rect x="404" y="708" width="52" height="19" rx="5" class="badge-clay"/>
-              <text x="430" y="721" text-anchor="middle" class="badge-txt">STEP 2</text>
-              <text x="464" y="722" class="c-title">Signed Offer Dispatch</text>
-              <text x="404" y="746" class="c-mono">Node A → POST Node B /inbox</text>
-              <text x="404" y="768" class="c-body">• Node A signs ActivityStreams Offer</text>
-              <text x="404" y="784" class="c-body">  using RSA-2048 HTTP Signature</text>
-              <text x="404" y="808" class="c-body">• Queued via Valkey federation queue</text>
-              <text x="404" y="832" class="c-clay">• Node B verifies signature, replay</text>
-              <text x="404" y="848" class="c-clay">  window (±300s) &amp; trust_level</text>
+            <g filter="url(#b9-sh)">
+              <rect x="392" y="704" width="316" height="158" rx="9" class="b9-card-c"/>
+              <rect x="404" y="715" width="48" height="18" rx="4" class="b9-b-c"/>
+              <text x="428" y="727" text-anchor="middle" class="b9-b-txt">STEP 2</text>
+              <text x="460" y="728" class="b9-ct">Custodian Review</text>
+              <text x="404" y="751" class="b9-cm">Node Beta: /admin/lending</text>
+              <text x="404" y="772" class="b9-cb">• Owner receives real-time alert in</text>
+              <text x="404" y="790" class="b9-cb">  Notifications &amp; Lending queue</text>
+              <text x="404" y="808" class="b9-cb">• Evaluates peer trust &amp; borrower ID</text>
+              <text x="404" y="840" class="b9-cl">Owner chooses Approve or Reject</text>
             </g>
 
             <!-- Step 3 -->
-            <g filter="url(#b9-shadow)">
-              <rect x="736" y="696" width="310" height="174" rx="10" class="card"/>
-              <rect x="748" y="708" width="52" height="19" rx="5" class="badge-indigo"/>
-              <text x="774" y="721" text-anchor="middle" class="badge-txt">STEP 3</text>
-              <text x="808" y="722" class="c-title">Custodian Review</text>
-              <text x="748" y="746" class="c-mono">Node B: /admin/lending</text>
-              <text x="748" y="768" class="c-body">• Owner receives real-time alert in</text>
-              <text x="748" y="784" class="c-body">  Notification Center &amp; Lending UI</text>
-              <text x="748" y="808" class="c-body">• Reviews borrower identity &amp; peer</text>
-              <text x="748" y="824" class="c-body">  trust status</text>
-              <text x="748" y="848" class="c-teal">• Chooses Approve or Reject</text>
+            <g filter="url(#b9-sh)">
+              <rect x="734" y="704" width="316" height="158" rx="9" class="b9-card-t"/>
+              <rect x="746" y="715" width="48" height="18" rx="4" class="b9-b-t"/>
+              <text x="770" y="727" text-anchor="middle" class="b9-b-txt">STEP 3</text>
+              <text x="802" y="728" class="b9-ct">Accept &amp; Lent State</text>
+              <text x="746" y="751" class="b9-cm">Node Beta → Signed Accept → Alpha</text>
+              <text x="746" y="772" class="b9-cb">• Signed Accept returned to Borrower</text>
+              <text x="746" y="790" class="b9-cb">• Owner Item transitions to lent</text>
+              <text x="746" y="810" class="b9-cl">• Appends CIDOC CRM ItemCustodyEvent</text>
+              <text x="746" y="840" class="b9-cb">Append-only immutable custody ledger</text>
             </g>
 
             <!-- Step 4 -->
-            <g filter="url(#b9-shadow)">
-              <rect x="1080" y="696" width="310" height="174" rx="10" class="card-teal"/>
-              <rect x="1092" y="708" width="52" height="19" rx="5" class="badge-teal"/>
-              <text x="1118" y="721" text-anchor="middle" class="badge-txt">STEP 4</text>
-              <text x="1152" y="722" class="c-title">Accept &amp; Custody Sync</text>
-              <text x="1092" y="746" class="c-mono">Node B → Signed Accept → Node A</text>
-              <text x="1092" y="768" class="c-body">• Item custody transitions to lent</text>
-              <text x="1092" y="786" class="c-teal">• Appends ItemCustodyEvent (E10)</text>
-              <text x="1092" y="808" class="c-body">• Appears as Borrowed on Node A</text>
-              <text x="1092" y="824" class="c-body">  shelf without forfeiting ownership</text>
-              <text x="1092" y="848" class="c-mono">• Active until Return confirmed</text>
+            <g filter="url(#b9-sh)">
+              <rect x="1076" y="704" width="314" height="158" rx="9" class="b9-card-t"/>
+              <rect x="1088" y="715" width="48" height="18" rx="4" class="b9-b-t"/>
+              <text x="1112" y="727" text-anchor="middle" class="b9-b-txt">STEP 4</text>
+              <text x="1144" y="728" class="b9-ct">Borrowed &amp; Return</text>
+              <text x="1088" y="751" class="b9-cm">Node Alpha Shelf ↔ Return Activity</text>
+              <text x="1088" y="772" class="b9-cb">• Appears as Borrowed on Borrower shelf</text>
+              <text x="1088" y="790" class="b9-cb">  without forfeiting owner sovereignty</text>
+              <text x="1088" y="810" class="b9-cl">• Signed Return restores available state</text>
+              <text x="1088" y="840" class="b9-cm">Closes custody event cleanly</text>
             </g>
 
-            <!-- Step Arrows -->
-            <path d="M 358 783 L 390 783" class="edge-indigo" marker-end="url(#b9-mk-indigo)"/>
-            <path d="M 702 783 L 734 783" class="edge-clay" marker-end="url(#b9-mk-clay)"/>
-            <path d="M 1046 783 L 1078 783" class="edge-teal" marker-end="url(#b9-mk-teal)"/>
+            <!-- Sequence Arrows -->
+            <path d="M 366 783 L 390 783" class="b9-ei" marker-end="url(#b9-mki)"/>
+            <path d="M 708 783 L 732 783" class="b9-ec" marker-end="url(#b9-mkc)"/>
+            <path d="M 1050 783 L 1074 783" class="b9-et" marker-end="url(#b9-mkt)"/>
 
-            <!-- Legend -->
-            <rect x="32" y="904" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="929" class="legend-h">LEGEND:</text>
-            <line x1="128" y1="925" x2="174" y2="925" class="edge-clay" marker-end="url(#b9-mk-clay)"/>
-            <text x="184" y="929" class="legend-t">Signed ActivityPub S2S Delivery</text>
-            <line x1="422" y1="925" x2="468" y2="925" class="edge-teal" marker-end="url(#b9-mk-teal)"/>
-            <text x="478" y="929" class="legend-t">Trusted Custody / Accept Flow</text>
-            <line x1="704" y1="925" x2="750" y2="925" class="edge-crimson" marker-end="url(#b9-mk-crimson)"/>
-            <text x="760" y="929" class="legend-t">HTTP Signature / Trust Gate</text>
-            <rect x="984" y="915" width="18" height="18" rx="4" class="badge-crimson"/>
-            <text x="1010" y="929" class="legend-t">Security / Blocked / 403</text>
-            <rect x="1200" y="915" width="18" height="18" rx="4" class="badge-teal"/>
-            <text x="1226" y="929" class="legend-t">Opt-In / Trusted</text>
+            <!-- Bottom Legend Bar -->
+            <rect x="36" y="890" width="1368" height="36" rx="9" class="b9-leg"/>
+            <text x="52" y="912" class="b9-leg-h">LEGEND:</text>
+            <line x1="126" y1="908" x2="168" y2="908" class="b9-ec" marker-end="url(#b9-mkc)"/>
+            <text x="178" y="912" class="b9-leg-t">Signed S2S ActivityPub</text>
+            <line x1="354" y1="908" x2="396" y2="908" class="b9-et" marker-end="url(#b9-mkt)"/>
+            <text x="406" y="912" class="b9-leg-t">Trusted Custody / Return</text>
+            <line x1="590" y1="908" x2="632" y2="908" class="b9-er" marker-end="url(#b9-mkr)"/>
+            <text x="642" y="912" class="b9-leg-t">Inbox Security Gate</text>
+            <rect x="812" y="899" width="16" height="16" rx="4" class="b9-b-r"/>
+            <text x="836" y="912" class="b9-leg-t">Crimson Gate / Blocked / Hub Lock</text>
+            <rect x="1088" y="899" width="16" height="16" rx="4" class="b9-b-t"/>
+            <text x="1112" y="912" class="b9-leg-t">Dedicated federation Schema</text>
           </svg>

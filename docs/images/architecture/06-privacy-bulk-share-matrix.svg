@@ -15,355 +15,315 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp6-title bp6-desc">
-            <title id="bp6-title">Blueprint 6 — Three-Tier Privacy Gate, Bulk Visibility &amp; Shared Collection Access Matrix</title>
-            <desc id="bp6-desc">Access control and visibility matrix diagram for iqoqo v1.2.0 showing private, friends_only, and public item states, three mutation paths including bulk visibility fan-out, and the SharedCollection visibility_scope evaluation table with Friend Bonus.</desc>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg id="svg-bp6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp6-title bp6-desc">
+            <title id="bp6-title">06 · Three-Tier Privacy Gate, Bulk Visibility &amp; Shared Collection Access Matrix</title>
+            <desc id="bp6-desc">iqoqo v1.2.0 access control diagram showing private, friends_only, and public item states, 4 management paths including physical_location redaction, bulk visibility/location fan-out, FederationConsent pruning, and the SharedCollection evaluation matrix with Friend Bonus.</desc>
             <style>
-              .canvas-bg { fill: #FDFBF7; }
-              .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
-              .subtitle-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 500; fill: #475569; }
-              .header-pill-bg { fill: #EFE9DD; stroke: #D6CFC2; stroke-width: 1.2; }
-              .header-pill-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #2B3D4F; }
+              .bg { fill: #FDFBF7; }
+              .hdr-title { font-family: Georgia, 'Times New Roman', serif; font-size: 21px; font-weight: 700; fill: #2B3D4F; }
+              .hdr-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12.2px; font-weight: 500; fill: #526375; }
+              .ver-pill { fill: #2B3D4F; }
+              .ver-txt { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 11px; font-weight: 700; fill: #FDFBF7; }
 
-              .zone-parchment { fill: #F4EFE6; stroke: #C9BFA9; stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-indigo { fill: #EEF2F6; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-sec { fill: #FEF2F2; stroke: #D15400; stroke-width: 1.6; stroke-dasharray: 5 4; }
+              .z-sand { fill: #F5F2EB; stroke: #CEC5B4; stroke-width: 1.4; stroke-dasharray: 6 4; }
+              .z-indigo { fill: #EEF2F6; stroke: #94A8BC; stroke-width: 1.4; stroke-dasharray: 6 4; }
+              .z-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1.4; stroke-dasharray: 6 4; }
+              .z-title { font-family: Georgia, 'Times New Roman', serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
+              .z-meta { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #526375; }
 
-              .zone-title { font-family: 'Merriweather', Georgia, serif; font-size: 12.5px; font-weight: 700; fill: #2B3D4F; }
-              .zone-meta { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 600; fill: #64748B; }
-
-              .badge-indigo { fill: #2B3D4F; }
-              .badge-clay { fill: #D15400; }
-              .badge-teal { fill: #0F766E; }
-              .badge-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
-
-              .card { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.5; }
+              .card { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.25; }
               .card-indigo { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.6; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.8; }
+              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.75; }
               .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
-              .card-sub { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1.1; }
+              .card-crimson { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 1.7; }
 
-              .node-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #1E293B; }
-              .node-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.8px; font-weight: 400; fill: #475569; }
-              .node-mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.8px; font-weight: 500; fill: #2B3D4F; }
-              .node-clay { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #B84700; }
-              .node-teal { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #0F766E; }
+              .b-indigo { fill: #2B3D4F; }
+              .b-clay { fill: #D15400; }
+              .b-teal { fill: #0F766E; }
+              .b-crimson { fill: #B91C1C; }
+              .b-txt { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9.5px; font-weight: 700; fill: #FFFFFF; }
 
-              .pill-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-              .pill-indigo-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #2B3D4F; }
-              .pill-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1; }
-              .pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #B84700; }
-              .pill-teal { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 1; }
-              .pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #0F766E; }
+              .c-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12.4px; font-weight: 700; fill: #2B3D4F; }
+              .c-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.3px; font-weight: 400; fill: #475569; }
+              .c-mono { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9.4px; font-weight: 500; fill: #2B3D4F; }
+              .c-clay { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9.4px; font-weight: 700; fill: #D15400; }
+              .c-teal { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9.4px; font-weight: 700; fill: #0F766E; }
+              .c-crimson { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9.4px; font-weight: 700; fill: #B91C1C; }
+
+              .pill-i { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-i-t { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
+              .pill-c { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-c-t { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #B84700; }
+              .pill-t { fill: #EDF7F5; stroke: #6BB4AA; stroke-width: 1; }
+              .pill-t-t { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #0F766E; }
+              .pill-r { fill: #FEF2F2; stroke: #FCA5A5; stroke-width: 1; }
+              .pill-r-t { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 9px; font-weight: 700; fill: #B91C1C; }
 
               .tbl-hdr { fill: #2B3D4F; }
-              .tbl-hdr-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #FFFFFF; }
-              .tbl-row-alt { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1; }
+              .tbl-hdr-t { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; fill: #FFFFFF; }
               .tbl-cell { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1; }
-              .tbl-cell-bonus { fill: #FEF3EB; stroke: #D15400; stroke-width: 2; }
-              .tbl-scope { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 700; fill: #2B3D4F; }
-              .tbl-val { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #1E293B; }
-              .tbl-val-sub { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10px; font-weight: 400; fill: #64748B; }
-              .tbl-val-clay { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #B84700; }
+              .tbl-alt { fill: #F5F2EB; stroke: #D6CFC2; stroke-width: 1; }
+              .tbl-bonus { fill: #FEF3EB; stroke: #D15400; stroke-width: 2; }
+              .tbl-scope { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 11px; font-weight: 700; fill: #2B3D4F; }
+              .tbl-val { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 600; fill: #1E293B; }
+              .tbl-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.8px; font-weight: 400; fill: #64748B; }
+              .tbl-clay { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; fill: #B84700; }
 
-              .edge-primary { fill: none; stroke: #2B3D4F; stroke-width: 1.9; stroke-linejoin: round; }
-              .edge-teal { fill: none; stroke: #0F766E; stroke-width: 1.75; stroke-dasharray: 5 3; stroke-linejoin: round; }
-              .edge-clay { fill: none; stroke: #D15400; stroke-width: 1.9; stroke-linejoin: round; }
-              .mk-primary { fill: #2B3D4F; }
-              .mk-teal { fill: #0F766E; }
-              .mk-clay { fill: #D15400; }
+              .e-i { fill: none; stroke: #2B3D4F; stroke-width: 1.9; stroke-linejoin: round; }
+              .mk-i { fill: #2B3D4F; }
 
-              .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
-              .legend-heading { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
-              .legend-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 500; fill: #334155; }
+              .legend-bg { fill: #F5F2EB; stroke: #D6CFC2; stroke-width: 1.25; }
+              .legend-h { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-t { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.8px; font-weight: 500; fill: #2B3D4F; }
             </style>
             <defs>
-              <pattern id="b6-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
+              <pattern id="b6-dots" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="1" fill="#E6E0D4"/>
               </pattern>
-              <filter id="b6-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+              <filter id="b6-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b6-mk-primary" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-primary"/>
-              </marker>
-              <marker id="b6-mk-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-teal"/>
-              </marker>
-              <marker id="b6-mk-clay" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-clay"/>
-              </marker>
+              <marker id="b6-mk-i" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-i"/></marker>
             </defs>
 
             <!-- Background -->
-            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
-            <rect x="0" y="0" width="1440" height="980" fill="url(#b6-grid)"/>
+            <rect x="0" y="0" width="1440" height="940" class="bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b6-dots)"/>
 
             <!-- Header -->
-            <text x="32" y="36" class="title-text">Blueprint 6 — Three-Tier Privacy Gate, Bulk Visibility &amp; Shared Collection Access Matrix</text>
-            <text x="32" y="57" class="subtitle-text">iqoqo v1.2.0  •  Item Visibility States, BOLA Guards, Atomic Bulk Mutations &amp; SharedCollection Friend Bonus Evaluation</text>
-            <rect x="1184" y="16" width="224" height="32" rx="8" class="header-pill-bg"/>
-            <text x="1296" y="36" text-anchor="middle" class="header-pill-text">Access Control &amp; Privacy Matrix</text>
+            <text x="36" y="36" class="hdr-title">06 · Three-Tier Privacy Gate, Bulk Visibility &amp; Shared Collection Access Matrix</text>
+            <text x="36" y="58" class="hdr-sub">iqoqo v1.2.0 — Visibility State Model, Owner-Gated Physical Location, Bulk Ops, Federation Consent &amp; Share Matrix</text>
+            <rect x="1256" y="18" width="148" height="30" rx="15" class="ver-pill"/>
+            <circle cx="1275" cy="33" r="4" fill="#D15400"/>
+            <text x="1336" y="37" text-anchor="middle" class="ver-txt">iqoqo v1.2.0</text>
 
-            <!-- ==================== TOP-LEFT ZONE: 3-TIER VISIBILITY MODEL ==================== -->
-            <rect x="32" y="78" width="564" height="422" rx="14" class="zone-parchment"/>
-            <rect x="46" y="90" width="52" height="20" rx="5" class="badge-indigo"/>
-            <text x="72" y="104" text-anchor="middle" class="badge-text">MODEL</text>
-            <text x="108" y="105" class="zone-title">Three-Tier Visibility State Model</text>
+            <!-- ==================== TOP-LEFT ZONE: VISIBILITY STATE MODEL ==================== -->
+            <rect x="36" y="84" width="454" height="368" rx="14" class="z-sand"/>
+            <rect x="50" y="95" width="52" height="19" rx="5" class="b-indigo"/>
+            <text x="76" y="108" text-anchor="middle" class="b-txt">MODEL</text>
+            <text x="110" y="109" class="z-title">Visibility State Model</text>
 
-            <!-- Tier 1: private -->
-            <g id="bp6-private">
-              <rect x="48" y="122" width="532" height="110" rx="9" class="card-clay" filter="url(#b6-shadow)"/>
-              <rect x="60" y="133" width="66" height="19" rx="5" class="badge-clay"/>
-              <text x="93" y="146" text-anchor="middle" class="badge-text">private</text>
-              <text x="136" y="147" class="node-title">Private / Hidden Copy</text>
-              <rect x="444" y="133" width="124" height="19" rx="5" class="pill-clay"/>
-              <text x="506" y="146" text-anchor="middle" class="pill-clay-text">is_hidden = True</text>
-              <text x="60" y="172" class="node-body">• Audience: Owner only (+ Admin custody maintenance tools)</text>
-              <text x="60" y="191" class="node-body">• Excluded from public grids, /u/&lt;username&gt;, default SPARQL snapshots &amp; RSS</text>
-              <text x="60" y="212" class="node-clay">• Visible via Share Link ONLY if visibility_scope == "all"</text>
+            <!-- private -->
+            <g filter="url(#b6-sh)">
+              <rect x="50" y="124" width="426" height="98" rx="9" class="card-crimson"/>
+              <rect x="62" y="134" width="58" height="18" rx="4" class="b-crimson"/>
+              <text x="91" y="146" text-anchor="middle" class="b-txt">private</text>
+              <text x="128" y="147" class="c-title">Private / Hidden</text>
+              <rect x="358" y="134" width="106" height="18" rx="4" class="pill-r"/>
+              <text x="411" y="146" text-anchor="middle" class="pill-r-t">is_hidden = True</text>
+              <text x="62" y="170" class="c-body">• Owner (+ Admin custody only).</text>
+              <text x="62" y="187" class="c-body">• Excluded from public grids, /u/&lt;username&gt;,</text>
+              <text x="62" y="203" class="c-body">  default SPARQL snapshots &amp; public RSS feeds.</text>
             </g>
 
-            <!-- Tier 2: friends_only -->
-            <g id="bp6-friends">
-              <rect x="48" y="246" width="532" height="110" rx="9" class="card-indigo" filter="url(#b6-shadow)"/>
-              <rect x="60" y="257" width="94" height="19" rx="5" class="badge-indigo"/>
-              <text x="107" y="270" text-anchor="middle" class="badge-text">friends_only</text>
-              <text x="164" y="271" class="node-title">Friends-Only (alias: shared)</text>
-              <rect x="434" y="257" width="134" height="19" rx="5" class="pill-indigo"/>
-              <text x="501" y="270" text-anchor="middle" class="pill-indigo-text">Normalized Guard</text>
-              <text x="60" y="296" class="node-body">• Audience: Owner + mutually accepted Friends (user_friendships local</text>
-              <text x="60" y="313" class="node-body">  or consented ActivityPub federated friends)</text>
-              <text x="60" y="336" class="node-mono">• Unlocked on public_only share links via Friend Bonus</text>
+            <!-- friends_only -->
+            <g filter="url(#b6-sh)">
+              <rect x="50" y="232" width="426" height="98" rx="9" class="card-clay"/>
+              <rect x="62" y="242" width="88" height="18" rx="4" class="b-clay"/>
+              <text x="106" y="254" text-anchor="middle" class="b-txt">friends_only</text>
+              <text x="158" y="255" class="c-title">Friends Only</text>
+              <rect x="366" y="242" width="98" height="18" rx="4" class="pill-c"/>
+              <text x="415" y="254" text-anchor="middle" class="pill-c-t">alias: shared</text>
+              <text x="62" y="278" class="c-body">• Owner + mutually accepted Friends</text>
+              <text x="62" y="295" class="c-mono">  (user_friendships local or consented AP friends).</text>
+              <text x="62" y="313" class="c-clay">• Unlocked on public_only links via Friend Bonus.</text>
             </g>
 
-            <!-- Tier 3: public -->
-            <g id="bp6-public">
-              <rect x="48" y="370" width="532" height="114" rx="9" class="card-teal" filter="url(#b6-shadow)"/>
-              <rect x="60" y="381" width="60" height="19" rx="5" class="badge-teal"/>
-              <text x="90" y="394" text-anchor="middle" class="badge-text">public</text>
-              <text x="130" y="395" class="node-title">Public Catalog Copy</text>
-              <rect x="440" y="381" width="128" height="19" rx="5" class="pill-teal"/>
-              <text x="504" y="394" text-anchor="middle" class="pill-teal-text">is_hidden = False</text>
-              <text x="60" y="420" class="node-body">• Audience: Owner + Friends + Anonymous visitors + /api/public/*</text>
-              <text x="60" y="439" class="node-body">• Indexed in Search / AI sitemaps &amp; feeds when User.visibility == "public"</text>
-              <text x="60" y="462" class="node-teal">• Federation still gated by FederationConsent.federated_collection</text>
+            <!-- public -->
+            <g filter="url(#b6-sh)">
+              <rect x="50" y="340" width="426" height="98" rx="9" class="card-teal"/>
+              <rect x="62" y="350" width="54" height="18" rx="4" class="b-teal"/>
+              <text x="89" y="362" text-anchor="middle" class="b-txt">public</text>
+              <text x="124" y="363" class="c-title">Public Catalog Copy</text>
+              <rect x="352" y="350" width="112" height="18" rx="4" class="pill-t"/>
+              <text x="408" y="362" text-anchor="middle" class="pill-t-t">is_hidden = False</text>
+              <text x="62" y="386" class="c-body">• Owner + Friends + Anonymous + /api/public/*</text>
+              <text x="62" y="403" class="c-body">• Search/AI sitemaps (if User.visibility=="public").</text>
+              <text x="62" y="421" class="c-teal">• Subject to FederationConsent opt-out gate.</text>
             </g>
 
-            <!-- ==================== TOP-RIGHT ZONE: 3 MUTATION PATHS ==================== -->
-            <rect x="620" y="78" width="788" height="422" rx="14" class="zone-indigo"/>
-            <rect x="634" y="90" width="68" height="20" rx="5" class="badge-indigo"/>
-            <text x="668" y="104" text-anchor="middle" class="badge-text">MUTATION</text>
-            <text x="712" y="105" class="zone-title">3 Management &amp; Visibility Mutation Paths</text>
+            <!-- ==================== TOP-RIGHT ZONE: 4 MANAGEMENT PATHS ==================== -->
+            <rect x="514" y="84" width="890" height="368" rx="14" class="z-indigo"/>
+            <rect x="528" y="95" width="76" height="19" rx="5" class="b-indigo"/>
+            <text x="566" y="108" text-anchor="middle" class="b-txt">CONTROLS</text>
+            <text x="612" y="109" class="z-title">Management Paths &amp; Enforcement Guards</text>
 
             <!-- Path 1: Account Default -->
-            <g id="bp6-p1">
-              <rect x="636" y="122" width="370" height="114" rx="9" class="card" filter="url(#b6-shadow)"/>
-              <rect x="648" y="133" width="50" height="18" rx="4" class="badge-indigo"/>
-              <text x="673" y="146" text-anchor="middle" class="badge-text">PATH 1</text>
-              <text x="706" y="147" class="node-title">Account Default</text>
-              <text x="648" y="170" class="node-mono">Profile Settings → User.default_item_visibility</text>
-              <text x="648" y="191" class="node-body">• Automatically applied at /scan &amp; Manual Entry</text>
-              <text x="648" y="210" class="node-body">• Safe default keeps new personal shelves private</text>
+            <g filter="url(#b6-sh)">
+              <rect x="528" y="124" width="330" height="106" rx="9" class="card"/>
+              <rect x="538" y="134" width="48" height="17" rx="4" class="b-indigo"/>
+              <text x="562" y="146" text-anchor="middle" class="b-txt">PATH 1</text>
+              <text x="594" y="147" class="c-title">Account Default (/profile)</text>
+              <text x="538" y="170" class="c-mono">User.default_item_visibility</text>
+              <text x="538" y="190" class="c-body">• Inherited automatically at /scan &amp;</text>
+              <text x="538" y="206" class="c-body">  Manual Entry ingest time.</text>
             </g>
 
-            <!-- Path 2: Per-Item Override -->
-            <g id="bp6-p2">
-              <rect x="1022" y="122" width="370" height="114" rx="9" class="card-clay" filter="url(#b6-shadow)"/>
-              <rect x="1034" y="133" width="50" height="18" rx="4" class="badge-clay"/>
-              <text x="1059" y="146" text-anchor="middle" class="badge-text">PATH 2</text>
-              <text x="1092" y="147" class="node-title">Per-Item Override</text>
-              <text x="1034" y="170" class="node-mono">/item/[id] → PUT/PATCH /api/items/&lt;id&gt;</text>
-              <text x="1034" y="191" class="node-clay">• Guard: @require_item_access(bola=True)</text>
-              <text x="1034" y="210" class="node-body">• Returns HTTP 404 (not 403) to block enumeration</text>
+            <!-- Path 2: Per-Item Override & Location (v1.2.0) -->
+            <g filter="url(#b6-sh)">
+              <rect x="870" y="124" width="520" height="106" rx="9" class="card-clay"/>
+              <rect x="880" y="134" width="48" height="17" rx="4" class="b-clay"/>
+              <text x="904" y="146" text-anchor="middle" class="b-txt">PATH 2</text>
+              <text x="936" y="147" class="c-title">Per-Item Override &amp; Location</text>
+              <rect x="1316" y="134" width="64" height="17" rx="4" class="b-clay"/>
+              <text x="1348" y="146" text-anchor="middle" class="b-txt">v1.2.0</text>
+              <text x="880" y="168" class="c-mono">/item/[id], TaxonomyEditor → PUT/PATCH /api/items/&lt;id&gt;</text>
+              <text x="880" y="186" class="c-body">• Sets visibility &amp; structured physical_location (+ loc: promotion)</text>
+              <text x="880" y="204" class="c-crimson">• @require_item_access(bola=True) (404) &amp; serializer redaction keep</text>
+              <text x="880" y="219" class="c-crimson">  physical_location strictly owner/custody-gated</text>
             </g>
 
-            <!-- Path 3: Bulk Visibility Toolbar + Fan-Out -->
-            <g id="bp6-p3">
-              <rect x="636" y="252" width="756" height="232" rx="10" class="card-indigo" filter="url(#b6-shadow)"/>
-              <rect x="648" y="263" width="50" height="18" rx="4" class="badge-indigo"/>
-              <text x="673" y="276" text-anchor="middle" class="badge-text">PATH 3</text>
-              <text x="706" y="277" class="node-title">Bulk Visibility Toolbar (/collection)</text>
-              <rect x="1126" y="263" width="252" height="19" rx="5" class="pill-indigo"/>
-              <text x="1252" y="276" text-anchor="middle" class="pill-indigo-text">PATCH /api/items/bulk-visibility</text>
+            <!-- Path 3: Bulk Visibility & Bulk Location (v1.2.0) -->
+            <g filter="url(#b6-sh)">
+              <rect x="528" y="242" width="862" height="122" rx="9" class="card-indigo"/>
+              <rect x="538" y="252" width="48" height="17" rx="4" class="b-indigo"/>
+              <text x="562" y="264" text-anchor="middle" class="b-txt">PATH 3</text>
+              <text x="594" y="265" class="c-title">Bulk Visibility &amp; Bulk Location (/collection)</text>
+              <rect x="1316" y="252" width="64" height="17" rx="4" class="b-clay"/>
+              <text x="1348" y="264" text-anchor="middle" class="b-txt">v1.2.0</text>
+              <text x="538" y="286" class="c-body">Sidebar Visibility &amp; Physical Location (?location=..., location_counts) facets; BulkItemVisibilityToolbar sends:</text>
+              <text x="538" y="303" class="c-mono">PATCH /api/items/bulk-visibility  |  PATCH /api/items/bulk-location  (1..100 items, FEDERATION_HEAD_MODE guard, 403 non-owner)</text>
 
-              <text x="648" y="302" class="node-body">Sidebar Visibility facet + BulkItemVisibilityToolbar → BulkItemVisibilitySchema (1..100 owned physical items)</text>
-              <text x="648" y="320" class="node-clay">Atomic ownership check prevents 404/403 existence oracle; commits &amp; fans out to 5 subsystems:</text>
-
-              <!-- Branching Fan-out Lines -->
-              <path d="M 1014 334 L 1014 358" class="edge-primary"/>
-              <path d="M 720 358 L 1308 358" class="edge-primary"/>
-              <path d="M 720 358 L 720 384" class="edge-primary" marker-end="url(#b6-mk-primary)"/>
-              <path d="M 867 358 L 867 384" class="edge-teal" marker-end="url(#b6-mk-teal)"/>
-              <path d="M 1014 358 L 1014 384" class="edge-teal" marker-end="url(#b6-mk-teal)"/>
-              <path d="M 1161 358 L 1161 384" class="edge-teal" marker-end="url(#b6-mk-teal)"/>
-              <path d="M 1308 358 L 1308 384" class="edge-teal" marker-end="url(#b6-mk-teal)"/>
-
-              <!-- 5 Fan-Out Subsystem Cards -->
-              <rect x="652" y="386" width="136" height="82" rx="8" class="card-sub"/>
-              <text x="720" y="408" text-anchor="middle" class="node-title">PostgreSQL</text>
-              <text x="720" y="427" text-anchor="middle" class="node-mono">inventory.items</text>
-              <text x="720" y="446" text-anchor="middle" class="node-body">Atomic TX Update</text>
-
-              <rect x="799" y="386" width="136" height="82" rx="8" class="card-sub"/>
-              <text x="867" y="408" text-anchor="middle" class="node-title">FTS Worker</text>
-              <text x="867" y="427" text-anchor="middle" class="node-mono">Celery Queue</text>
-              <text x="867" y="446" text-anchor="middle" class="node-body">tsvector Reindex</text>
-
-              <rect x="946" y="386" width="136" height="82" rx="8" class="card-sub"/>
-              <text x="1014" y="408" text-anchor="middle" class="node-title">Valkey Cache</text>
-              <text x="1014" y="427" text-anchor="middle" class="node-mono">Facet Cache</text>
-              <text x="1014" y="446" text-anchor="middle" class="node-body">Key Invalidation</text>
-
-              <rect x="1093" y="386" width="136" height="82" rx="8" class="card-sub"/>
-              <text x="1161" y="408" text-anchor="middle" class="node-title">SSE Stream</text>
-              <text x="1161" y="427" text-anchor="middle" class="node-mono">item_visibility</text>
-              <text x="1161" y="446" text-anchor="middle" class="node-body">_updated event</text>
-
-              <rect x="1240" y="386" width="136" height="82" rx="8" class="card-sub"/>
-              <text x="1308" y="408" text-anchor="middle" class="node-title">ActivityPub</text>
-              <text x="1308" y="427" text-anchor="middle" class="node-mono">federation Q</text>
-              <text x="1308" y="446" text-anchor="middle" class="node-body">Outbox Sync</text>
+              <!-- 5-way Atomic Fan-Out Badges -->
+              <text x="538" y="325" class="c-teal">5-Way Atomic Fan-Out:</text>
+              <rect x="538" y="332" width="156" height="22" rx="5" class="pill-i"/>
+              <text x="616" y="346" text-anchor="middle" class="pill-i-t">1. PostgreSQL</text>
+              <rect x="706" y="332" width="156" height="22" rx="5" class="pill-t"/>
+              <text x="784" y="346" text-anchor="middle" class="pill-t-t">2. FTS Reindex</text>
+              <rect x="874" y="332" width="156" height="22" rx="5" class="pill-t"/>
+              <text x="952" y="346" text-anchor="middle" class="pill-t-t">3. Facet Cache</text>
+              <rect x="1042" y="332" width="156" height="22" rx="5" class="pill-t"/>
+              <text x="1120" y="346" text-anchor="middle" class="pill-t-t">4. SSE Events</text>
+              <rect x="1210" y="332" width="168" height="22" rx="5" class="pill-c"/>
+              <text x="1294" y="346" text-anchor="middle" class="pill-c-t">5. ActivityPub Outbox</text>
             </g>
 
-            <!-- Connector between Top Zones -->
-            <path d="M 620 298 L 598 298" class="edge-primary" marker-end="url(#b6-mk-primary)"/>
+            <!-- Path 4: Federation Consent Gate (v1.2.0 Crimson) -->
+            <g filter="url(#b6-sh)">
+              <rect x="528" y="374" width="862" height="64" rx="9" class="card-crimson"/>
+              <rect x="538" y="384" width="48" height="17" rx="4" class="b-crimson"/>
+              <text x="562" y="396" text-anchor="middle" class="b-txt">PATH 4</text>
+              <text x="594" y="397" class="c-title">Federation Consent Gate</text>
+              <rect x="1316" y="384" width="64" height="17" rx="4" class="b-clay"/>
+              <text x="1348" y="396" text-anchor="middle" class="b-txt">v1.2.0</text>
+              <text x="538" y="420" class="c-crimson">FederationConsent (federated_collection=False) prunes owner's items from public graph builds &amp; federated exposure unless viewer is an accepted friend.</text>
+            </g>
+
+            <!-- Connector Top-Right -> Top-Left -->
+            <path d="M 514 268 L 492 268" class="e-i" marker-end="url(#b6-mk-i)"/>
 
             <!-- ==================== BOTTOM ZONE: SHARED COLLECTION MATRIX ==================== -->
-            <rect x="32" y="522" width="1376" height="384" rx="14" class="zone-clay"/>
-            <rect x="46" y="534" width="62" height="20" rx="5" class="badge-clay"/>
-            <text x="77" y="548" text-anchor="middle" class="badge-text">MATRIX</text>
-            <text x="118" y="549" class="zone-title">Shared Collection Evaluation Matrix</text>
-            <rect x="392" y="534" width="276" height="20" rx="5" class="pill-indigo"/>
-            <text x="530" y="547" text-anchor="middle" class="pill-indigo-text">SharedCollection.filters["visibility_scope"]</text>
+            <rect x="36" y="470" width="1368" height="406" rx="14" class="z-clay"/>
+            <rect x="50" y="481" width="62" height="19" rx="5" class="b-clay"/>
+            <text x="81" y="494" text-anchor="middle" class="b-txt">MATRIX</text>
+            <text x="122" y="495" class="z-title">SharedCollection.filters["visibility_scope"] Access Evaluation Matrix</text>
+            <text x="1388" y="494" text-anchor="end" class="z-meta">DYNAMIC TOKEN EVALUATION</text>
 
-            <!-- Matrix Table (x=48..1052, y=568..890) -->
-            <g id="bp6-matrix" filter="url(#b6-shadow)">
+            <!-- 5-Column Matrix Table (x=50..1390, w=1340) -->
+            <g filter="url(#b6-sh)">
               <!-- Header Row -->
-              <rect x="48" y="568" width="220" height="44" rx="6" class="tbl-hdr"/>
-              <text x="158" y="594" text-anchor="middle" class="tbl-hdr-text">visibility_scope</text>
+              <rect x="50" y="510" width="248" height="40" rx="6" class="tbl-hdr"/>
+              <text x="174" y="534" text-anchor="middle" class="tbl-hdr-t">visibility_scope</text>
 
-              <rect x="268" y="568" width="196" height="44" class="tbl-hdr"/>
-              <text x="366" y="587" text-anchor="middle" class="tbl-hdr-text">Anonymous</text>
-              <text x="366" y="602" text-anchor="middle" class="tbl-hdr-text">Token Holder</text>
+              <rect x="298" y="510" width="268" height="40" class="tbl-hdr"/>
+              <text x="432" y="534" text-anchor="middle" class="tbl-hdr-t">Anonymous Token Holder</text>
 
-              <rect x="464" y="568" width="196" height="44" class="tbl-hdr"/>
-              <text x="562" y="587" text-anchor="middle" class="tbl-hdr-text">Logged-In</text>
-              <text x="562" y="602" text-anchor="middle" class="tbl-hdr-text">Non-Friend</text>
+              <rect x="566" y="510" width="268" height="40" class="tbl-hdr"/>
+              <text x="700" y="534" text-anchor="middle" class="tbl-hdr-t">Logged-In Non-Friend</text>
 
-              <rect x="660" y="568" width="196" height="44" class="tbl-hdr"/>
-              <text x="758" y="587" text-anchor="middle" class="tbl-hdr-text">Logged-In</text>
-              <text x="758" y="602" text-anchor="middle" class="tbl-hdr-text">Accepted Friend</text>
+              <rect x="834" y="510" width="288" height="40" class="tbl-hdr"/>
+              <text x="978" y="534" text-anchor="middle" class="tbl-hdr-t">Logged-In Accepted Friend</text>
 
-              <rect x="856" y="568" width="196" height="44" rx="6" class="tbl-hdr"/>
-              <text x="954" y="594" text-anchor="middle" class="tbl-hdr-text">Share Owner</text>
+              <rect x="1122" y="510" width="268" height="40" rx="6" class="tbl-hdr"/>
+              <text x="1256" y="534" text-anchor="middle" class="tbl-hdr-t">Share Owner</text>
 
               <!-- Row 1: public_only (Default) -->
-              <rect x="48" y="612" width="220" height="94" class="tbl-row-alt"/>
-              <text x="64" y="648" class="tbl-scope">public_only</text>
-              <rect x="64" y="658" width="68" height="18" rx="4" class="pill-indigo"/>
-              <text x="98" y="670" text-anchor="middle" class="pill-indigo-text">DEFAULT</text>
+              <rect x="50" y="550" width="248" height="82" class="tbl-alt"/>
+              <text x="66" y="584" class="tbl-scope">public_only</text>
+              <rect x="66" y="594" width="68" height="17" rx="4" class="pill-i"/>
+              <text x="100" y="606" text-anchor="middle" class="pill-i-t">DEFAULT</text>
 
-              <rect x="268" y="612" width="196" height="94" class="tbl-cell"/>
-              <text x="366" y="656" text-anchor="middle" class="tbl-val">public only</text>
-              <text x="366" y="675" text-anchor="middle" class="tbl-val-sub">friends_only &amp; private hidden</text>
+              <rect x="298" y="550" width="268" height="82" class="tbl-cell"/>
+              <text x="432" y="588" text-anchor="middle" class="tbl-val">public only</text>
+              <text x="432" y="606" text-anchor="middle" class="tbl-sub">friends_only &amp; private hidden</text>
 
-              <rect x="464" y="612" width="196" height="94" class="tbl-cell"/>
-              <text x="562" y="656" text-anchor="middle" class="tbl-val">public only</text>
-              <text x="562" y="675" text-anchor="middle" class="tbl-val-sub">friends_only &amp; private hidden</text>
+              <rect x="566" y="550" width="268" height="82" class="tbl-cell"/>
+              <text x="700" y="588" text-anchor="middle" class="tbl-val">public only</text>
+              <text x="700" y="606" text-anchor="middle" class="tbl-sub">friends_only &amp; private hidden</text>
 
-              <!-- FRIEND BONUS CELL -->
-              <rect x="660" y="612" width="196" height="94" class="tbl-cell-bonus"/>
-              <rect x="706" y="622" width="104" height="19" rx="5" class="badge-clay"/>
-              <text x="758" y="635" text-anchor="middle" class="badge-text">FRIEND BONUS</text>
-              <text x="758" y="661" text-anchor="middle" class="tbl-val-clay">public + friends_only</text>
-              <text x="758" y="680" text-anchor="middle" class="tbl-val-sub">Automatically unlocked!</text>
+              <!-- Highlighted Friend Bonus Cell -->
+              <rect x="834" y="550" width="288" height="82" class="tbl-bonus"/>
+              <rect x="914" y="559" width="128" height="19" rx="5" class="b-clay"/>
+              <text x="978" y="572" text-anchor="middle" class="b-txt">★ FRIEND BONUS</text>
+              <text x="978" y="599" text-anchor="middle" class="tbl-clay">public + friends_only</text>
+              <text x="978" y="617" text-anchor="middle" class="tbl-sub">Automatically unlocked for friends</text>
 
-              <rect x="856" y="612" width="196" height="94" class="tbl-cell"/>
-              <text x="954" y="654" text-anchor="middle" class="tbl-val">Matching scope items</text>
-              <text x="954" y="673" text-anchor="middle" class="tbl-val-sub">+ full edit UI on own shelf</text>
+              <rect x="1122" y="550" width="268" height="82" class="tbl-cell"/>
+              <text x="1256" y="588" text-anchor="middle" class="tbl-val">Matching per scope</text>
+              <text x="1256" y="606" text-anchor="middle" class="tbl-sub">+ full edit UI on own shelf</text>
 
               <!-- Row 2: friends_and_public -->
-              <rect x="48" y="706" width="220" height="90" class="tbl-row-alt"/>
-              <text x="64" y="748" class="tbl-scope">friends_and_public</text>
-              <text x="64" y="768" class="tbl-val-sub">Private items remain hidden</text>
+              <rect x="50" y="632" width="248" height="76" class="tbl-alt"/>
+              <text x="66" y="668" class="tbl-scope">friends_and_public</text>
+              <text x="66" y="686" class="tbl-sub">private items stay hidden</text>
 
-              <rect x="268" y="706" width="196" height="90" class="tbl-cell"/>
-              <text x="366" y="749" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="366" y="768" text-anchor="middle" class="tbl-val-sub">private stays hidden</text>
+              <rect x="298" y="632" width="268" height="76" class="tbl-cell"/>
+              <text x="432" y="668" text-anchor="middle" class="tbl-val">public + friends_only</text>
+              <text x="432" y="686" text-anchor="middle" class="tbl-sub">private stays hidden</text>
 
-              <rect x="464" y="706" width="196" height="90" class="tbl-cell"/>
-              <text x="562" y="749" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="562" y="768" text-anchor="middle" class="tbl-val-sub">private stays hidden</text>
+              <rect x="566" y="632" width="268" height="76" class="tbl-cell"/>
+              <text x="700" y="668" text-anchor="middle" class="tbl-val">public + friends_only</text>
+              <text x="700" y="686" text-anchor="middle" class="tbl-sub">private stays hidden</text>
 
-              <rect x="660" y="706" width="196" height="90" class="tbl-cell"/>
-              <text x="758" y="749" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="758" y="768" text-anchor="middle" class="tbl-val-sub">private stays hidden</text>
+              <rect x="834" y="632" width="288" height="76" class="tbl-cell"/>
+              <text x="978" y="668" text-anchor="middle" class="tbl-val">public + friends_only</text>
+              <text x="978" y="686" text-anchor="middle" class="tbl-sub">private stays hidden</text>
 
-              <rect x="856" y="706" width="196" height="90" class="tbl-cell"/>
-              <text x="954" y="749" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="954" y="768" text-anchor="middle" class="tbl-val-sub">Matches share filters</text>
+              <rect x="1122" y="632" width="268" height="76" class="tbl-cell"/>
+              <text x="1256" y="668" text-anchor="middle" class="tbl-val">Matching public + friends_only</text>
+              <text x="1256" y="686" text-anchor="middle" class="tbl-sub">Matches share filters</text>
 
               <!-- Row 3: all -->
-              <rect x="48" y="796" width="220" height="92" class="tbl-row-alt"/>
-              <text x="64" y="836" class="tbl-scope">all</text>
-              <text x="64" y="856" class="tbl-val-sub">Explicit full-token unlock</text>
+              <rect x="50" y="708" width="248" height="76" class="tbl-alt"/>
+              <text x="66" y="744" class="tbl-scope">all</text>
+              <text x="66" y="762" class="tbl-sub">Explicit full-token unlock</text>
 
-              <rect x="268" y="796" width="196" height="92" class="tbl-cell"/>
-              <text x="366" y="838" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="366" y="857" text-anchor="middle" class="tbl-val-clay">+ private items</text>
+              <rect x="298" y="708" width="268" height="76" class="tbl-cell"/>
+              <text x="432" y="744" text-anchor="middle" class="tbl-val">public + friends_only + private</text>
+              <text x="432" y="762" text-anchor="middle" class="tbl-sub">Token grants full filtered view</text>
 
-              <rect x="464" y="796" width="196" height="92" class="tbl-cell"/>
-              <text x="562" y="838" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="562" y="857" text-anchor="middle" class="tbl-val-clay">+ private items</text>
+              <rect x="566" y="708" width="268" height="76" class="tbl-cell"/>
+              <text x="700" y="744" text-anchor="middle" class="tbl-val">public + friends_only + private</text>
+              <text x="700" y="762" text-anchor="middle" class="tbl-sub">Token grants full filtered view</text>
 
-              <rect x="660" y="796" width="196" height="92" class="tbl-cell"/>
-              <text x="758" y="838" text-anchor="middle" class="tbl-val">public + friends_only</text>
-              <text x="758" y="857" text-anchor="middle" class="tbl-val-clay">+ private items</text>
+              <rect x="834" y="708" width="288" height="76" class="tbl-cell"/>
+              <text x="978" y="744" text-anchor="middle" class="tbl-val">public + friends_only + private</text>
+              <text x="978" y="762" text-anchor="middle" class="tbl-sub">Token grants full filtered view</text>
 
-              <rect x="856" y="796" width="196" height="92" class="tbl-cell"/>
-              <text x="954" y="838" text-anchor="middle" class="tbl-val">All matching items</text>
-              <text x="954" y="857" text-anchor="middle" class="tbl-val-sub">including private copies</text>
+              <rect x="1122" y="708" width="268" height="76" class="tbl-cell"/>
+              <text x="1256" y="744" text-anchor="middle" class="tbl-val">All matching incl. private</text>
+              <text x="1256" y="762" text-anchor="middle" class="tbl-sub">Full ownership visibility</text>
             </g>
 
-            <!-- Security Invariants Callout (Right of Matrix) -->
-            <g id="bp6-invariants">
-              <rect x="1072" y="568" width="320" height="320" rx="10" class="zone-sec"/>
-              <rect x="1086" y="582" width="84" height="19" rx="5" class="badge-clay"/>
-              <text x="1128" y="595" text-anchor="middle" class="badge-text">INVARIANTS</text>
-              <text x="1178" y="596" class="node-title">Share Token Security</text>
-
-              <rect x="1086" y="614" width="292" height="54" rx="7" class="card"/>
-              <text x="1098" y="633" class="node-mono">256-bit Cryptographic Token</text>
-              <text x="1098" y="652" class="node-body">secrets.token_urlsafe(32) • Optional TTL</text>
-
-              <rect x="1086" y="678" width="292" height="44" rx="7" class="card"/>
-              <text x="1098" y="697" class="node-mono">expires_in_days: 1..365</text>
-              <text x="1098" y="713" class="node-body">Revocable at any time by owner</text>
-
-              <rect x="1086" y="732" width="292" height="66" rx="7" class="card"/>
-              <text x="1098" y="751" class="node-clay">PII &amp; Private Field Scrubbing</text>
-              <text x="1098" y="769" class="node-body">Always strips purchase_price &amp;</text>
-              <text x="1098" y="785" class="node-body">private reading_sessions notes</text>
-
-              <rect x="1086" y="808" width="292" height="66" rx="7" class="card"/>
-              <text x="1098" y="827" class="node-teal">HTTP Cache-Safety Headers</text>
-              <text x="1098" y="845" class="node-mono">Cache-Control: private, no-store</text>
-              <text x="1098" y="861" class="node-mono">Vary: Authorization, Cookie</text>
+            <!-- Security Invariants Strip -->
+            <g filter="url(#b6-sh)">
+              <rect x="50" y="798" width="1340" height="64" rx="9" class="card-crimson"/>
+              <rect x="64" y="809" width="134" height="19" rx="5" class="b-crimson"/>
+              <text x="131" y="822" text-anchor="middle" class="b-txt">SECURITY INVARIANTS</text>
+              <text x="210" y="822" class="c-mono">256-bit secrets.token_urlsafe(32)  •  Optional TTL (expires_in_days: 1..365)</text>
+              <text x="64" y="846" class="c-crimson">Redaction &amp; Headers: Always strips owner prices, physical_location &amp; private reading_sessions notes  •  Private Cache-Control + Vary: Authorization, Cookie</text>
             </g>
 
-            <!-- Legend -->
-            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="947" class="legend-heading">LEGEND:</text>
-            <rect x="128" y="933" width="18" height="18" rx="4" class="badge-clay"/>
-            <text x="154" y="947" class="legend-text">Private / Friend Bonus / Security Guard</text>
-            <rect x="434" y="933" width="18" height="18" rx="4" class="badge-indigo"/>
-            <text x="460" y="947" class="legend-text">Friends-Only / Mutation Path</text>
-            <rect x="684" y="933" width="18" height="18" rx="4" class="badge-teal"/>
-            <text x="710" y="947" class="legend-text">Public / Cache-Safe Path</text>
-            <line x1="910" y1="943" x2="956" y2="943" class="edge-primary" marker-end="url(#b6-mk-primary)"/>
-            <text x="966" y="947" class="legend-text">Atomic DB Write</text>
-            <line x1="1116" y1="943" x2="1162" y2="943" class="edge-teal" marker-end="url(#b6-mk-teal)"/>
-            <text x="1172" y="947" class="legend-text">Async Fan-Out Invalidation</text>
+            <!-- Legend Bar -->
+            <rect x="36" y="890" width="1368" height="36" rx="9" class="legend-bg"/>
+            <text x="52" y="912" class="legend-h">LEGEND:</text>
+            <rect x="126" y="899" width="16" height="16" rx="4" class="b-crimson"/>
+            <text x="150" y="912" class="legend-t">Private / BOLA 404 / Consent Gate</text>
+            <rect x="406" y="899" width="16" height="16" rx="4" class="b-clay"/>
+            <text x="430" y="912" class="legend-t">Friends-Only / ★ Friend Bonus / v1.2.0</text>
+            <rect x="706" y="899" width="16" height="16" rx="4" class="b-teal"/>
+            <text x="730" y="912" class="legend-t">Public / Async Fan-Out</text>
+            <rect x="920" y="899" width="16" height="16" rx="4" class="b-indigo"/>
+            <text x="944" y="912" class="legend-t">Account Default / Bulk Control</text>
           </svg>

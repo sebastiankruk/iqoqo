@@ -15,258 +15,270 @@
  You should have received a copy of the GNU Affero General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>
 -->
-<svg id="svg-bp10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 960" width="1440" height="960" role="img" aria-labelledby="bp10-title bp10-desc">
-            <title id="bp10-title">10 · Hybrid Web SSR &amp; Capacitor 7 Native Mobile Architecture</title>
-            <desc id="bp10-desc">Modern Athenaeum dual-target build diagram for iqoqo v1.2.0 showing the shared frontend mono-repo branching into Target A Web SSR Docker and Target B Capacitor 7 Native Mobile with _placeholder routing, deep-link OAuth, secure storage, and offline cache resilience.</desc>
-            <style>
-              .bg { fill: #FDFBF7; }
-              .title { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
-              .sub { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 500; fill: #5A6776; }
-              .hdr-pill { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.2; }
-              .hdr-pill-txt { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #2B3D4F; }
-
-              .zone { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.5; stroke-dasharray: 6 4; }
-              .zone-teal { fill: #EEF9F7; stroke: #0F766E; stroke-width: 1.4; stroke-dasharray: 6 4; }
-              .zone-clay { fill: #FFF3EB; stroke: #D15400; stroke-width: 1.4; stroke-dasharray: 6 4; }
-              .zone-title { font-family: 'Merriweather', Georgia, serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
-              .zone-meta { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 600; fill: #5A6776; }
-
-              .card { fill: #FFFFFF; stroke: #D6CFC5; stroke-width: 1.5; }
-              .card-indigo { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.7; }
-              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.7; }
-              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
-              .card-tint-clay { fill: #FFF3EB; stroke: #E5A073; stroke-width: 1; }
-              .card-tint-teal { fill: #EEF9F7; stroke: #5EEAD4; stroke-width: 1; }
-              .card-tint-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
-
-              .badge-indigo { fill: #2B3D4F; }
-              .badge-clay { fill: #D15400; }
-              .badge-teal { fill: #0F766E; }
-              .badge-crimson { fill: #991B1B; }
-              .badge-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
-
-              .c-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
-              .c-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.7px; font-weight: 400; fill: #475569; }
-              .c-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.7px; font-weight: 500; fill: #2B3D4F; }
-              .c-clay { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.7px; font-weight: 600; fill: #D15400; }
-              .c-teal { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.7px; font-weight: 600; fill: #0F766E; }
-              .c-crimson { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.7px; font-weight: 600; fill: #991B1B; }
-
-              .edge-indigo { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
-              .edge-clay { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
-              .edge-teal { fill: none; stroke: #0F766E; stroke-width: 2; stroke-linejoin: round; }
-              .mk-indigo { fill: #2B3D4F; }
-              .mk-clay { fill: #D15400; }
-              .mk-teal { fill: #0F766E; }
-
-              .e-pill { fill: #FDFBF7; stroke: #CBC3B7; stroke-width: 1; }
-              .e-pill-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
-              .e-pill-clay { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
-              .e-pill-clay-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; font-weight: 700; fill: #D15400; }
-
-              .legend-bg { fill: #F6F2EA; stroke: #CBC3B7; stroke-width: 1.25; }
-              .legend-h { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; fill: #2B3D4F; }
-              .legend-t { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 500; fill: #2B3D4F; }
-            </style>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg id="svg-bp10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" width="1440" height="940" role="img" aria-labelledby="bp10-title bp10-desc">
+            <title id="bp10-title">Blueprint 10: Hybrid Web SSR &amp; Capacitor 7 Native Mobile Architecture</title>
+            <desc id="bp10-desc">Modern Athenaeum dual-target build diagram for iqoqo v1.2.0 showing shared frontend mono-repo branching into Target A Web SSR Docker and Target B Capacitor 7 Native Mobile with v1.2.0 Multi-Server Registry, per-server Keychain token isolation, and per-server offline-cache.ts resilience.</desc>
             <defs>
-              <pattern id="b10-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E6DFD5" stroke-width="0.6" opacity="0.45"/>
+              <style>
+                .b10-bg { fill: #FDFBF7; }
+                .b10-frame { fill: none; stroke: #E5DFD3; stroke-width: 2; }
+                .b10-title { font-family: Georgia, 'Merriweather', serif; font-size: 19.5px; font-weight: 700; fill: #2B3D4F; }
+                .b10-sub { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 500; fill: #475569; }
+                .b10-pill-ver { fill: #2B3D4F; }
+                .b10-pill-ver-t { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; font-weight: 600; fill: #FDFBF7; }
+
+                .b10-z-i { fill: #EEF2F6; stroke: #2B3D4F; stroke-width: 1.4; stroke-dasharray: 6 4; }
+                .b10-z-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1.5; stroke-dasharray: 6 4; }
+                .b10-z-t { fill: #ECFDF5; stroke: #0F766E; stroke-width: 1.5; stroke-dasharray: 6 4; }
+                .b10-z-title { font-family: Georgia, 'Merriweather', serif; font-size: 13px; font-weight: 700; fill: #2B3D4F; }
+                .b10-z-meta { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #64748B; }
+
+                .b10-card { fill: #FFFFFF; stroke: #CBD5E1; stroke-width: 1.3; }
+                .b10-card-i { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.65; }
+                .b10-card-c { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.85; }
+                .b10-card-t { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.65; }
+                .b10-card-r { fill: #FFFFFF; stroke: #991B1B; stroke-width: 1.75; }
+
+                .b10-b-i { fill: #2B3D4F; }
+                .b10-b-c { fill: #D15400; }
+                .b10-b-t { fill: #0F766E; }
+                .b10-b-r { fill: #991B1B; }
+                .b10-b-txt { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; font-weight: 700; fill: #FFFFFF; }
+
+                .b10-ct { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12.2px; font-weight: 700; fill: #2B3D4F; }
+                .b10-cb { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.2px; font-weight: 400; fill: #475569; }
+                .b10-cm { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 500; fill: #2B3D4F; }
+                .b10-cc { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #D15400; }
+                .b10-cl { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #0F766E; }
+                .b10-cr { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.2px; font-weight: 700; fill: #991B1B; }
+
+                .b10-p-i { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+                .b10-p-c { fill: #FFF3EB; stroke: #D15400; stroke-width: 1; }
+                .b10-p-t { fill: #ECFDF5; stroke: #0F766E; stroke-width: 1; }
+                .b10-p-r { fill: #FEF2F2; stroke: #991B1B; stroke-width: 1; }
+                .b10-pt-i { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 600; fill: #2B3D4F; }
+                .b10-pt-c { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #D15400; }
+                .b10-pt-t { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.8px; font-weight: 700; fill: #0F766E; }
+
+                .b10-ei { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
+                .b10-ec { fill: none; stroke: #D15400; stroke-width: 2; stroke-linejoin: round; }
+                .b10-et { fill: none; stroke: #0F766E; stroke-width: 2; stroke-linejoin: round; }
+
+                .b10-leg { fill: #F6F2EA; stroke: #E5DFD3; stroke-width: 1.3; }
+                .b10-leg-h { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+                .b10-leg-t { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.6px; font-weight: 500; fill: #2B3D4F; }
+              </style>
+              <pattern id="b10-dots" width="22" height="22" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="0.9" fill="#E5DFD3"/>
               </pattern>
-              <filter id="b10-shadow" x="-6%" y="-6%" width="112%" height="118%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2B3D4F" flood-opacity="0.08"/>
+              <filter id="b10-sh" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2B3D4F" flood-opacity="0.08"/>
               </filter>
-              <marker id="b10-mk-indigo" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-indigo"/>
-              </marker>
-              <marker id="b10-mk-clay" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-clay"/>
-              </marker>
-              <marker id="b10-mk-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-teal"/>
-              </marker>
+              <marker id="b10-mki" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#2B3D4F"/></marker>
+              <marker id="b10-mkc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#D15400"/></marker>
+              <marker id="b10-mkt" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="#0F766E"/></marker>
             </defs>
 
-            <!-- Background -->
-            <rect x="0" y="0" width="1440" height="960" class="bg"/>
-            <rect x="0" y="0" width="1440" height="960" fill="url(#b10-grid)"/>
+            <!-- Background & Border -->
+            <rect x="0" y="0" width="1440" height="940" class="b10-bg"/>
+            <rect x="0" y="0" width="1440" height="940" fill="url(#b10-dots)"/>
+            <rect x="1" y="1" width="1438" height="938" class="b10-frame"/>
 
-            <!-- Header -->
-            <text x="32" y="36" class="title">10 · Hybrid Web SSR &amp; Capacitor 7 Native Mobile Architecture</text>
-            <text x="32" y="57" class="sub">iqoqo v1.2.0  •  Dual-Target Mono-Repo Build, _placeholder Native Flight Routing, Deep-Link OAuth &amp; Offline Resilience</text>
-            <rect x="1174" y="16" width="234" height="32" rx="8" class="hdr-pill"/>
-            <text x="1291" y="36" text-anchor="middle" class="hdr-pill-txt">Dual-Target Build &amp; Mobile</text>
+            <!-- Top Header Bar -->
+            <rect x="36" y="17" width="102" height="22" rx="5" class="b10-b-i"/>
+            <text x="87" y="32" text-anchor="middle" class="b10-b-txt">BLUEPRINT 10</text>
+            <text x="150" y="35" class="b10-title">Blueprint 10: Hybrid Web SSR &amp; Capacitor 7 Native Mobile Architecture</text>
+            <text x="36" y="57" class="b10-sub">Dual-Target Next.js 16 Mono-Repo • v1.2.0 Multi-Server Registry • Per-Server Keychain &amp; Scoped Offline Cache</text>
+            <rect x="1152" y="17" width="252" height="30" rx="15" class="b10-pill-ver"/>
+            <circle cx="1170" cy="32" r="4" fill="#D15400"/>
+            <text x="1284" y="36" text-anchor="middle" class="b10-pill-ver-t">iqoqo v1.2.0 • Modern Athenaeum</text>
+            <line x1="36" y1="71" x2="1404" y2="71" stroke="#E5DFD3" stroke-width="1.2"/>
 
-            <!-- ==================== TOP SOURCE BANNER ==================== -->
-            <g filter="url(#b10-shadow)">
-              <rect x="32" y="76" width="1376" height="58" rx="12" class="card-indigo"/>
-              <rect x="46" y="93" width="96" height="24" rx="6" class="badge-indigo"/>
-              <text x="94" y="109" text-anchor="middle" class="badge-txt">MONO-REPO</text>
-              <text x="156" y="110" class="zone-title">Single Source: frontend/</text>
-              <rect x="360" y="93" width="248" height="24" rx="6" class="card-tint-indigo"/>
-              <text x="484" y="109" text-anchor="middle" class="c-mono">Next.js 16.4.6 App Router</text>
-              <rect x="620" y="93" width="148" height="24" rx="6" class="card-tint-indigo"/>
-              <text x="694" y="109" text-anchor="middle" class="c-mono">React 19.2.8</text>
-              <rect x="780" y="93" width="148" height="24" rx="6" class="card-tint-indigo"/>
-              <text x="854" y="109" text-anchor="middle" class="c-mono">TypeScript 5</text>
-              <rect x="940" y="93" width="170" height="24" rx="6" class="card-tint-teal"/>
-              <text x="1025" y="109" text-anchor="middle" class="c-teal">Tailwind CSS v4</text>
-              <text x="1392" y="109" text-anchor="end" class="zone-meta">SHARED UI, HOOKS &amp; TYPES</text>
+            <!-- ==================== TOP SHARED MONO-REPO NODE ==================== -->
+            <g filter="url(#b10-sh)">
+              <rect x="36" y="84" width="1368" height="54" rx="11" class="b10-card-i"/>
+              <rect x="50" y="100" width="102" height="22" rx="5" class="b10-b-i"/>
+              <text x="101" y="115" text-anchor="middle" class="b10-b-txt">MONO-REPO</text>
+              <text x="166" y="116" class="b10-z-title">Shared frontend/</text>
+              <rect x="312" y="99" width="224" height="24" rx="6" class="b10-p-i"/>
+              <text x="424" y="115" text-anchor="middle" class="b10-pt-i">Next.js 16.4.6 App Router</text>
+              <rect x="548" y="99" width="128" height="24" rx="6" class="b10-p-i"/>
+              <text x="612" y="115" text-anchor="middle" class="b10-pt-i">React 19.2.8</text>
+              <rect x="688" y="99" width="128" height="24" rx="6" class="b10-p-i"/>
+              <text x="752" y="115" text-anchor="middle" class="b10-pt-i">TypeScript 5</text>
+              <rect x="828" y="99" width="132" height="24" rx="6" class="b10-p-t"/>
+              <text x="894" y="115" text-anchor="middle" class="b10-pt-t">Tailwind v4</text>
+              <rect x="972" y="99" width="166" height="24" rx="6" class="b10-p-t"/>
+              <text x="1055" y="115" text-anchor="middle" class="b10-pt-t">TanStack Query v5</text>
+              <text x="1390" y="115" text-anchor="end" class="b10-z-meta">SINGLE UI CODEBASE</text>
             </g>
 
-            <!-- Branching Arrows from Mono-Repo to Target A & Target B -->
-            <path d="M 353 134 L 353 168" class="edge-indigo" marker-end="url(#b10-mk-indigo)"/>
-            <rect x="292" y="141" width="122" height="19" rx="5" class="e-pill"/>
-            <text x="353" y="154" text-anchor="middle" class="e-pill-txt">next build (SSR)</text>
+            <!-- Branch Arrows -->
+            <path d="M 361 138 L 361 170" class="b10-ei" marker-end="url(#b10-mki)"/>
+            <rect x="296" y="144" width="130" height="18" rx="4" class="b10-p-i"/>
+            <text x="361" y="156" text-anchor="middle" class="b10-pt-i">next build (SSR)</text>
 
-            <path d="M 1057 134 L 1057 168" class="edge-clay" marker-end="url(#b10-mk-clay)"/>
-            <rect x="974" y="141" width="166" height="19" rx="5" class="e-pill-clay"/>
-            <text x="1057" y="154" text-anchor="middle" class="e-pill-clay-txt">CAPACITOR_BUILD=true</text>
+            <path d="M 1059 138 L 1059 170" class="b10-ec" marker-end="url(#b10-mkc)"/>
+            <rect x="974" y="144" width="170" height="18" rx="4" class="b10-p-c"/>
+            <text x="1059" y="156" text-anchor="middle" class="b10-pt-c">CAPACITOR_BUILD=true</text>
 
             <!-- ==================== LEFT COLUMN: TARGET A (WEB SSR) ==================== -->
-            <rect x="32" y="170" width="642" height="492" rx="14" class="zone"/>
-            <rect x="46" y="182" width="76" height="20" rx="5" class="badge-indigo"/>
-            <text x="84" y="196" text-anchor="middle" class="badge-txt">TARGET A</text>
-            <text x="132" y="197" class="zone-title">Web SSR / Docker (next build)</text>
-            <text x="660" y="196" text-anchor="end" class="zone-meta">SERVER RUNTIME</text>
+            <rect x="36" y="172" width="650" height="482" rx="14" class="b10-z-i"/>
+            <rect x="50" y="183" width="74" height="19" rx="5" class="b10-b-i"/>
+            <text x="87" y="196" text-anchor="middle" class="b10-b-txt">TARGET A</text>
+            <text x="134" y="197" class="b10-z-title">Web SSR / Docker (next build)</text>
+            <text x="672" y="196" text-anchor="end" class="b10-z-meta">NODE.JS SERVER</text>
 
-            <!-- Card A1: Runtime & Proxy -->
-            <g filter="url(#b10-shadow)">
-              <rect x="48" y="212" width="610" height="128" rx="10" class="card-indigo"/>
-              <text x="62" y="234" class="c-title">Node.js Runtime &amp; Auth Proxy</text>
-              <rect x="464" y="220" width="182" height="19" rx="5" class="card-tint-indigo"/>
-              <text x="555" y="233" text-anchor="middle" class="c-mono">No Deprecated Edge</text>
-              <text x="62" y="258" class="c-mono">frontend/proxy.ts  •  Next.js 16 Node.js Runtime</text>
-              <text x="62" y="278" class="c-body">• Handles page-level auth routing &amp; redirects cleanly on Node runtime</text>
-              <text x="62" y="298" class="c-mono">• next.config.ts: proxyTimeout: 120s  |  proxyClientMaxBodySize: 60mb</text>
-              <text x="62" y="318" class="c-body">• Supports long SPARQL queries &amp; 50MP batch cover uploads</text>
+            <!-- Card A1: Node.js Runtime -->
+            <g filter="url(#b10-sh)">
+              <rect x="50" y="212" width="622" height="126" rx="9" class="b10-card-i"/>
+              <text x="62" y="233" class="b10-ct">Node.js Runtime &amp; Routing Proxy</text>
+              <rect x="508" y="220" width="152" height="18" rx="4" class="b10-p-i"/>
+              <text x="584" y="232" text-anchor="middle" class="b10-pt-i">Zero Edge Deprecation</text>
+              <text x="62" y="256" class="b10-cm">next.config.ts  •  frontend/proxy.ts (Node.js routing proxy)</text>
+              <text x="62" y="276" class="b10-cb">• Page-level auth routing &amp; redirects execute natively on Node.js runtime</text>
+              <text x="62" y="296" class="b10-cm">• proxyTimeout: 120s  |  proxyClientMaxBodySize: 60mb</text>
+              <text x="62" y="316" class="b10-cb">• Accommodates complex SPARQL queries &amp; 50MP batch cover uploads</text>
             </g>
 
-            <!-- Card A2: Transport -->
-            <g filter="url(#b10-shadow)">
-              <rect x="48" y="354" width="610" height="120" rx="10" class="card"/>
-              <text x="62" y="376" class="c-title">Dual-Hop SSR &amp; Browser Transport</text>
-              <text x="62" y="400" class="c-mono">Server Components (RSC) → FLASK_API_URL=http://web:5000/api</text>
-              <text x="62" y="420" class="c-body">• Zero external network hop inside Docker bridge (iqoqo_default)</text>
-              <text x="62" y="442" class="c-mono">Browser SPA Client      → Nginx Edge Proxy (/api/*)</text>
-              <text x="62" y="460" class="c-body">• TanStack React Query v5 caching &amp; retries over Axios client</text>
+            <!-- Card A2: SSR & BFF Transport -->
+            <g filter="url(#b10-sh)">
+              <rect x="50" y="350" width="622" height="126" rx="9" class="b10-card"/>
+              <text x="62" y="371" class="b10-ct">SSR &amp; Browser BFF Transport</text>
+              <text x="62" y="395" class="b10-cm">Server Components (RSC) → FLASK_API_URL=http://web:5000/api</text>
+              <text x="62" y="415" class="b10-cb">• Internal Docker bridge hop (iqoqo_default) with zero public round-trip</text>
+              <text x="62" y="437" class="b10-cm">Browser Client (SPA)    → Nginx Reverse Proxy (/api/*)</text>
+              <text x="62" y="457" class="b10-cb">• TanStack Query v5 caching, retries &amp; optimistic UI updates</text>
             </g>
 
-            <!-- Card A3: Web Auth & Revocation -->
-            <g filter="url(#b10-shadow)">
-              <rect x="48" y="488" width="610" height="158" rx="10" class="card-teal"/>
-              <text x="62" y="510" class="c-title">Web Auth BFF &amp; Immediate JWT Revocation</text>
-              <rect x="506" y="496" width="140" height="19" rx="5" class="card-tint-teal"/>
-              <text x="576" y="509" text-anchor="middle" class="c-teal">HttpOnly Session</text>
-              <text x="62" y="534" class="c-mono">1. /api/auth-exchange (BFF Route) → Writes HttpOnly JWT cookie</text>
-              <text x="62" y="554" class="c-body">   Prevents XSS JavaScript access to session token in browser</text>
-              <text x="62" y="578" class="c-mono">2. Logout Flow → Forwards Bearer JWT to POST /api/auth/logout</text>
-              <text x="62" y="598" class="c-teal">   Revokes token jti in auth.token_blocklist BEFORE clearing cookie</text>
-              <text x="62" y="622" class="c-body">• Backend Flask enforces JWT signature, expiry &amp; RBAC permissions</text>
+            <!-- Card A3: Cookie Auth & Revocation -->
+            <g filter="url(#b10-sh)">
+              <rect x="50" y="488" width="622" height="152" rx="9" class="b10-card-t"/>
+              <text x="62" y="509" class="b10-ct">Cookie Auth BFF &amp; TokenBlocklist Revocation</text>
+              <rect x="530" y="496" width="130" height="18" rx="4" class="b10-p-t"/>
+              <text x="595" y="508" text-anchor="middle" class="b10-pt-t">HttpOnly Cookie</text>
+              <text x="62" y="533" class="b10-cm">1. /api/auth-exchange (BFF) → Stores JWT in HttpOnly cookie</text>
+              <text x="62" y="553" class="b10-cb">   Blocks JavaScript / XSS access to raw session credentials</text>
+              <text x="62" y="575" class="b10-cm">2. Logout → Forwards Bearer JWT to POST /api/auth/logout</text>
+              <text x="62" y="595" class="b10-cl">   Revokes jti in auth.token_blocklist BEFORE clearing browser cookie</text>
+              <text x="62" y="619" class="b10-cb">• Flask backend enforces cryptographic JWT signature &amp; RBAC matrix</text>
             </g>
 
             <!-- ==================== RIGHT COLUMN: TARGET B (CAPACITOR 7) ==================== -->
-            <rect x="706" y="170" width="702" height="492" rx="14" class="zone-clay"/>
-            <rect x="720" y="182" width="76" height="20" rx="5" class="badge-clay"/>
-            <text x="758" y="196" text-anchor="middle" class="badge-txt">TARGET B</text>
-            <text x="806" y="197" class="zone-title">Capacitor 7 Native Mobile (CAPACITOR_BUILD=true)</text>
-            <text x="1394" y="196" text-anchor="end" class="zone-meta">iOS &amp; ANDROID</text>
+            <rect x="714" y="172" width="690" height="482" rx="14" class="b10-z-c"/>
+            <rect x="728" y="183" width="74" height="19" rx="5" class="b10-b-c"/>
+            <text x="765" y="196" text-anchor="middle" class="b10-b-txt">TARGET B</text>
+            <text x="812" y="197" class="b10-z-title">Capacitor 7 Native Mobile (CAPACITOR_BUILD=true)</text>
+            <text x="1390" y="196" text-anchor="end" class="b10-z-meta">iOS &amp; ANDROID</text>
 
-            <!-- Card B1: Static Export Build -->
-            <g filter="url(#b10-shadow)">
-              <rect x="722" y="212" width="670" height="104" rx="10" class="card-clay"/>
-              <text x="736" y="234" class="c-title">Static Export Bundle &amp; Native WebView Shells</text>
-              <rect x="1220" y="220" width="160" height="19" rx="5" class="card-tint-clay"/>
-              <text x="1300" y="233" text-anchor="middle" class="c-clay">output: "export"</text>
-              <text x="736" y="258" class="c-mono">Build: node scripts/build-capacitor.js &amp;&amp; npx cap sync</text>
-              <text x="736" y="279" class="c-body">• Android: MainActivity.java (RouteProcessor) • Chrome WebView</text>
-              <text x="736" y="298" class="c-body">• iOS: AppDelegate.swift (NextJSRouter) • WKWebView</text>
+            <!-- Card B1: Static Export & Native Routers -->
+            <g filter="url(#b10-sh)">
+              <rect x="728" y="212" width="662" height="126" rx="9" class="b10-card-i"/>
+              <text x="740" y="233" class="b10-ct">Static Export &amp; Native WebView Routers</text>
+              <rect x="1152" y="220" width="226" height="18" rx="4" class="b10-p-i"/>
+              <text x="1265" y="232" text-anchor="middle" class="b10-pt-i">node scripts/build-capacitor.js &amp;&amp; cap sync</text>
+              <text x="740" y="255" class="b10-cm">Android: MainActivity.java (RouteProcessor)  •  iOS: AppDelegate.swift (NextJSRouter)</text>
+              <text x="740" y="275" class="b10-cb">• Intercepts .html &amp; .txt Next Flight requests for dynamic routes → _placeholder</text>
+              <text x="740" y="294" class="b10-cm">• useResolvedRouteParam() resolves live URL segment at runtime</text>
+              <text x="740" y="314" class="b10-cl">• Exact slug parity maintained across all 5 static /help/* articles</text>
             </g>
 
-            <!-- Card B2: Dynamic _placeholder Routing -->
-            <g filter="url(#b10-shadow)">
-              <rect x="722" y="330" width="670" height="146" rx="10" class="card"/>
-              <text x="736" y="352" class="c-title">Dynamic _placeholder &amp; Next Flight (.txt) Routing</text>
-              <text x="736" y="374" class="c-mono">Routes: /item/[id], /work/[id], /expression/[id], /manifestation/[id],</text>
-              <text x="736" y="390" class="c-mono">        /u/[username], /share/[token], /help/[slug]</text>
-              <text x="736" y="412" class="c-body">• generateStaticParams() emits single _placeholder shell per dynamic segment</text>
-              <text x="736" y="431" class="c-clay">• RouteProcessor / NextJSRouter rewrite .html &amp; .txt Flight fetches → _placeholder</text>
-              <text x="736" y="450" class="c-teal">• useResolvedRouteParam() reads live URL; exact slug parity on 5 static /help/*</text>
+            <!-- Card B2: v1.2.0 NEW Multi-Server Registry (Clay Highlight) -->
+            <g filter="url(#b10-sh)">
+              <rect x="728" y="348" width="662" height="142" rx="9" class="b10-card-c"/>
+              <rect x="740" y="358" width="76" height="18" rx="4" class="b10-b-c"/>
+              <text x="778" y="370" text-anchor="middle" class="b10-b-txt">v1.2.0 NEW</text>
+              <text x="826" y="371" class="b10-ct">Multi-Server Registry &amp; Library Switcher</text>
+              <rect x="1220" y="358" width="158" height="18" rx="4" class="b10-p-c"/>
+              <text x="1299" y="370" text-anchor="middle" class="b10-pt-c">iqoqo_servers_v1</text>
+              <text x="740" y="394" class="b10-cc">ServerProfile[] in iqoqo_servers_v1  •  iqoqo_active_server_id</text>
+              <text x="740" y="413" class="b10-cm">migrateLegacyServerStorage() upgrades single-server installs cleanly</text>
+              <text x="740" y="433" class="b10-cb">• Verifies /api/health + /api/auth/providers before adding any instance</text>
+              <text x="740" y="452" class="b10-cb">• Add, rename, switch, or remove libraries via &lt;ServerSelector /&gt;,</text>
+              <text x="740" y="468" class="b10-cm">  &lt;ServerSelectorModal /&gt;, and native Footer switcher</text>
             </g>
 
-            <!-- Card B3: Native Auth, Deep Links & Secure Storage -->
-            <g filter="url(#b10-shadow)">
-              <rect x="722" y="490" width="670" height="156" rx="10" class="card-indigo"/>
-              <text x="736" y="512" class="c-title">ServerSelector, Native OAuth Deep Links &amp; Secure Storage</text>
-              <text x="736" y="534" class="c-mono">1. ServerSelector probes /api/health + /api/auth/providers (HASS model)</text>
-              <text x="736" y="554" class="c-mono">2. Transport: withCredentials=false • Bearer Auth (capacitor://, https://localhost)</text>
-              <text x="736" y="574" class="c-clay">3. Google / Apple Native OAuth → single-use OAuthExchangeCode</text>
-              <text x="736" y="592" class="c-clay">   → Deep Link: iqoqo://auth-exchange?code=... (System Browser Handoff)</text>
-              <rect x="736" y="604" width="642" height="30" rx="6" class="card-tint-teal"/>
-              <text x="748" y="623" class="c-teal">@capacitor-community/secure-storage → iOS Keychain / Android EncryptedSharedPrefs</text>
+            <!-- Card B3: Per-Server Auth & Deep-Link Security -->
+            <g filter="url(#b10-sh)">
+              <rect x="728" y="500" width="662" height="140" rx="9" class="b10-card-r"/>
+              <rect x="740" y="510" width="68" height="18" rx="4" class="b10-b-r"/>
+              <text x="774" y="522" text-anchor="middle" class="b10-b-txt">SECURITY</text>
+              <text x="818" y="523" class="b10-ct">Per-Server Auth &amp; Deep-Link OAuth</text>
+              <rect x="1222" y="510" width="156" height="18" rx="4" class="b10-p-t"/>
+              <text x="1300" y="522" text-anchor="middle" class="b10-pt-t">withCredentials=false</text>
+              <text x="740" y="546" class="b10-cb">• Bearer Authorization transport across capacitor://localhost &amp; https://localhost</text>
+              <text x="740" y="565" class="b10-cr">• Google / Apple Native OAuth → single-use OAuthExchangeCode</text>
+              <text x="740" y="583" class="b10-cm">  → System Browser Deep Link: iqoqo://auth-exchange</text>
+              <rect x="740" y="594" width="638" height="34" rx="6" class="b10-p-t"/>
+              <text x="750" y="615" class="b10-cl">Isolated per server: iqoqo_auth_token_&lt;serverId&gt; in iOS Keychain / Android EncryptedSharedPrefs</text>
             </g>
 
-            <!-- Connector Target B -> Offline Strip -->
-            <path d="M 1057 662 L 1057 688" class="edge-teal" marker-end="url(#b10-mk-teal)"/>
+            <!-- Connector Target B -> Bottom Offline Strip -->
+            <path d="M 1059 654 L 1059 676" class="b10-et" marker-end="url(#b10-mkt)"/>
 
-            <!-- ==================== BOTTOM STRIP: OFFLINE RESILIENCE ==================== -->
-            <rect x="32" y="690" width="1376" height="198" rx="14" class="zone-teal"/>
-            <rect x="46" y="702" width="76" height="20" rx="5" class="badge-teal"/>
-            <text x="84" y="716" text-anchor="middle" class="badge-txt">OFFLINE</text>
-            <text x="132" y="717" class="zone-title">Offline Collection &amp; Scan Resilience</text>
-            <rect x="412" y="702" width="276" height="20" rx="5" class="card-tint-indigo"/>
-            <text x="550" y="715" text-anchor="middle" class="c-mono">frontend/lib/capacitor/offline-cache.ts</text>
+            <!-- ==================== BOTTOM STRIP: v1.2.0 OFFLINE RESILIENCE ==================== -->
+            <rect x="36" y="678" width="1368" height="200" rx="14" class="b10-z-t"/>
+            <rect x="50" y="689" width="76" height="19" rx="5" class="b10-b-c"/>
+            <text x="88" y="702" text-anchor="middle" class="b10-b-txt">v1.2.0 NEW</text>
+            <text x="136" y="703" class="b10-z-title">Per-Server Offline Collection &amp; Scan Resilience</text>
+            <rect x="464" y="689" width="268" height="19" rx="5" class="b10-p-i"/>
+            <text x="598" y="702" text-anchor="middle" class="b10-pt-i">frontend/lib/capacitor/offline-cache.ts</text>
 
-            <!-- Offline Card 1 -->
-            <g filter="url(#b10-shadow)">
-              <rect x="48" y="736" width="424" height="136" rx="10" class="card"/>
-              <rect x="60" y="747" width="24" height="19" rx="5" class="badge-teal"/>
-              <text x="72" y="760" text-anchor="middle" class="badge-txt">1</text>
-              <text x="92" y="761" class="c-title">Snapshot Persistence (/collection)</text>
-              <text x="60" y="784" class="c-body">• Persists full collection + wishlist snapshots on device</text>
-              <text x="60" y="803" class="c-body">• Displays "Offline Mode — Viewing Cached Library"</text>
-              <text x="60" y="822" class="c-body">  banner in zero-signal basements &amp; bookstores</text>
-              <text x="60" y="848" class="c-clay">• Invariant: Never overwritten by filtered subsets</text>
+            <!-- Stage 1 -->
+            <g filter="url(#b10-sh)">
+              <rect x="50" y="720" width="424" height="144" rx="9" class="b10-card-t"/>
+              <rect x="62" y="731" width="22" height="18" rx="4" class="b10-b-t"/>
+              <text x="73" y="743" text-anchor="middle" class="b10-b-txt">1</text>
+              <text x="92" y="744" class="b10-ct">Namespaced Snapshots</text>
+              <text x="62" y="768" class="b10-cl">scopedCacheKey(serverId, ...)</text>
+              <text x="62" y="789" class="b10-cb">• Persists full collection + wishlist snapshots</text>
+              <text x="62" y="806" class="b10-cb">  strictly isolated per server profile</text>
+              <text x="62" y="832" class="b10-cc">• Invariant: Never overwrites full cache</text>
+              <text x="62" y="848" class="b10-cc">  with filtered collection subsets</text>
             </g>
 
-            <!-- Offline Card 2 -->
-            <g filter="url(#b10-shadow)">
-              <rect x="508" y="736" width="424" height="136" rx="10" class="card"/>
-              <rect x="520" y="747" width="24" height="19" rx="5" class="badge-teal"/>
-              <text x="532" y="760" text-anchor="middle" class="badge-txt">2</text>
-              <text x="552" y="761" class="c-title">Offline Duplicate Check (/scan)</text>
-              <text x="520" y="784" class="c-body">• Barcode camera scans check local cached snapshot</text>
-              <text x="520" y="803" class="c-body">  immediately when backend is unreachable</text>
-              <text x="520" y="822" class="c-body">• Prevents buying duplicate editions at book fairs</text>
-              <text x="520" y="848" class="c-teal">• Queues manual entries locally for reconnect flush</text>
+            <!-- Stage 2 -->
+            <g filter="url(#b10-sh)">
+              <rect x="508" y="720" width="424" height="144" rx="9" class="b10-card-t"/>
+              <rect x="520" y="731" width="22" height="18" rx="4" class="b10-b-t"/>
+              <text x="531" y="743" text-anchor="middle" class="b10-b-txt">2</text>
+              <text x="550" y="744" class="b10-ct">Offline UX &amp; Duplicate Guard</text>
+              <text x="520" y="768" class="b10-cm">/collection → "Offline Mode — Viewing Cached Library"</text>
+              <text x="520" y="789" class="b10-cb">• /scan duplicate-checks scanned barcodes</text>
+              <text x="520" y="806" class="b10-cb">  locally against active server's snapshot</text>
+              <text x="520" y="832" class="b10-cl">• Queues offline manual scans per serverId</text>
+              <text x="520" y="848" class="b10-cb">  until connectivity is restored</text>
             </g>
 
-            <!-- Offline Card 3 -->
-            <g filter="url(#b10-shadow)">
-              <rect x="968" y="736" width="424" height="136" rx="10" class="card-teal"/>
-              <rect x="980" y="747" width="24" height="19" rx="5" class="badge-teal"/>
-              <text x="992" y="760" text-anchor="middle" class="badge-txt">3</text>
-              <text x="1012" y="761" class="c-title">Reconnect Sync &amp; Purge Safety</text>
-              <text x="980" y="784" class="c-mono">flushOfflineManualQueue() [In-Flight Mutex]</text>
-              <text x="980" y="804" class="c-body">• Prevents duplicate POST replay on flaky networks</text>
-              <text x="980" y="824" class="c-crimson">• Security Purge: Wipes all cached snapshots</text>
-              <text x="980" y="842" class="c-crimson">  immediately on logout or instance switch</text>
+            <!-- Stage 3 -->
+            <g filter="url(#b10-sh)">
+              <rect x="966" y="720" width="424" height="144" rx="9" class="b10-card-c"/>
+              <rect x="978" y="731" width="22" height="18" rx="4" class="b10-b-c"/>
+              <text x="989" y="743" text-anchor="middle" class="b10-b-txt">3</text>
+              <text x="1008" y="744" class="b10-ct">Safe Reconnect &amp; Isolation</text>
+              <text x="978" y="768" class="b10-cm">flushOfflineManualQueue() [In-Flight Mutex]</text>
+              <text x="978" y="789" class="b10-cb">• Syncs queued entries without duplicate POSTs</text>
+              <text x="978" y="810" class="b10-cl">• Switching servers preserves sibling caches</text>
+              <text x="978" y="834" class="b10-cr">• Purges cache ONLY on server removal or</text>
+              <text x="978" y="850" class="b10-cr">  explicit user logout</text>
             </g>
 
-            <!-- Offline Flow Arrows -->
-            <path d="M 472 804 L 506 804" class="edge-teal" marker-end="url(#b10-mk-teal)"/>
-            <path d="M 932 804 L 966 804" class="edge-teal" marker-end="url(#b10-mk-teal)"/>
+            <!-- Offline Arrows -->
+            <path d="M 474 792 L 506 792" class="b10-et" marker-end="url(#b10-mkt)"/>
+            <path d="M 932 792 L 964 792" class="b10-et" marker-end="url(#b10-mkt)"/>
 
-            <!-- Legend -->
-            <rect x="32" y="904" width="1376" height="42" rx="10" class="legend-bg"/>
-            <text x="50" y="929" class="legend-h">LEGEND:</text>
-            <line x1="128" y1="925" x2="174" y2="925" class="edge-indigo" marker-end="url(#b10-mk-indigo)"/>
-            <text x="184" y="929" class="legend-t">Web SSR Build Path</text>
-            <line x1="346" y1="925" x2="392" y2="925" class="edge-clay" marker-end="url(#b10-mk-clay)"/>
-            <text x="402" y="929" class="legend-t">Capacitor 7 Static Export Path</text>
-            <line x1="628" y1="925" x2="674" y2="925" class="edge-teal" marker-end="url(#b10-mk-teal)"/>
-            <text x="684" y="929" class="legend-t">Offline Cache &amp; Reconnect Flow</text>
-            <rect x="930" y="915" width="18" height="18" rx="4" class="badge-indigo"/>
-            <text x="956" y="929" class="legend-t">Node.js SSR / Shared Core</text>
-            <rect x="1150" y="915" width="18" height="18" rx="4" class="badge-clay"/>
-            <text x="1176" y="929" class="legend-t">Native iOS / Android Bridge</text>
+            <!-- Bottom Legend Bar -->
+            <rect x="36" y="890" width="1368" height="36" rx="9" class="b10-leg"/>
+            <text x="52" y="912" class="b10-leg-h">LEGEND:</text>
+            <line x1="126" y1="908" x2="168" y2="908" class="b10-ei" marker-end="url(#b10-mki)"/>
+            <text x="178" y="912" class="b10-leg-t">Web SSR Build Path</text>
+            <line x1="336" y1="908" x2="378" y2="908" class="b10-ec" marker-end="url(#b10-mkc)"/>
+            <text x="388" y="912" class="b10-leg-t">Capacitor 7 Static Export</text>
+            <line x1="582" y1="908" x2="624" y2="908" class="b10-et" marker-end="url(#b10-mkt)"/>
+            <text x="634" y="912" class="b10-leg-t">Per-Server Offline Cache Flow</text>
+            <rect x="862" y="899" width="16" height="16" rx="4" class="b10-b-c"/>
+            <text x="886" y="912" class="b10-leg-t">v1.2.0 Multi-Server &amp; Cache</text>
+            <rect x="1104" y="899" width="16" height="16" rx="4" class="b10-b-r"/>
+            <text x="1128" y="912" class="b10-leg-t">Keychain / Deep-Link Security</text>
           </svg>
