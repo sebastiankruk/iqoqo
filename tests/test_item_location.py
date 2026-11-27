@@ -258,3 +258,75 @@ def test_search_and_facets_respect_location_filter_and_privacy(client, app, norm
         == 200
     )
     assert client.get(f"/api/items/{id2}", headers=normal_user_headers).get_json()["data"]["physical_location"] is None
+
+
+def test_item_update_preserves_derived_reading_totals_and_handles_dirty_meta(client, app, normal_user_headers):
+    """PUT/PATCH /api/items/<id> must neither overwrite nor wipe session-derived reading totals."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    created = client.post(
+        "/api/items/manual",
+        json={"Title": "Protected Duration Book", "Authors": ["Author X"], "Format": "book"},
+        headers=normal_user_headers,
+    )
+    assert created.status_code in (200, 201)
+    created_data = created.get_json()["data"]
+    item_id = created_data.get("item_id") or created_data.get("id")
+
+    session_res = client.post(
+        f"/api/items/{item_id}/reading-sessions",
+        json={"duration_minutes": 45, "pages_read": 20, "note": "Good start"},
+        headers=normal_user_headers,
+    )
+    assert session_res.status_code == 201
+    assert session_res.get_json()["data"]["reading_duration_summary"]["total_minutes"] == 45
+
+    patch_res = client.patch(
+        f"/api/items/{item_id}",
+        json={
+            "physical_location": "Study / Shelf B",
+            "total_reading_minutes": 12345,
+            "meta": {
+                "total_reading_minutes": "bad",
+                "reading_sessions_count": 999,
+                "reading_sessions": [],
+                "notes": "Curator note kept",
+            },
+        },
+        headers=normal_user_headers,
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.get_json()["data"]["physical_location"] == "Study / Shelf B"
+
+    put_res = client.put(
+        f"/api/items/{item_id}",
+        json={"meta": {"total_reading_minutes": 9999}},
+        headers=normal_user_headers,
+    )
+    assert put_res.status_code == 200
+
+    with app.app_context():
+        item = db.session.get(Item, item_id)
+        assert item is not None
+        assert item.meta["notes"] == "Curator note kept"
+        assert item.meta["total_reading_minutes"] == 45
+        assert item.meta["reading_sessions_count"] == 1
+        assert len(item.meta["reading_sessions"]) == 1
+
+        # Legacy corrupted values do not break GET /api/items/<id> or subsequent session logging
+        item.meta["total_reading_minutes"] = "not-an-int"
+        item.meta["reading_sessions_count"] = "bad"
+        flag_modified(item, "meta")
+        db.session.commit()
+
+    get_res = client.get(f"/api/items/{item_id}", headers=normal_user_headers)
+    assert get_res.status_code == 200
+    assert get_res.get_json()["data"]["reading_duration_summary"]["total_minutes"] == 0
+
+    second_log = client.post(
+        f"/api/items/{item_id}/reading-sessions",
+        json={"duration_minutes": 15},
+        headers=normal_user_headers,
+    )
+    assert second_log.status_code == 201
+    assert second_log.get_json()["data"]["reading_duration_summary"]["total_minutes"] == 15

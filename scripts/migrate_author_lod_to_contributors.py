@@ -26,7 +26,7 @@ deterministic precedence, and logs changes to :class:`~app.db.core.EntityAuditLo
 
 Usage:
     python scripts/migrate_author_lod_to_contributors.py --dry-run
-    python scripts/migrate_author_lod_to_contributors.py --apply [--yes]
+    python scripts/migrate_author_lod_to_contributors.py --apply
 """
 
 from __future__ import annotations
@@ -236,12 +236,13 @@ def migrate_author_lod_links(
             old_entity_id = loser.entity_id
             loser_id = loser.id
 
-            if winner is link:
-                # Copy winner scalar fields onto the kept row only after freeing or deleting loser cleanly
-                winner.entity_type = "contributor"
-                winner.entity_id = contributor.id
             session.delete(loser)
             session.flush()
+            if winner is link:
+                # Re-point surviving link only after deleting the conflicting target row cleanly
+                winner.entity_type = "contributor"
+                winner.entity_id = contributor.id
+                session.flush()
             summary["deduplicated"] += 1
             session.add(
                 EntityAuditLog(
@@ -305,7 +306,6 @@ def main(argv: list[str] | None = None) -> int:
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--dry-run", action="store_true", help="Inspect and report changes without mutating DB rows (default).")
     mode_group.add_argument("--apply", action="store_true", help="Persist Contributor backfill and deduplication changes.")
-    parser.add_argument("--yes", action="store_true", help="Skip interactive confirmation in non-production environments.")
     args = parser.parse_args(argv)
 
     dry_run = not args.apply

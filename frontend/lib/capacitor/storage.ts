@@ -273,8 +273,16 @@ export async function getActiveServerId(): Promise<string | null> {
   const stored = await readPref(ACTIVE_SERVER_ID_KEY);
   if (stored) {
     inMemoryActiveServerId = stored;
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(ACTIVE_SERVER_ID_KEY, stored);
+      } catch {
+        // Ignore localStorage mirror errors
+      }
+    }
     return stored;
   }
+  inMemoryActiveServerId = null;
   return null;
 }
 
@@ -566,16 +574,8 @@ async function removeSecureToken(key: string): Promise<void> {
  * @returns {Promise<string | null>} The authentication token or null.
  */
 export async function getAuthToken(serverId?: string): Promise<string | null> {
-  const targetId = serverId ?? getSyncActiveServerId();
-  const scoped = await readSecureToken(tokenKeyForServer(targetId));
-  if (scoped) {
-    return scoped;
-  }
-  if (!serverId && targetId) {
-    // Fallback to legacy un-scoped key only for implicit active server lookup
-    return await readSecureToken(AUTH_TOKEN_KEY);
-  }
-  return null;
+  const targetId = serverId ?? (await getActiveServerId());
+  return await readSecureToken(tokenKeyForServer(targetId));
 }
 
 /**
@@ -587,7 +587,7 @@ export async function getAuthToken(serverId?: string): Promise<string | null> {
  * @returns {Promise<void>}
  */
 export async function setAuthToken(token: string, serverId?: string): Promise<void> {
-  const targetId = serverId ?? getSyncActiveServerId();
+  const targetId = serverId ?? (await getActiveServerId());
   await writeSecureToken(tokenKeyForServer(targetId), token);
 }
 
@@ -598,10 +598,10 @@ export async function setAuthToken(token: string, serverId?: string): Promise<vo
  * @returns {Promise<void>}
  */
 export async function removeAuthToken(serverId?: string): Promise<void> {
-  const targetId = serverId ?? getSyncActiveServerId();
+  const targetId = serverId ?? (await getActiveServerId());
   await clearOfflineCache(targetId ?? undefined);
   await removeSecureToken(tokenKeyForServer(targetId));
-  if (!targetId) {
+  if (!serverId && targetId) {
     await removeSecureToken(AUTH_TOKEN_KEY);
   }
 }

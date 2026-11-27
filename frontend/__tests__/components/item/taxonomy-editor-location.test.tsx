@@ -84,4 +84,16 @@ describe("TaxonomyEditor Physical Location & Tag Promotion (C157)", () => {
     await user.click(screen.getByRole("button", { name: "Move loc: to Physical Location" }));
     expect(mockMutate).toHaveBeenCalledTimes(callCountBefore);
   });
+
+  it("synchronizes locationInput when item.physical_location changes externally", () => {
+    const { rerender } = render(<TaxonomyEditor item={baseItem} />);
+    const locInput = screen.getByLabelText("Physical Location") as HTMLInputElement;
+    expect(locInput.value).toBe("Study / Shelf 1");
+
+    rerender(<TaxonomyEditor item={{ ...baseItem, physical_location: "Attic / Box 9" }} />);
+    expect((screen.getByLabelText("Physical Location") as HTMLInputElement).value).toBe("Attic / Box 9");
+
+    rerender(<TaxonomyEditor item={{ ...baseItem, physical_location: null }} />);
+    expect((screen.getByLabelText("Physical Location") as HTMLInputElement).value).toBe("");
+  });
 });

@@ -464,10 +464,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
     bind = db.session.get_bind()
     dialect_name = bind.dialect.name if bind is not None else "sqlite"
-    if dialect_name == "postgresql":
-        minutes_expr = db.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
-    else:
-        minutes_expr = db.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+    minutes_expr = _safe_total_reading_minutes_expr(dialect_name)
 
     avg_reading_raw = db.session.execute(
         select(func.avg(minutes_expr)).filter(
@@ -1082,7 +1079,38 @@ def _month_bucket_expr(dialect_name: str, column: Any) -> Any:
 
 
 _ACTIVE_READER_STATUSES = ("reading", "read", "listening", "listened", "watching", "watched", "playing", "played", "building", "built")
+_STARTED_READER_STATUSES = ("reading", "currently_reading", "listening", "watching", "playing", "building")
 _COMPLETED_STATUSES = ("read", "listened", "watched", "played", "built")
+
+
+def _safe_total_reading_minutes_expr(dialect_name: str) -> Any:
+    """Return a dialect-safe integer expression for ``Item.meta['total_reading_minutes']``.
+
+    Non-numeric strings, decimals, negatives, and overlong integers yield ``NULL``
+    so malformed metadata never triggers PostgreSQL ``DataError`` HTTP 500s.
+    """
+    if dialect_name == "postgresql":
+        raw_val = Item.meta["total_reading_minutes"].as_string()
+        return db.case(
+            (db.and_(raw_val.isnot(None), raw_val.op("~")(r"^[0-9]{1,9}$")), db.cast(raw_val, db.Integer)),
+            else_=None,
+        )
+
+    raw_val = func.json_extract(Item.meta, "$.total_reading_minutes")
+    val_type = func.typeof(raw_val)
+    return db.case(
+        (val_type == "integer", db.cast(raw_val, db.Integer)),
+        (
+            db.and_(
+                val_type == "text",
+                raw_val != "",
+                func.length(raw_val) <= 9,
+                db.not_(raw_val.op("GLOB")("*[^0-9]*")),
+            ),
+            db.cast(raw_val, db.Integer),
+        ),
+        else_=None,
+    )
 
 
 def _compute_manifestation_stats(manifestation_id: int) -> dict[str, Any]:
@@ -1113,10 +1141,7 @@ def _compute_manifestation_stats(manifestation_id: int) -> dict[str, Any]:
             completed_count += cnt
 
     # 2. Average session minutes across public items
-    if dialect_name == "postgresql":
-        minutes_expr = db.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
-    else:
-        minutes_expr = db.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+    minutes_expr = _safe_total_reading_minutes_expr(dialect_name)
 
     avg_minutes_raw = db.session.execute(
         select(func.avg(minutes_expr)).where(
@@ -1131,9 +1156,7 @@ def _compute_manifestation_stats(manifestation_id: int) -> dict[str, Any]:
     log_span_rows = db.session.execute(
         select(
             ItemStatusLog.item_id,
-            func.min(db.case((ItemStatusLog.new_status.in_(("reading", "currently_reading")), ItemStatusLog.changed_at))).label(
-                "started_at"
-            ),
+            func.min(db.case((ItemStatusLog.new_status.in_(_STARTED_READER_STATUSES), ItemStatusLog.changed_at))).label("started_at"),
             func.max(db.case((ItemStatusLog.new_status.in_(_COMPLETED_STATUSES), ItemStatusLog.changed_at))).label("finished_at"),
         )
         .join(Item, ItemStatusLog.item_id == Item.id)

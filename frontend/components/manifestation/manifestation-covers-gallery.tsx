@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { X, Images } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -35,6 +35,17 @@ export function ManifestationCoversGallery({ manifestationId, primaryCoverUrl }:
   const t = useTranslations("Manifestation");
   const { data: images = [] } = useManifestationImages(manifestationId);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!previewUrl) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewUrl(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewUrl]);
 
   const normalizedPrimary = primaryCoverUrl?.trim() || "";
   const galleryImages = images.filter(img => {

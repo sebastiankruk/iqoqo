@@ -103,6 +103,35 @@ describe("ManifestationCoversGallery", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("closes the cover lightbox preview when pressing Escape", async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          {
+            id: 2,
+            url: "https://covers.example.org/back-scan.jpg",
+            label: "Back Cover Scan",
+            source: "community",
+            added_at: "2026-03-01T10:00:00Z",
+          },
+        ],
+      },
+    });
+
+    renderWithQuery(<ManifestationCoversGallery manifestationId={42} />);
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "Back Cover Scan" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /community/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("renders nothing when all contributed images duplicate the primary cover", async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({
       data: {

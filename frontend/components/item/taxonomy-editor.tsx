@@ -37,7 +37,14 @@ interface TaxonomyEditorProps {
  */
 export function TaxonomyEditor({ item }: TaxonomyEditorProps) {
   const [tagInput, setTagInput] = useState("");
-  const [locationInput, setLocationInput] = useState(item.physical_location ?? "");
+  const propLocation = item.physical_location ?? "";
+  const locationSyncKey = `${item.id}:${propLocation}`;
+  const [locationInput, setLocationInput] = useState(propLocation);
+  const [prevLocationSyncKey, setPrevLocationSyncKey] = useState(locationSyncKey);
+  if (locationSyncKey !== prevLocationSyncKey) {
+    setPrevLocationSyncKey(locationSyncKey);
+    setLocationInput(propLocation);
+  }
   const updateItem = useUpdateItem(item.id);
   const router = useRouter();
 

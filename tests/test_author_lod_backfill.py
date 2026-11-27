@@ -180,3 +180,71 @@ def test_author_lod_backfill_creates_contributor_when_absent(app):
             select(WorkContribution).where(WorkContribution.work_id == work.id, WorkContribution.contributor_id == contrib.id)
         ).scalar_one()
         assert wc.role == "author"
+
+
+def test_author_lod_backfill_deletes_loser_before_updating_winner_and_drops_yes_flag(app, monkeypatch):
+    """Deduplication executes DELETE before re-pointing winner UPDATE; CLI rejects --yes while keeping prod confirmation."""
+    import pytest
+    from sqlalchemy import event
+
+    from scripts.migrate_author_lod_to_contributors import _confirm_production_execution, main
+
+    # Dead --yes CLI flag was removed
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--apply", "--yes"])
+    assert exc_info.value.code == 2
+
+    # Production DB confirmation guard remains enforced
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/iqoqo_prod")
+    monkeypatch.setattr("builtins.input", lambda _prompt: "wrong_db")
+    with pytest.raises(RuntimeError, match="Confirmation mismatch"):
+        _confirm_production_execution()
+
+    # Verify SQL statement order: DELETE of loser precedes UPDATE of winner when winner is work link
+    statements: list[str] = []
+
+    def _capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(" ".join(statement.split()))
+
+    with app.app_context():
+        w = Work(title="Order Guard Work", meta={"authors": ["Isaac Asimov"]})
+        c = Contributor(name="Isaac Asimov", type="person")
+        db.session.add_all([w, c])
+        db.session.flush()
+
+        loser = SemanticLink(
+            entity_type="contributor",
+            entity_id=c.id,
+            authority="dbpedia",
+            external_uri="http://dbpedia.org/resource/Isaac_Asimov",
+            pref_label="Isaac Asimov",
+            confidence=0.60,
+            status="suggested",
+            verified=False,
+        )
+        winner = SemanticLink(
+            entity_type="work",
+            entity_id=w.id,
+            authority="dbpedia",
+            external_uri="http://dbpedia.org/resource/Isaac_Asimov",
+            pref_label="Isaac Asimov",
+            confidence=0.99,
+            status="accepted",
+            attributes={"role": "author"},
+            verified=True,
+        )
+        db.session.add_all([loser, winner])
+        db.session.commit()
+
+        event.listen(db.engine, "before_cursor_execute", _capture_sql)
+        try:
+            res = migrate_author_lod_links(db.session, dry_run=False)
+        finally:
+            event.remove(db.engine, "before_cursor_execute", _capture_sql)
+
+        assert res["deduplicated"] == 1
+        delete_indices = [i for i, stmt in enumerate(statements) if "DELETE FROM" in stmt and "semantic_links" in stmt]
+        update_indices = [i for i, stmt in enumerate(statements) if "UPDATE" in stmt and "semantic_links" in stmt and "entity_type" in stmt]
+        assert delete_indices and update_indices
+        assert delete_indices[0] < update_indices[0]

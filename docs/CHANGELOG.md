@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - TBD
+## [1.2.0] - 2026-11-27
 
 ### Added
 
@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Pre-Merge Security, Mobile Token Isolation, Stats & Release Polish (C171)**:
+  - Guarded PostgreSQL `Item.meta["total_reading_minutes"]` casts via `_safe_total_reading_minutes_expr()` (`^[0-9]{1,9}$`) in `app/api/manifestations.py`, excluded `_DERIVED_ITEM_META_KEYS` from client item overwrites without deleting session totals in `app/api/items.py`, and hardened integer reads in `_compute_reading_duration_summary()` / `log_reading_session()`.
+  - Expanded `_compute_manifestation_stats()` start statuses (`listening`, `watching`, `playing`, `building`) for non-book `avg_reading_days` parity.
+  - Updated `frontend/lib/capacitor/storage.ts` (`getAuthToken`, `setAuthToken`, `removeAuthToken`) to await `getActiveServerId()`, block cross-server legacy token fallback, and clean stale legacy tokens on logout.
+  - Synced `TaxonomyEditor` `locationInput` on external `item.physical_location` updates, added `Escape` lightbox dismissal in `ManifestationCoversGallery`, and updated `scripts/migrate_author_lod_to_contributors.py` to delete losing duplicates and flush before re-pointing surviving links (dropping the dead `--yes` flag).
+  - Synced and archived completed `v1.2.0` OpenSpec changes into `openspec/specs/` (keeping `C168` open for user SVG regeneration and `C170` active for `v1.3.0`).
 - **Author LOD Contributor Ownership, OWL/SHACL Synchronization & Tier Purity Guards (C169)**:
   - Fixed `owl:sameAs` author/work identity collapse by moving author DBpedia `SemanticLink` attachment onto `Contributor` (`app/core/lod_linking_service.py`), updating retrieval, curation (`PATCH`/`DELETE /api/manifestations/<id>/semantic-links`), filters, admin stats, cleanup tasks, and frontend badges (`Contributor Level` / `Poziom twórcy`, `Expression Level` / `Poziom ekspresji`), and adding idempotent backfill script [`scripts/migrate_author_lod_to_contributors.py`](../scripts/migrate_author_lod_to_contributors.py).
   - Updated `app/core/frbr_service.py` and `app/core/export_service.py` to emit dereferenceable `<BASE_URL>/contributors/<id>` IRIs instead of duplicate `BNode` creators, dual `FRBR.*`/`iqoqo:*` types, `iqoqo:SerialWork`/`iqoqo:PublicationIssue`, `iqoqo:User` types on custody/friend IRIs, and reified `iqoqo:ContainerAggregation` and full-profile `iqoqo:ImageScan` nodes.

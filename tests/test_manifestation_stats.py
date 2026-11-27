@@ -224,3 +224,111 @@ def test_manifestation_stats_friends_only_exclusion_media_statuses_and_12_month_
     assert len(data["popularity_over_time"]) == 12
     assert data["popularity_over_time"][0]["month"] == "2025-03"
     assert data["popularity_over_time"][-1]["month"] == "2026-02"
+
+
+def test_manifestation_stats_ignores_malformed_reading_minutes_without_500(client, app):
+    """Non-integer or overflowing Item.meta['total_reading_minutes'] values return NULL safely without HTTP 500."""
+    from sqlalchemy.dialects import postgresql
+
+    from app.api.manifestations import _safe_total_reading_minutes_expr
+
+    compiled = _safe_total_reading_minutes_expr("postgresql").compile(dialect=postgresql.dialect())
+    pg_sql = str(compiled)
+    assert "CASE WHEN" in pg_sql
+    assert "~" in pg_sql
+    assert "AS INTEGER)" in pg_sql
+    assert "^[0-9]{1,9}$" in compiled.params.values()
+
+    with app.app_context():
+        u = User(email="dirty_meta_stats@example.com", display_name="Edge Reader", is_active=True)
+        u.set_password("Pass123!")
+        db.session.add(u)
+        db.session.flush()
+
+        w = Work(title="Malformed Duration Case")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="text", language="en")
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id, meta={"format": "book"})
+        db.session.add(m)
+        db.session.flush()
+
+        raw_values = [120, "60", "45.5", "bad", "", "-5", "99999999999999999", 45.5]
+        for val in raw_values:
+            db.session.add(
+                Item(
+                    manifestation_id=m.id,
+                    owner_id=u.id,
+                    status="read",
+                    visibility="public",
+                    is_hidden=False,
+                    meta={"total_reading_minutes": val},
+                )
+            )
+        db.session.commit()
+        man_id = m.id
+
+    detail_resp = client.get(f"/api/manifestations/{man_id}")
+    assert detail_resp.status_code == 200
+    assert detail_resp.get_json()["data"]["average_reading_minutes"] == 90.0
+
+    stats_resp = client.get(f"/api/manifestations/{man_id}/stats")
+    assert stats_resp.status_code == 200
+    stats_data = stats_resp.get_json()["data"]
+    assert stats_data["total_items"] == 8
+    assert stats_data["avg_session_minutes"] == 90.0
+
+
+def test_manifestation_stats_computes_non_book_avg_reading_days(client, app):
+    """avg_reading_days covers listening, watching, playing, and building start statuses."""
+    with app.app_context():
+        u = User(email="nonbook_days@example.com", display_name="Game Collector", is_active=True)
+        u.set_password("Pass123!")
+        db.session.add(u)
+        db.session.flush()
+
+        w = Work(title="Multi-Format Campaign")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="board_game", language="en")
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id, meta={"format": "board_game"})
+        db.session.add(m)
+        db.session.flush()
+
+        pairs = [
+            ("listening", "listened", 2),
+            ("watching", "watched", 4),
+            ("playing", "played", 6),
+            ("building", "built", 8),
+        ]
+        base = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+        for idx, (start_st, done_st, days) in enumerate(pairs):
+            item = Item(
+                manifestation_id=m.id,
+                owner_id=u.id,
+                status=done_st,
+                visibility="public",
+                is_hidden=False,
+                added_at=base + timedelta(days=idx),
+            )
+            db.session.add(item)
+            db.session.flush()
+            db.session.add_all(
+                [
+                    ItemStatusLog(item_id=item.id, user_id=u.id, new_status=start_st, changed_at=base),
+                    ItemStatusLog(item_id=item.id, user_id=u.id, new_status=done_st, changed_at=base + timedelta(days=days)),
+                ]
+            )
+        db.session.commit()
+        man_id = m.id
+
+    resp = client.get(f"/api/manifestations/{man_id}/stats")
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["reader_count"] == 4
+    assert data["completed_count"] == 4
+    assert data["avg_reading_days"] == 5.0

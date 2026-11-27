@@ -724,13 +724,27 @@ def get_item_detail(item_id: int):
 _MAX_READING_SESSIONS_STORED = 200
 
 
+def _safe_nonneg_int(value: Any, default: int = 0) -> int:
+    """Parse non-negative integers safely, ignoring booleans and malformed strings."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if value >= 0 else default
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.isdigit():
+            return int(stripped)
+    return default
+
+
 def _compute_reading_duration_summary(item: Item) -> dict[str, Any]:
     """Build FRBR Item-scoped reading duration and transition elapsed-days summary."""
     meta = item.meta if isinstance(item.meta, dict) else {}
     raw_sessions = meta.get("reading_sessions")
     sessions = raw_sessions if isinstance(raw_sessions, list) else []
-    total_minutes = int(meta.get("total_reading_minutes") or 0)
-    sessions_count = int(meta.get("reading_sessions_count") or len(sessions))
+    total_minutes = _safe_nonneg_int(meta.get("total_reading_minutes"), 0)
+    raw_sessions_count = meta.get("reading_sessions_count")
+    sessions_count = _safe_nonneg_int(raw_sessions_count, len(sessions)) if raw_sessions_count else len(sessions)
 
     logs = (
         db.session.execute(
@@ -808,8 +822,8 @@ def log_reading_session(item_id: int) -> tuple[Response, int]:
         sessions = sessions[-_MAX_READING_SESSIONS_STORED:]
 
     meta["reading_sessions"] = sessions
-    meta["total_reading_minutes"] = int(meta.get("total_reading_minutes") or 0) + payload.duration_minutes
-    meta["reading_sessions_count"] = int(meta.get("reading_sessions_count") or 0) + 1
+    meta["total_reading_minutes"] = _safe_nonneg_int(meta.get("total_reading_minutes"), 0) + payload.duration_minutes
+    meta["reading_sessions_count"] = _safe_nonneg_int(meta.get("reading_sessions_count"), 0) + 1
     item.meta = meta
     flag_modified(item, "meta")
     db.session.commit()
@@ -925,6 +939,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         "map_insert_present",
     }
     _DISALLOWED_ITEM_META_KEYS = {"format", "Format", "type", "isbn", "isbn13", "publisher", "Publisher", "format_type"}
+    _DERIVED_ITEM_META_KEYS = {"total_reading_minutes", "reading_sessions_count", "reading_sessions"}
 
     item_meta = dict(item.meta or {})
     if payload.build_status is not None:
@@ -942,9 +957,12 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         if k in metadata:
             item_meta[k] = metadata[k]
 
-    # Persist item-scoped metadata strictly to Item; never mutate shared Manifestation.meta
-    # or copy carrier/format fields into item.meta (FRBR F5 <-> F3 boundary).
-    allowed_meta = {k: v for k, v in metadata.items() if k not in forbidden and k not in _DISALLOWED_ITEM_META_KEYS}
+    # Persist item-scoped metadata strictly to Item; never mutate shared Manifestation.meta,
+    # copy carrier/format fields into item.meta (FRBR F5 <-> F3 boundary), or overwrite
+    # session-derived reading totals directly via item edits.
+    allowed_meta = {
+        k: v for k, v in metadata.items() if k not in forbidden and k not in _DISALLOWED_ITEM_META_KEYS and k not in _DERIVED_ITEM_META_KEYS
+    }
     item_meta.update(allowed_meta)
     for key in _DISALLOWED_ITEM_META_KEYS:
         item_meta.pop(key, None)
