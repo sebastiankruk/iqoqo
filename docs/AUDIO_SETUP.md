@@ -1,6 +1,6 @@
 # Audio Setup and Scanning Support
 
-As of `v0.2.0`, iqoqo supports automatic metadata fetching for audio items (CDs, Vinyls, etc.).
+iqoqo supports automatic metadata fetching for audio items (CDs, Vinyls, Cassettes, SACDs, etc.).
 
 ## How It Works
 The standard `POST /api/scan` endpoint has been upgraded with an auto-fallback feature:
@@ -14,7 +14,7 @@ The standard `POST /api/scan` endpoint has been upgraded with an auto-fallback f
 ### MusicBrainz
 
 - **No API key required** by default.
-- Uses a standardized User-Agent (`iqoqo/0.3.0 ( dev@kruk.me )`).
+- Uses a standardized User-Agent (`iqoqo/1.2.0 ( dev@kruk.me )`).
 - Fetches covers from the Cover Art Archive.
 
 ### Discogs

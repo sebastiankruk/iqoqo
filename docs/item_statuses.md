@@ -39,7 +39,6 @@ These statuses track the user's interaction progress with the content, categoriz
 ### Audio (Music, Audiobooks)
 
 | Status           | Description                    |
-
 |:-----------------|:-------------------------------|
 | `want_to_listen` | Intended for future listening. |
 | `listening`      | Currently listening.           |

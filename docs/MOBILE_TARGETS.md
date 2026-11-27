@@ -1,4 +1,4 @@
-# Mobile Platform Targets & Compatibility Matrix — iqoqo v1.0.0
+# Mobile Platform Targets & Compatibility Matrix — iqoqo v1.2.0
 
 This document defines the supported operating systems, hardware baselines, and native device capabilities for the iqoqo native mobile ecosystem across Android and iOS.
 
@@ -47,7 +47,8 @@ This document defines the supported operating systems, hardware baselines, and n
 | **Cover Photo Upload** | Camera & Media permissions | `NSPhotoLibraryAddUsageDescription` | HTML `<input type="file" accept="image/*">` |
 | **Haptic Feedback** | Device vibrator | Taptic Engine | Guarded by `isNativeApp()`, no-op on web |
 | **Hardware Torch** | Camera flashlight | AVCaptureDevice torch | Torch toggle disabled when not supported |
-| **Secure Token Storage** | Android Keystore / `EncryptedSharedPreferences` | iOS Keychain Services | Guarded; web falls back to session cookies |
+| **Secure Token Storage** | Android Keystore / `EncryptedSharedPreferences` | iOS Keychain Services | Guarded per `serverId` (`iqoqo_auth_token_<serverId>`); web falls back to session cookies |
+| **Multi-Server Registry (`C156`)** | `ServerProfile[]` (`iqoqo_servers_v1`), `iqoqo_active_server_id` | Same Capacitor `Preferences` + `serverId`-namespaced offline cache | Add, switch, rename, and remove saved instances via `<ServerSelectorModal />` & Footer switcher without wiping other servers' credentials/snapshots |
 | **Deep-Link Authentication** | Intent filter (`iqoqo://auth-exchange`) | CFBundleURLSchemes (`iqoqo`) | Handled client-side on `/auth-exchange` |
 | **System Browser OAuth** | Chrome Custom Tabs via `@capacitor/browser` | `ASWebAuthenticationSession` | Standard window redirect |
 

@@ -1,5 +1,8 @@
 # Upgrading to iqoqo v0.8.0
 
+> [!NOTE]
+> **Historical Document (`[Archived]`):** This runbook covers the legacy v0.7.x → v0.8.0 upgrade. For current v1.2.0 installation and upgrades, see [`INSTALL.md`](../INSTALL.md) and [`DEPLOYMENT.md`](../DEPLOYMENT.md).
+
 This guide covers everything you need to know to safely upgrade from iqoqo v0.7.x to v0.8.0. Version 0.8.0 introduces the **Semantic Web layer** — SPARQL querying, Linked Open Data endpoints, canonical IRI minting, and data sovereignty exports — along with a **breaking database migration** that promotes JSONB attributes to indexed relational columns.
 
 ## 📋 Pre-Upgrade Checklist

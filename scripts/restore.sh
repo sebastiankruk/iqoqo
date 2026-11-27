@@ -153,11 +153,14 @@ while IFS= read -r -d '' asset_archive; do
 done < <(find "${UNPACKED_DIR}" -maxdepth 1 -type f -name "*_*.tar.gz" -print0 2>/dev/null || true)
 
 # 3. Enforce strict permissions on restored federation keys
-if [ -d "${PROJECT_ROOT}/data/federation_keys" ]; then
-    log "🔒 Enforcing secure permissions on data/federation_keys..."
-    chmod 0700 "${PROJECT_ROOT}/data/federation_keys"
-    find "${PROJECT_ROOT}/data/federation_keys" -type f -exec chmod 0600 {} + 2>/dev/null || true
-    log "✅ Federation keys restored with 0700 directory and 0600 file permissions."
-fi
+for key_rel in "data/keys" "data/federation_keys"; do
+    key_dir="${PROJECT_ROOT}/${key_rel}"
+    if [ -d "${key_dir}" ]; then
+        log "🔒 Enforcing secure permissions on ${key_rel}..."
+        chmod 0700 "${key_dir}"
+        find "${key_dir}" -type f -exec chmod 0600 {} + 2>/dev/null || true
+        log "✅ Federation keys restored with 0700 directory and 0600 file permissions (${key_rel})."
+    fi
+done
 
 log "🎉 Disaster recovery restore completed successfully."

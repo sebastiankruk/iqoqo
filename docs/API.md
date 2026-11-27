@@ -1,6 +1,6 @@
 # 📡 API Reference
 
-Complete reference for iqoqo's REST API endpoints, including the Semantic Web layer introduced in v0.8.0.
+Complete reference for iqoqo's REST API endpoints and Semantic Web layer (`v1.2.0`).
 
 ## Authentication
 
@@ -207,6 +207,12 @@ Administrative and curation endpoints live on the `admin` blueprint, mounted at
 | `/api/v1/admin/duplicates/<id>/merge`                  | `POST` | `write:metadata` | Execute a transactional merge for a chosen primary                    |
 | `/api/v1/admin/frbr/manifestation/<id>/provider-merge` | `POST` | `write:metadata` | Consolidate custodian-selected provider fragments across FRBR tiers   |
 | `/api/v1/admin/works/search`                           | `GET`  | `read:metadata`  | Diacritic-insensitive series work search autocomplete                 |
+| `/api/v1/admin/work-links`                             | `GET`  | `read:metadata`  | List cross-media `WorkLinkCandidate` & `WorkRelation` suggestions     |
+| `/api/v1/admin/work-links/scan`                        | `POST` | `write:metadata` | Enqueue cross-media Work reconciliation scan                          |
+| `/api/v1/admin/work-links/<id>/accept`                 | `POST` | `write:metadata` | Atomically accept a candidate pair into a `WorkRelation`              |
+| `/api/v1/admin/work-links/<id>/reject`                 | `POST` | `write:metadata` | Dismiss a cross-media Work link candidate                             |
+| `/api/v1/admin/work-links/manual`                      | `POST` | `write:metadata` | Create a direct manual cross-media `WorkRelation`                     |
+| `/api/v1/admin/ownership/items`                        | `GET`  | `transfer:item`  | Paginated item ownership list for custody inspection & transfer       |
 | `/api/v1/admin/ownership/preview`                      | `POST` | `transfer:item`  | Preview item custody ownership transfer impact                        |
 | `/api/v1/admin/ownership/reassign`                     | `POST` | `transfer:item`  | Atomically execute item custody ownership transfer                    |
 
@@ -230,241 +236,27 @@ every request rather than falling open.
 
 ---
 
-## SPARQL Endpoint
-
-### `GET /api/sparql`
-
-Execute a SPARQL query via URL parameter (SPARQL Protocol compliance).
-
-**Authentication:** Required (`read:metadata` permission)
-
-**Parameters:**
-
-| Parameter | Type   | Required | Description                     |
-| --------- | ------ | -------- | ------------------------------- |
-| `query`   | string | Yes      | URL-encoded SPARQL query string |
-
-**Example:**
-
-```bash
-curl -G "http://localhost:8000/api/sparql" \
-  --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 5" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Accept: application/sparql-results+json"
-```
-
-### `POST /api/sparql`
-
-Execute a SPARQL query via request body.
-
-**Authentication:** Required (`read:metadata` permission)
-
-**Supported Content Types:**
-
-| Content-Type                        | Body Format                       |
-| ----------------------------------- | --------------------------------- |
-| `application/sparql-query`          | Raw SPARQL query string           |
-| `application/json`                  | `{"query": "SELECT ..."}`         |
-| `application/x-www-form-urlencoded` | `query=SELECT+...` (form-encoded) |
-
-**Example (JSON):**
-
-```bash
-curl -X POST http://localhost:8000/api/sparql \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/sparql-results+json" \
-  -d '{"query": "SELECT ?title WHERE { ?work a <http://purl.org/vocab/frbr/core#Work> ; <http://purl.org/dc/terms/title> ?title } LIMIT 10"}'
-```
-
-**Example (Raw SPARQL):**
-
-```bash
-curl -X POST http://localhost:8000/api/sparql \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/sparql-query" \
-  -d 'SELECT * WHERE { ?s ?p ?o } LIMIT 5'
-```
-
-### Response Formats
-
-#### SELECT / ASK Results
-
-| Accept Header                     | Format                |
-| --------------------------------- | --------------------- |
-| `application/sparql-results+json` | SPARQL JSON (default) |
-| `application/sparql-results+xml`  | SPARQL XML            |
-| `text/csv`                        | CSV                   |
-| `text/tab-separated-values`       | TSV                   |
-
-**SPARQL JSON Response:**
-
-```json
-{
-  "head": { "vars": ["title", "author"] },
-  "results": {
-    "bindings": [
-      {
-        "title": { "type": "literal", "value": "The Hobbit" },
-        "author": { "type": "literal", "value": "J.R.R. Tolkien" }
-      }
-    ]
-  }
-}
-```
-
-#### CONSTRUCT / DESCRIBE Results
-
-| Accept Header         | Format           |
-| --------------------- | ---------------- |
-| `text/turtle`         | Turtle (default) |
-| `application/ld+json` | JSON-LD          |
-| `application/rdf+xml` | RDF/XML          |
-
-**Turtle Response:**
-
-```turtle
-@prefix dc: <http://purl.org/dc/terms/> .
-@prefix frbr: <http://purl.org/vocab/frbr/core#> .
-
-<https://iqoqo.cc/works/42> a frbr:Work ;
-    dc:title "The Hobbit" ;
-    dc:creator "J.R.R. Tolkien" .
-```
-
----
-
-## Public Linked Data Endpoints
-
-All public endpoints are **unauthenticated** and include open CORS headers for AI agents and Linked Data crawlers.
-
-### `GET /api/public/works/<id>`
-
-Retrieve a Work entity as RDF.
-
-**Authentication:** Not required
-
-**Parameters:**
-
-| Parameter | Type   | Required | Description                                |
-| --------- | ------ | -------- | ------------------------------------------ |
-| `format`  | string | No       | Override format: `json-ld`, `turtle`, `nt` |
-
-**Example:**
-
-```bash
-# JSON-LD (default)
-curl http://localhost:8000/api/public/works/1
-
-# Turtle
-curl -H "Accept: text/turtle" http://localhost:8000/api/public/works/1
-
-# N-Triples via query parameter
-curl "http://localhost:8000/api/public/works/1?format=nt"
-```
-
-**Response (JSON-LD):**
-
-```json
-{
-  "@context": {
-    "frbr": "http://purl.org/vocab/frbr/core#",
-    "dc": "http://purl.org/dc/terms/",
-    "schema": "https://schema.org/"
-  },
-  "@id": "https://iqoqo.cc/works/1",
-  "@type": "frbr:Work",
-  "dc:title": "The Hobbit",
-  "dc:creator": "J.R.R. Tolkien"
-}
-```
-
-### `GET /api/public/expressions/<id>`
-
-Retrieve an Expression entity as RDF.
-
-**Authentication:** Not required
-
-```bash
-curl -H "Accept: text/turtle" http://localhost:8000/api/public/expressions/3
-```
-
-### `GET /api/public/manifestations/<id>`
-
-Retrieve a Manifestation entity as RDF.
-
-**Authentication:** Not required
-
-```bash
-curl -H "Accept: application/ld+json" http://localhost:8000/api/public/manifestations/42
-```
-
-### `GET /api/public/items/<id>`
-
-Retrieve an Item entity as RDF. Only non-hidden items are accessible.
-
-**Authentication:** Not required
-
-```bash
-curl "http://localhost:8000/api/public/items/7?format=turtle"
-```
-
-### `GET /api/public/u/<username>/items`
-
-Retrieve a user's public collection items.
-
-**Authentication:** Not required
-
-**Parameters:**
-
-| Parameter  | Type    | Required | Description                            |
-| ---------- | ------- | -------- | -------------------------------------- |
-| `format`   | string  | No       | RDF format: `json-ld`, `turtle`, `nt`  |
-| `limit`    | integer | No       | Items per page (1–1000, default: 100)  |
-| `stream`   | boolean | No       | Enable streaming for large collections |
-| `page`     | integer | No       | Page number (JSON mode only)           |
-| `per_page` | integer | No       | Items per page (JSON mode, max: 100)   |
-
-**Example:**
-
-```bash
-# JSON-LD collection
-curl -H "Accept: application/ld+json" \
-  "http://localhost:8000/api/public/u/alice/items?limit=50"
-
-# Streaming Turtle export
-curl "http://localhost:8000/api/public/u/alice/items?format=turtle&stream=true&limit=1000"
-
-# Standard JSON (paginated)
-curl "http://localhost:8000/api/public/u/alice/items?page=1&per_page=24"
-```
-
-### `GET /api/public/feed.xml`
-
-Global fresh arrivals RSS feed.
-
-```bash
-curl http://localhost:8000/api/public/feed.xml
-curl "http://localhost:8000/api/public/feed.xml?view=works"
-```
-
-### `GET /api/public/sitemap.xml`
-
-XML sitemap for search engine indexing.
-
-```bash
-curl http://localhost:8000/api/public/sitemap.xml
-```
-
-### CORS Headers
-
-All public endpoints include:
-
-```text
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, HEAD, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Accept, Authorization
-```
+## SPARQL & Public Linked Data Endpoints
+
+Full SPARQL queries, `Accept` content-negotiation headers, JSON-LD contexts, and `?format=` (`json-ld`, `turtle`, `nt`) examples live in the **[Semantic Web Guide](SEMANTIC_WEB.md)**.
+
+### `GET /api/sparql` & `POST /api/sparql`
+
+- **Auth & Limits:** Requires `read:metadata` permission (`10 per minute`). Read-only (`10 KB` max query, `15s` timeout, `4` concurrent, `5,000` items / `100,000` triples graph cap).
+- **Inputs:** `GET ?query=<sparql>`, or `POST` with `application/sparql-query`, `application/json` (`{"query": "..."}`), or `application/x-www-form-urlencoded`.
+- **Responses:** SELECT/ASK (`application/sparql-results+json`, `+xml`, `text/csv`, `text/tab-separated-values`); CONSTRUCT/DESCRIBE (`text/turtle`, `application/ld+json`, `application/rdf+xml`).
+
+### Public Entity, Collection & Discovery Routes (Unauthenticated, `Access-Control-Allow-Origin: *`)
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET /api/public/works/<id>` | Work RDF (`?format=json-ld\|turtle\|nt`, `303` redirect for `text/html`) |
+| `GET /api/public/expressions/<id>` | Expression RDF (`120 per minute` across single-entity routes) |
+| `GET /api/public/manifestations/<id>` | Manifestation RDF |
+| `GET /api/public/items/<id>` | Item RDF (`public` & non-hidden items only; owner `physical_location` redacted) |
+| `GET /api/public/u/<username>/items` | User collection JSON (`page`, `per_page <= 100`) or RDF (`limit` `1..1000`, default `100`, `stream=true`) |
+| `GET /api/public/feed.xml` | Global fresh arrivals RSS (`?view=works` optional, `60 per minute`) |
+| `GET /api/public/sitemap.xml` | XML sitemap (`60 per minute`) |
 
 ---
 
@@ -579,10 +371,41 @@ Atomically update the three-tier visibility level (`public`, `friends_only`, or 
 
 Re-indexes FTS entries, invalidates facet counts, emits SSE `item_visibility_updated` events, and dispatches ActivityPub collection updates when visibility changes. Returns `404` if any requested ID is missing or not owned by the caller.
 
-### `GET /api/items` Visibility Filter & Reading Sessions (`POST /api/items/<id>/reading-sessions`)
+### `PATCH /api/items/bulk-location`
 
-- **`GET /api/items?visibility=public,friends_only,private`:** Filters the returned inventory grid by three-tier visibility (scoped by caller ownership and `scope=personal|friends`).
+Atomically update `physical_location` across a bounded batch (`1..100`) of owned physical items (`BulkItemLocationSchema`).
+
+**Authentication:** Required (`write:item` permission; blocked on `FEDERATION_HEAD_MODE` instances; returns `403 Forbidden` if any selected item is not owned by the caller).
+
+**Rate Limit:** 30 per minute.
+
+**Request Body:**
+
+```json
+{
+  "item_ids": [12, 19, 24],
+  "physical_location": "Living Room / Shelf A"
+}
+```
+
+Pass `null` to clear stored shelf locations. Re-indexes FTS entries and invalidates facet caches (`location_counts`).
+
+### `GET /api/items` Filters, Facets & Reading Sessions (`POST /api/items/<id>/reading-sessions`)
+
+- **`GET /api/items`:** Supports comma-separated `?visibility=public,friends_only,private` and SQL-paginated `?location=...` (matching owner's `Item.physical_location`, also applied across `GET /api/items?q=...` FTS/ILIKE search and `GET /api/stats/facets?location=...`). Non-owners and unauthenticated callers never see `physical_location` in serialized items.
 - **`POST /api/items/<id>/reading-sessions`:** Log an active reading session (`duration_minutes`: `1..1440`, optional `pages_read`, optional private `note`) on an owned physical item (`write:item` permission, `60 per hour`, max `200` stored sessions per item; blocked on `FEDERATION_HEAD_MODE`). Private session notes are automatically redacted from non-owner `GET /api/items/<id>` responses while durations contribute anonymously to edition averages.
+
+---
+
+## Manifestation Images & Reading Stats
+
+### `GET /api/manifestations/<id>/images` & `POST /api/manifestations/<id>/images`
+
+Retrieve or contribute gallery images (`ImageScan` rows: inlay, disc, back cover) for a Manifestation using the `{success, data, error}` envelope (`POST` requires `write:metadata`).
+
+### `GET /api/manifestations/<id>/stats`
+
+Return anonymized, visibility-safe `GROUP BY` reading statistics across `public`, non-hidden physical items for a Manifestation (returns `{success, data, error}`): `total_items`, `reader_count`, `completed_count`, `avg_session_minutes`, `avg_reading_days`, and monthly `popularity_over_time` (`added_count` / `completed_count` across up to 12 recent months, with zero PII or private notes).
 
 ---
 
@@ -598,23 +421,28 @@ Browse conceptual Works with aggregated user ownership, Work-level wishlist inte
 
 ### `GET /api/catalog/graph`
 
-Return a bounded, visibility-safe 1-hop or 2-hop FRBR and semantic relation neighborhood centered at any anchor entity.
+Return a bounded, visibility-safe FRBR neighborhood (`mode=neighborhood`) or full-library concept graph (`mode=library`) honoring `is_item_visible_to_viewer()` and `FederationConsent`.
 
-**Authentication:** Optional (anonymous callers see `public` items only; authenticated callers also see own items and `friends_only` items from accepted friends).
-
-**Rate Limit:** 60 per minute.
+**Authentication:** Optional (`404` on nonexistent or restricted `Item` anchor). **Rate Limit:** 60 per minute.
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `entity_type` | string | Required | `work`, `expression`, `manifestation`, or `item` |
-| `entity_id` | integer | Required | Positive database ID of anchor entity |
-| `depth` | integer | `1` | Traversal hops (clamped to `1..2`) |
-| `max_nodes` | integer | `150` | Maximum nodes before `meta.truncated = true` (clamped `1..150`) |
-| `edge_types` | CSV string | All | Filter edge categories: `frbr`, `series`, `parts_expansions`, `contributors`, `maps`, `lod` |
+| `mode` | string | `neighborhood` | `neighborhood` or `library` |
+| `entity_type` | string | Required (`neighborhood`) | `work`, `expression`, `manifestation`, `item`, `person`, `contributor`, or `series` |
+| `entity_id` | integer | Required (`neighborhood`) | Positive database ID of anchor entity |
+| `depth` | integer | `1` | Traversal hops (clamped `1..4`) |
+| `max_nodes` | integer | `150` | Maximum nodes before truncation (`1..150`) |
+| `max_edges` | integer | `400` | Maximum edges before truncation (ceiling `600`) |
+| `entity_types` | CSV string | All (`library`) | `work`, `series`, `contributor`, `expression`, `manifestation`, `item`, `map`, `lod` |
+| `edge_types` | CSV string | All (`7` categories) | `frbr`, `series`, `parts_expansions`, `derivatives`, `contributors`, `maps`, `lod` |
 
-Returns `404` if the anchor entity does not exist or is a restricted `Item`.
+External authority URIs are canonicalized into deterministic `lod:<digest>` node IDs so intersecting LOD links across Works and Contributors merge cleanly without duplicate graph nodes.
+
+### `GET /api/catalog/graph/search`
+
+Diacritic-insensitive search (`?q=...&types=...&limit=10`) returning root candidates across `person`, `series`, `work`, `manifestation`, `item`, `expression`, and `contributor` (`60 per minute`).
 
 ---
 
@@ -631,7 +459,7 @@ Create a tokenized filtered collection view with configurable `visibility_scope`
 
 ### `GET /api/public/share/<token>` & AI Mini-Pages (`/share/<token>/jsonld/<page>`)
 
-- Supports standard JSON (`?page=1&per_page=48`), RDF content negotiation (`Accept: application/ld+json|text/turtle|application/rdf+xml|application/n-triples`), `GET /api/public/rdf/share/<token>?format=jsonld&limit=2000`, non-`/api/` `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`, plus query-free paginated HTML/JSON-LD mini-pages `/share/<token>/jsonld/1..N` (`60` items/page) for headerless AI agents.
+- Supports standard JSON (`?page=1&per_page=48`), RDF content negotiation (`Accept: application/ld+json|text/turtle|application/rdf+xml|application/n-triples`), `GET /api/public/rdf/share/<token>?format=jsonld&limit=2000` (`MAX_SHARED_COLLECTION_LIMIT=2000`), non-`/api/` `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`, plus query-free paginated HTML/JSON-LD mini-pages `/share/<token>/jsonld/1..N` (`60` items/page) for headerless AI agents.
 
 ---
 
@@ -691,117 +519,17 @@ Detach a Work from a container series Work.
 
 ---
 
-## Data Export Endpoint
+## Data Export & Content Negotiation
 
 ### `GET /api/items/export`
 
-Stream export of the authenticated user's library in Linked Data or JSON format.
-
-**Authentication:** Required (any authenticated user)
-
-**Parameters:**
-
-| Parameter | Type   | Required | Description                                          |
-| --------- | ------ | -------- | ---------------------------------------------------- |
-| `format`  | string | No       | Export format: `json-ld` (default), `turtle`, `json` |
-
-**Example:**
-
-```bash
-# JSON-LD export (default)
-curl -H "Authorization: Bearer $TOKEN" \
-  -o my-library.jsonld \
-  "http://localhost:8000/api/items/export"
-
-# Turtle export
-curl -H "Authorization: Bearer $TOKEN" \
-  -o my-library.ttl \
-  "http://localhost:8000/api/items/export?format=turtle"
-
-# JSON export
-curl -H "Authorization: Bearer $TOKEN" \
-  -o my-library.json \
-  "http://localhost:8000/api/items/export?format=json"
-```
-
-**Response Headers:**
-
-```http
-Content-Type: application/ld+json  (or text/turtle, application/json)
-Content-Disposition: attachment; filename="iqoqo-export-20260921-143022.jsonld"
-Transfer-Encoding: chunked
-```
-
-### Format Details
-
-#### JSON-LD (`application/ld+json`)
-
-Includes canonical `@context` with FRBR, Schema.org, Dublin Core, and iqoqo ontology namespace mappings. Each item is a JSON-LD resource with typed properties.
-
-#### Turtle (`text/turtle`)
-
-Standard W3C RDF Turtle serialization with prefixed namespaces (`frbr:`, `schema:`, `dc:`, `iqoqo:`).
-
-#### JSON (`application/json`)
-
-Hierarchical JSON following the FRBR Group 1 structure:
-
-```json
-{
-  "version": "1.0",
-  "exported_at": "2026-09-21T14:30:22.000000",
-  "items": [
-    {
-      "id": 1,
-      "status": "available",
-      "manifestation": {
-        "id": 42,
-        "isbn13": "9780547928227",
-        "publisher": "Mariner Books",
-        "expression": {
-          "id": 17,
-          "language": "en",
-          "work": {
-            "id": 1,
-            "title": "The Hobbit"
-          }
-        }
-      }
-    }
-  ]
-}
-```
-
----
-
-## Content Negotiation
-
-### Accept Headers
-
-| Endpoint Type             | Supported Accept Headers                                                           | Default     |
-| ------------------------- | ---------------------------------------------------------------------------------- | ----------- |
-| SPARQL SELECT/ASK         | `application/sparql-results+json`, `+xml`, `text/csv`, `text/tab-separated-values` | SPARQL JSON |
-| SPARQL CONSTRUCT/DESCRIBE | `text/turtle`, `application/ld+json`, `application/rdf+xml`                        | Turtle      |
-| Public Entity             | `application/ld+json`, `text/turtle`, `application/n-triples`, `text/html`         | JSON-LD     |
-| Public Collection         | `application/ld+json`, `text/turtle`, `application/n-triples`                      | JSON-LD     |
-
-### Format Query Parameter
-
-As an alternative to `Accept` headers, use the `?format=` parameter:
-
-| `?format=` Value | MIME Type               |
-| ---------------- | ----------------------- |
-| `json-ld`        | `application/ld+json`   |
-| `turtle`         | `text/turtle`           |
-| `nt`             | `application/n-triples` |
-| `n-triples`      | `application/n-triples` |
-| `jsonld`         | `application/ld+json`   |
+Stream export of the authenticated user's library (`format`: `json-ld` default, `turtle`, or `json`) via chunked `Transfer-Encoding`. See **[Semantic Web Guide](SEMANTIC_WEB.md)** for full curl examples, canonical `@context`, and `Accept` / `?format=` content-negotiation matrices.
 
 ---
 
 ## Federation & ActivityPub Endpoints
 
-Introduced in **v0.9.0**, iQoQo supports decentralized discovery and social federation via ActivityPub, RFC 7033 WebFinger, and NodeInfo 2.1.
+iQoQo supports decentralized discovery and social federation via ActivityPub, RFC 7033 WebFinger, and NodeInfo 2.1.
 
 ### `GET /.well-known/webfinger` (also `GET /api/federation/webfinger`)
 
@@ -921,7 +649,7 @@ Explicitly provision or rotate the local instance RSA-2048 keypair (`data/keys/s
 
 ### `PUT /api/v1/admin/federation/instances/<id>` & `DELETE /api/v1/admin/federation/instances/<id>`
 
-Update an instance's trust level (`untrusted`, `pending`, `trusted`, `blocked`) or delete an instance along with linked actors and followers.
+Update an instance's trust level (`untrusted`, `trusted`, `blocked`) or delete an instance along with linked actors and followers.
 
 **Authentication:** Admin required (`role:admin`).
 
@@ -1010,4 +738,4 @@ All error responses follow a consistent JSON envelope:
 - **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL examples and Linked Data integration
 - **[Architecture Guide](ARCHITECTURE.md)** — Semantic Web layer architecture
 - **[Operations Runbook](OPERATIONS.md)** — FRBR ETL and maintenance scripts
-- **[Upgrade Guide](UPGRADE_0.8.0.md)** — Migration instructions for v0.8.0
+- **[Upgrade Guide](archive/UPGRADE_0.8.0.md)** — Historical v0.8.0 migration notes

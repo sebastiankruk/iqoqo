@@ -1,7 +1,7 @@
-# Mobile Sideloading Guide — iqoqo v1.0.0
+# Mobile Sideloading Guide — iqoqo v1.2.0
 
 This document describes how to build, install, and sideload the iqoqo native mobile app
-(Android and iOS) without requiring paid store accounts upfront.
+(Android and iOS) without requiring paid store accounts upfront. Running the installed app supports connecting to and switching between multiple self-hosted iqoqo instances (`ServerProfile[]` registry with isolated credentials and offline snapshots).
 
 ---
 

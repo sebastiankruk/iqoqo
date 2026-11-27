@@ -8,10 +8,13 @@ The iqoqo platform requires strict test coverage across multiple tiers:
 
 | Tier | Tooling | Command | Scope |
 | :--- | :--- | :--- | :--- |
+| **Fast Parallel Verification** | `run_tests_parallel.py` | `make test-parallel` (alias `make test-fast`) | Concurrent 4-stream run (`domain`, `api`, `frontend`, `tooling`) |
 | **Backend Layer** | `pytest` | `make test-backend` | FRBR ontology mapping, SQLAlchemy models, API endpoints, serialization |
+| **PG Merge Integrity** | `pytest` + PostgreSQL 18 | `make test-merge-integrity-pg` | Real FK merge cascade integrity (`frbr_merge.py`) & PG schema index names |
 | **Frontend Layer** | `Vitest` + React Testing Library | `make test-frontend` | Components, custom React hooks, layout boundaries, user interactions |
-| **End-to-End (E2E)** | `Playwright` | `make test-e2e` | Multi-page browser workflows, authentication exchange, multi-instance federation |
-| **Operational Scripts** | `pytest` + `bats` | `make test-scripts-python` | Deployment, database management, and maintenance automation scripts |
+| **End-to-End (E2E)** | `Playwright` | `make test-e2e` | Multi-page browser workflows, auth exchange (`test-e2e-mobile` for mobile filter) |
+| **Federation Pair E2E** | `Playwright` + paired containers | `make test-e2e-federation` | Live dual-origin S2S ActivityPub inbox/outbox & cross-instance lending |
+| **Operational Scripts** | `pytest` + `bats` | `make test-scripts` (`test-scripts-python` + `test-scripts-bash`) | Deployment, database management, backup/restore, and installer scripts |
 
 ---
 

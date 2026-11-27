@@ -441,7 +441,7 @@ fi
 
 # 2. Archive uploaded assets and instance keys (non-fatal if missing)
 # Standard iQoQo asset and key paths relative to app root/volumes
-ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers" "data/federation_keys")
+ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers" "data/keys" "data/federation_keys")
 for asset_dir in "${ASSET_PATHS[@]}"; do
     if [ -d "${asset_dir}" ]; then
         echo "📁 Archiving ${asset_dir}..."

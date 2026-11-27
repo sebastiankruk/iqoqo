@@ -51,10 +51,9 @@ make start
 
 This will:
 
-1. Start Colima (Docker runtime for macOS)
-2. Start PostgreSQL database container
-3. Activate virtual environment
-4. Run Flask development server at [http://localhost:5000](http://localhost:5000)
+1. Start Colima (Docker runtime for macOS) or local Docker engine
+2. Start PostgreSQL 18 + Valkey 8 containers
+3. Start Flask API (`:5000`), Celery worker, Next.js (`:3000`), and Nginx gateway at `http://localhost:8000`
 
 **Stop everything cleanly:**
 
@@ -64,18 +63,16 @@ make stop
 
 This will:
 
-1. Stop Flask server
-2. Stop database container
-3. Keep Colima running (stops only if you run `colima stop`)
+1. Stop application and gateway containers cleanly (`./run.sh stop` / `docker compose down`)
 
 **Verify it's working:**
 
 ```bash
-# Check API endpoint
-curl http://localhost:5000/api/stats
+# Check API endpoint via Nginx gateway
+curl http://localhost:8000/api/stats
 
 # Access web interface
-open http://localhost:5000
+open http://localhost:8000
 ```
 
 ### 4. Create a Feature Branch
@@ -125,48 +122,46 @@ make test
 
 #### Python Standards
 
-- **Formatting**: Black with 120-character line length
-- **Linting**: Ruff (replaces flake8, pylint, isort checks)
-- **Type Hints**: Use type annotations; checked by mypy
+- **Formatting**: Black with 140-character line length
+- **Linting**: Ruff (replaces flake8, pycodestyle, isort checks; local `make lint-all` also runs Pylint)
+- **Type Hints**: Strict Python 3.14+ annotations; checked by mypy
+- **ORM**: SQLAlchemy 2.0 `select()` / `session.execute()` style only (no legacy `session.query()`)
 - **Imports**: Organized by isort (standard → third-party → local)
 
 ```python
 # Good example
-from typing import Optional
-
-from flask import Blueprint, jsonify
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Work, Expression, Manifestation, Item
+from app.db.models import Work
 
 
-def get_or_create_work(session: Session, title: str, author: str) -> Work:
+def get_or_create_work(session: Session, title: str) -> Work:
     """Get existing Work or create new one following FRBR model."""
-    work = session.query(Work).filter_by(title=title, author=author).first()
+    work = session.execute(select(Work).where(Work.title == title)).scalar_one_or_none()
     if not work:
-        work = Work(title=title, author=author)
+        work = Work(title=title)
         session.add(work)
         session.commit()
     return work
 ```
 
-#### JavaScript Standards
+#### JavaScript / TypeScript Standards
 
 - **Formatting**: Prettier
-- **Linting**: ESLint with recommended rules
-- **Style**: Modern ES6+ features encouraged
+- **Linting**: ESLint with `--max-warnings=0` and `tsc --noEmit`
+- **Style**: React 19 functional components + TypeScript hooks
 
-```javascript
+```typescript
 // Good example
-const scanBarcode = async (isbn) => {
-    try {
-        const response = await fetch(`/api/isbn/${isbn}`);
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Barcode scan failed:', error);
-        showToast('error', 'Failed to scan barcode');
-    }
+const previewBarcode = async (barcode: string) => {
+  try {
+    const response = await fetch(`/api/scanner/preview/${encodeURIComponent(barcode)}`);
+    const payload = await response.json();
+    return payload.data;
+  } catch (error) {
+    console.error("Barcode scan failed:", error);
+  }
 };
 ```
 
@@ -174,7 +169,7 @@ const scanBarcode = async (isbn) => {
 
 - **Formatting**: Prettier
 - **Linting**: stylelint with standard config
-- **Approach**: Use Bootstrap classes first; custom CSS as needed
+- **Approach**: Use **Tailwind CSS v4** utilities and **shadcn/ui** primitives (`frontend/components/ui/`) exclusively; avoid hand-written raw CSS unless strictly necessary.
 
 ### Development Commands Quick Reference
 

@@ -125,7 +125,7 @@ EOF
 
 teardown() {
   rm -rf "${TEST_TEMP_DIR}"
-  rm -rf data/federation_keys 2>/dev/null || true
+  rm -rf data/keys data/federation_keys 2>/dev/null || true
   # A preserved archive is the expected outcome of the failure tests; clean it
   # so a passing run does not leave megabytes in /tmp.
   rm -f /tmp/iqoqo_backup_*.tar.gz 2>/dev/null || true
@@ -738,6 +738,52 @@ EOF
   [ "${file_perm}" = "600" ]
 
   rm -rf data/federation_keys
+}
+
+@test "cloud_backup.sh archives data/keys when present (canonical key directory)" {
+  mkdir -p data/keys
+  local k_hdr="-----BEGIN RSA"
+  local k_ftr="-----END RSA"
+  printf "%s %s\n%s\n%s %s\n" "${k_hdr}" "PRIVATE KEY-----" "MIIEowIBAAKCAQEA0stub" "${k_ftr}" "PRIVATE KEY-----" > data/keys/server.pem
+  chmod 0600 data/keys/server.pem
+
+  export RCLONE_SHOULD_FAIL=1
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+
+  preserved=$(ls /tmp/iqoqo_backup_*.tar.gz 2>/dev/null | head -1)
+  [ -n "${preserved}" ]
+  tar -ztf "${preserved}" | grep -q "keys_"
+
+  local inspect_dir="${TEST_TEMP_DIR}/inspect_keys"
+  mkdir -p "${inspect_dir}"
+  tar -xzf "${preserved}" -C "${inspect_dir}"
+  local nested_keys
+  nested_keys=$(find "${inspect_dir}" -name "keys_*.tar.gz" | head -1)
+  [ -n "${nested_keys}" ]
+  tar -ztf "${nested_keys}" | grep -q "data/keys/server.pem"
+  rm -rf data/keys
+}
+
+@test "scripts/restore.sh validates archive and restores canonical data/keys with 0700/0600 permissions" {
+  local mock_backup_dir="${TEST_TEMP_DIR}/iqoqo_backup_mock_canon"
+  mkdir -p "${mock_backup_dir}"
+  echo "CREATE TABLE test_restore;" > "${mock_backup_dir}/db_dump_20261127_120000.sql"
+
+  local mock_keys_dir="${TEST_TEMP_DIR}/mock_canon_keys/data/keys"
+  mkdir -p "${mock_keys_dir}"
+  echo "MOCK_KEY" > "${mock_keys_dir}/server.pem"
+  tar -czf "${mock_backup_dir}/keys_20261127_120000.tar.gz" -C "${TEST_TEMP_DIR}/mock_canon_keys" data/keys
+
+  local mock_archive="${TEST_TEMP_DIR}/mock_canon_backup.tar.gz"
+  tar -czf "${mock_archive}" -C "${TEST_TEMP_DIR}" iqoqo_backup_mock_canon
+
+  run bash scripts/restore.sh --yes "${mock_archive}"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Federation keys restored with 0700 directory and 0600 file permissions (data/keys)" ]]
+  [ "$(stat -c '%a' data/keys)" = "700" ]
+  [ "$(stat -c '%a' data/keys/server.pem)" = "600" ]
+  rm -rf data/keys
 }
 
 @test "scripts/restore.sh fails with invalid or missing archive" {

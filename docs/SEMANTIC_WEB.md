@@ -1,6 +1,6 @@
 # 🌐 Semantic Web & Linked Open Data Guide
 
-iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
+iqoqo provides a W3C Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
 
 ![Semantic Web, Isolated SPARQL Runner, and AI-Fetchable Share Feeds](images/architecture/07-semantic-web-sparql-feeds.svg)
 
@@ -295,22 +295,25 @@ iqoqo automatically embeds Schema.org structured data in RDF serializations, ena
 
 ### Type Mappings
 
-| Content Type | Schema.org Type                                 |
-| ------------ | ----------------------------------------------- |
-| `text`       | `schema:Book` (or `schema:Map` for maps)        |
-| `serial`     | `schema:Periodical` + `schema:PublicationIssue` |
-| `audiobook`  | `schema:Audiobook`                              |
-| `music`      | `schema:MusicAlbum` + `schema:MusicRelease`     |
-| `movie`      | `schema:Movie`                                  |
-| `board_game` | `schema:Game`                                   |
-| `puzzle`     | `schema:Product`                                |
-| `lego`       | `schema:Product`                                |
-| `concert`    | `schema:MusicEvent`                             |
+| Content Type   | Schema.org Type                                                    |
+| -------------- | ------------------------------------------------------------------ |
+| `text`         | `schema:Book` (or `schema:Map` for maps)                           |
+| `serial`       | `schema:Periodical` + `schema:PublicationIssue`                    |
+| `audiobook`    | `schema:Audiobook`                                                 |
+| `music`        | `schema:MusicAlbum` + `schema:MusicRelease`                        |
+| `movie`        | `schema:Movie` (includes `vcd`)                                    |
+| `board_game`   | `schema:Game`                                                      |
+| `puzzle`       | `schema:Product`                                                   |
+| `lego`         | `schema:Product`                                                   |
+| `concert`      | `schema:MusicEvent`                                                |
+| `cd_dvd_combo` | `schema:MusicAlbum` + `schema:Movie` (hybrid audio/video carrier)  |
 
-### Audio Pressing & Serial Issue Extensions (`v1.0.3`–`v1.1.0`)
+### Audio Pressing, Serial Issue & Cross-Media Extensions (`v1.0.3`–`v1.2.0`)
 
 - **Audio Pressing RDF Triples (`_emit_audio_rdf_triples()`):** Audio Manifestations emit paired `schema:MusicAlbum` / `schema:MusicRelease` descriptions carrying `schema:recordLabel`, `schema:catalogNumber`, `schema:gtin13`, `iqoqo:matrixRunout` (wax matrix etching), and `owl:sameAs` links to Discogs / MusicBrainz.
 - **FRBRoo Serials (`F18_Serial_Work` & `PublicationIssue`):** Serial Works (`work_kind = "serial"`) emit `frbroo:F18_Serial_Work` and `schema:Periodical` alongside `schema:issn`, while each issue Manifestation emits `schema:PublicationIssue`, `schema:issueNumber`, `schema:volumeNumber`, and `schema:datePublished`.
+- **Cross-Media Derivatives (`WorkRelation`):** Linked derivative Works emit `frbroo:R2_is_derivative_of` and `schema:isBasedOn` between canonical Work IRIs.
+- **Owner-Authorized Physical Locations (`Item.physical_location`):** Under `enrichment_profile="full"` when requested by the authorized owner, physical copies emit `iqoqo:physicalLocation` and `schema:location`; public and anonymous serializations redact shelf locations.
 - **OpenCollections.org LOD Bridge:** `OpenCollectionsLookupStrategy` reconciles records and emits `owl:sameAs`, `schema:sameAs`, and `rdfs:seeAlso` triples referencing canonical OpenCollections URIs.
 
 ### Properties Mapped
@@ -358,8 +361,8 @@ Set the `BASE_URL` environment variable in your `.env` file:
 # Production
 BASE_URL=https://iqoqo.cc
 
-# Local development
-BASE_URL=http://localhost:5000
+# Local development (via Nginx gateway)
+BASE_URL=http://localhost:8000
 
 # Custom domain
 BASE_URL=https://library.example.com
@@ -538,6 +541,6 @@ Collectors can pair public `/share/<token>` links with **Gemini Gems**, **ChatGP
 - **[API Reference](API.md)** — Complete endpoint documentation
 - **[Architecture Guide](ARCHITECTURE.md)** — Semantic Web layer architecture
 - **[Operations Runbook](OPERATIONS.md)** — FRBR ETL and ontology sync scripts
-- **[Upgrade Guide](UPGRADE_0.8.0.md)** — Migration instructions for v0.8.0
+- **[Upgrade Guide](archive/UPGRADE_0.8.0.md)** — Historical v0.8.0 migration notes
 - **[SPARQL Tutorial](tutorials/sparql-queries.md)** — Step-by-step SPARQL tutorial
 - **[Linked Data Tutorial](tutorials/linked-data-integration.md)** — Integration examples
