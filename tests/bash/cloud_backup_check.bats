@@ -398,13 +398,58 @@ teardown() {
 
 @test "cloud_backup_check.sh --archive checks iqoqo-archive cron file" {
   export TEMP_ARCHIVE_CRON="${TEST_TEMP_DIR}/archive-cron-job"
-  echo "0 4 1 * * root /usr/src/app/scripts/cloud_backup.sh" > "${TEMP_ARCHIVE_CRON}"
+  echo "0 4 1 * * root /usr/src/app/scripts/cloud_backup.sh --archive" > "${TEMP_ARCHIVE_CRON}"
   sed -i.bak "s|/etc/cron.d/iqoqo-archive|${TEMP_ARCHIVE_CRON}|g" "${CHECK_SCRIPT}"
 
   run bash "${CHECK_SCRIPT}" --archive my-remote
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Checking iQoQo archive configuration" ]]
   [[ "$output" =~ "Cron job: ${TEMP_ARCHIVE_CRON} exists" ]]
+}
+
+@test "cloud_backup_check.sh --archive probes S3_BUCKET_ARCHIVE and archives prefix" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  export TEMP_ARCHIVE_CRON="${TEST_TEMP_DIR}/archive-cron-job"
+  echo "0 4 1 * * root ./scripts/cloud_backup.sh --archive" > "${TEMP_ARCHIVE_CRON}"
+  sed -i.bak "s|/etc/cron.d/iqoqo-archive|${TEMP_ARCHIVE_CRON}|g" "${CHECK_SCRIPT}"
+
+  export S3_BACKEND="auto"
+  export S3_BUCKET_ARCHIVE="my-cold-bucket"
+  export S3_ARCHIVE_PREFIX="cold/archives/"
+  local stamp
+  stamp=$(/bin/date -d "240 hours ago" +"%Y%m%d_%H%M%S")
+  export STUB_LIST_KEYS="[\"cold/archives/iqoqo_backup_${stamp}.tar.gz\"]"
+
+  run bash "${CHECK_SCRIPT}" --archive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "bucket: my-cold-bucket, prefix: cold/archives/" ]]
+  [[ "$output" =~ "[OK]  S3 bucket 'my-cold-bucket': reachable: 1 object(s) under cold/archives/" ]]
+  [[ "$output" =~ "[OK]  Last archive: 10d ago" ]]
+}
+
+@test "cloud_backup_check.sh --archive falls back to rclone lsd when rclone about is unsupported" {
+  export TEMP_ARCHIVE_CRON="${TEST_TEMP_DIR}/archive-cron-job"
+  echo "0 4 1 * * root ./scripts/cloud_backup.sh --archive" > "${TEMP_ARCHIVE_CRON}"
+  sed -i.bak "s|/etc/cron.d/iqoqo-archive|${TEMP_ARCHIVE_CRON}|g" "${CHECK_SCRIPT}"
+
+  cat << 'RBEOF' > "${TEST_TEMP_DIR}/stub-bin/rclone"
+#!/bin/bash
+if [[ "$*" == *"listremotes"* ]]; then
+  echo "my-remote:"
+elif [[ "$*" == *"about"* ]]; then
+  echo "ERROR : S3 root: doesn't support about" >&2
+  exit 1
+elif [[ "$*" == *"lsd"* ]]; then
+  echo "          -1 2026-11-26 12:00:00        -1 iqoqo-archive"
+  exit 0
+fi
+exit 0
+RBEOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/rclone"
+
+  run bash "${CHECK_SCRIPT}" --archive my-remote
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "[OK]  Rclone remote 'my-remote': reachable (listed root)" ]]
 }
 
 # ── Duplicate cron, lock status, and configuration validation ───────────────

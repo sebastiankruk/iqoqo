@@ -45,8 +45,10 @@ fi
 
 if [ "${IS_ARCHIVE}" = true ]; then
     REMOTE="${2:-${RCLONE_REMOTE_ARCHIVE:-}}"
+    TARGET_S3_BUCKET="${S3_BUCKET_ARCHIVE:-${S3_BUCKET_BACKUP:-}}"
 else
     REMOTE="${2:-${RCLONE_REMOTE_FAST:-}}"
+    TARGET_S3_BUCKET="${S3_BUCKET_BACKUP:-}"
 fi
 
 BACKEND=""
@@ -63,7 +65,7 @@ case "${S3_BACKEND}" in
         # must not hijack an S3-only deployment.
         if [ -f "${RCLONE_CONFIG:-${HOME}/.config/rclone/rclone.conf}" ]; then
             BACKEND="rclone"
-        elif [ -n "${S3_BUCKET_BACKUP:-}" ]; then
+        elif [ -n "${TARGET_S3_BUCKET:-}" ]; then
             BACKEND="s3"
         else
             BACKEND="none"
@@ -91,9 +93,13 @@ if [ "${BACKEND}" = "rclone" ]; then
         exit 1
     fi
 elif [ "${BACKEND}" = "s3" ]; then
-    if [ -z "${S3_BUCKET_BACKUP:-}" ]; then
-        echo "ERROR: S3_BUCKET_BACKUP is not set in ${ENV_FILE:-.env}." >&2
-        echo "       Add S3_BUCKET_BACKUP along with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY." >&2
+    if [ -z "${TARGET_S3_BUCKET:-}" ]; then
+        if [ "${IS_ARCHIVE}" = true ]; then
+            echo "ERROR: Neither S3_BUCKET_ARCHIVE nor S3_BUCKET_BACKUP is set in ${ENV_FILE:-.env}." >&2
+        else
+            echo "ERROR: S3_BUCKET_BACKUP is not set in ${ENV_FILE:-.env}." >&2
+        fi
+        echo "       Add S3_BUCKET_BACKUP (or S3_BUCKET_ARCHIVE) along with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY." >&2
         exit 1
     fi
     if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
@@ -128,13 +134,13 @@ case "${CMD}" in
     ;;
   archive-install|install-archive)
     ARCHIVE_TARGET="${REMOTE:-iqoqo-glacier:iqoqo-archive}"
-    CRON_CMD="./scripts/cloud_backup.sh"
+    CRON_CMD="./scripts/cloud_backup.sh --archive"
     [ "${BACKEND}" = "rclone" ] && CRON_CMD="${CRON_CMD} ${ARCHIVE_TARGET}"
 
     if [ "${BACKEND}" = "rclone" ]; then
         echo "Installing monthly 04:00 cron job (backend: rclone, remote: ${ARCHIVE_TARGET})..."
     else
-        echo "Installing monthly 04:00 cron job (backend: s3, bucket: ${S3_BUCKET_ARCHIVE:-${S3_BUCKET_BACKUP}})..."
+        echo "Installing monthly 04:00 cron job (backend: s3, bucket: ${TARGET_S3_BUCKET})..."
     fi
     echo "0 4 1 * * root cd ${PROJECT_DIR} && ${CRON_CMD} >> /var/log/iqoqo_archive.log 2>&1" | \
       docker run --rm -i -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c 'cat > /etc/cron.d/iqoqo-archive'

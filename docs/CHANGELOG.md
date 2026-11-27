@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **AWS S3 & Glacier Cold Archive Backup Repair (C163)**:
+  - Fixed `Makefile` `archive-run` and `scripts/cloud_backup_cron.sh` (`archive-install`) to pass `--archive` without injecting `iqoqo-glacier:iqoqo-archive` when `S3_BACKEND=auto`, allowing S3-only hosts to archive cleanly without `rclone` hijacks.
+  - Updated `scripts/cloud_backup.sh` and `scripts/cloud_backup_check.sh --archive` to initialize via `S3Service.from_environment("backup")` (preserving `S3_REGION_NAME`, `S3_ENDPOINT_URL`, `S3_ADDRESSING_STYLE`, and `AWS_SESSION_TOKEN`), support `S3_BUCKET_ARCHIVE`, `S3_ARCHIVE_PREFIX` (`archives/`), and `S3_ARCHIVE_STORAGE_CLASS` (`S3Service.upload_file(..., storage_class=...)`), and fall back to `rclone lsd` when `rclone about` is unsupported.
 - **Preview Clone Re-Encryption Key Propagation & `APP_VERSION` Tag Parity (C155)**:
   - Extended `scripts/reconcile_preview_settings.py --dotenv-stdin` to pop an optional framed `__IQOQO_SRC_SECRET_KEY__=` first-line stdin header without persisting it to disk, argv, env, or DB, and to emit a `⚠️ Encrypted settings partially reconciled (..., preserved undecryptable: N)` warning whenever undecryptable rows remain.
   - Updated `Makefile` (`start` prebuilt preview, `preview-reconcile`, and `monitoring-reset-auth`) to default `SKIP_CLONE` to `0`, propagate optional `SRC_SECRET_KEY`/`SRC_LOC` via pure-shell `printf` stdin framing without host `python3` or `2>/dev/null`, force-recreate `web`/`worker`, and preserve running `web` container `APP_VERSION` tags.

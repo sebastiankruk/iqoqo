@@ -359,6 +359,43 @@ def test_upload_file_passes_sse_and_content_type(monkeypatch) -> None:
     assert kwargs["ExtraArgs"]["ContentType"] == "image/jpeg"
 
 
+def test_upload_file_passes_storage_class_when_set(monkeypatch) -> None:
+    """Archive uploads must pass optional StorageClass (e.g. GLACIER) in ExtraArgs."""
+    monkeypatch.delenv("S3_SSE", raising=False)
+    service = _configured(BUCKET_BACKUP)
+    client = RecordingClient()
+    service._client = client  # pylint: disable=protected-access
+
+    service.upload_file(
+        "/tmp/archive.tar.gz",
+        "archives/archive.tar.gz",
+        content_type="application/gzip",
+        storage_class="GLACIER",
+    )
+
+    _, _, kwargs = client.calls[0]
+    assert kwargs["ExtraArgs"]["ContentType"] == "application/gzip"
+    assert kwargs["ExtraArgs"]["StorageClass"] == "GLACIER"
+
+
+def test_from_environment_preserves_endpoint_region_and_style(monkeypatch) -> None:
+    """S3Service.from_environment must preserve endpoint URL, region, addressing style, and session token."""
+    monkeypatch.setenv("S3_ENDPOINT_URL", "https://minio.local:9000")
+    monkeypatch.setenv("S3_REGION_NAME", "eu-central-1")
+    monkeypatch.setenv("S3_ADDRESSING_STYLE", "path")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test-secret-value")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "tok-test")
+    monkeypatch.setenv("S3_BUCKET_BACKUP", "test-bucket")
+
+    service = S3Service.from_environment(BUCKET_BACKUP)
+    assert service.endpoint_url == "https://minio.local:9000"
+    assert service.region_name == "eu-central-1"
+    assert service.addressing_style == "path"
+    assert service.bucket == "test-bucket"
+    assert service.is_configured() is True
+
+
 def test_cache_miss_returns_none_instead_of_raising() -> None:
     """A cache lookup must never fail a request that local storage can serve."""
 

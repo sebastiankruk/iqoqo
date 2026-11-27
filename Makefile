@@ -1257,11 +1257,11 @@ backup-check:
 
 archive-run:
 	@remote_target="$(remote)"; \
-	if [ -z "$$remote_target" ] && [ -f .env ]; then \
-		remote_target=$$(grep -E '^RCLONE_REMOTE_ARCHIVE=' .env 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
-	fi; \
-	remote_target="$${remote_target:-iqoqo-glacier:iqoqo-archive}"; \
-	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
+	if [ -n "$$remote_target" ]; then \
+		cd $(CURDIR) && bash scripts/cloud_backup.sh --archive "$$remote_target"; \
+	else \
+		cd $(CURDIR) && bash scripts/cloud_backup.sh --archive; \
+	fi
 
 archive-install: archive-run
 	@bash scripts/cloud_backup_cron.sh archive-install $(remote)

@@ -346,7 +346,14 @@ class S3Service:
 
     # ── Operations ────────────────────────────────────────────────────────
 
-    def upload_file(self, local_path: str, key: str, *, content_type: str | None = None) -> str:
+    def upload_file(
+        self,
+        local_path: str,
+        key: str,
+        *,
+        content_type: str | None = None,
+        storage_class: str | None = None,
+    ) -> str:
         """Upload *local_path* to *key*.
 
         Uses ``upload_file`` rather than ``put_object`` so large backup archives
@@ -356,6 +363,7 @@ class S3Service:
             local_path: Absolute path to the local file.
             key: Object key. Must already be validated.
             content_type: Optional MIME type for the stored object.
+            storage_class: Optional S3 storage class (e.g., ``GLACIER``).
 
         Returns:
             The object key written.
@@ -366,6 +374,8 @@ class S3Service:
         extra: dict[str, Any] = dict(self._extra_args())
         if content_type:
             extra["ContentType"] = content_type
+        if storage_class and storage_class.strip():
+            extra["StorageClass"] = storage_class.strip()
 
         try:
             self._get_client().upload_file(local_path, self._bucket, key, ExtraArgs=extra or None)

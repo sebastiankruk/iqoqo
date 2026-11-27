@@ -375,6 +375,47 @@ EOF
   [[ "${output}" =~ "S3_BACKEND=s3" ]]
 }
 
+@test "cloud_backup.sh --archive uses S3 on S3-only hosts with archive bucket, prefix, and storage class" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  export S3_BACKEND="auto"
+  export AWS_ACCESS_KEY_ID="test-archive-key"
+  export AWS_SECRET_ACCESS_KEY="test-archive-secret"
+  export S3_BUCKET_BACKUP="daily-bucket"
+  export S3_BUCKET_ARCHIVE="cold-archive-bucket"
+  export S3_ARCHIVE_PREFIX="cold/archives"
+  export S3_ARCHIVE_STORAGE_CLASS="GLACIER"
+  export S3_REGION_NAME="eu-central-1"
+
+  run bash scripts/cloud_backup.sh --archive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "backend: s3, bucket: cold-archive-bucket, prefix: cold/archives/" ]]
+  [[ "$output" =~ "storage class: GLACIER" ]]
+  [ ! -s "${RCLONE_LOG}" ]
+  [ -f "${UPLOAD_RECORD}" ]
+
+  python3 -c '
+import json
+with open("'"${UPLOAD_RECORD}"'") as f:
+    rec = json.load(f)
+assert rec["bucket"] == "cold-archive-bucket", rec
+assert rec["key"].startswith("cold/archives/iqoqo_backup_"), rec
+assert rec["extra"]["StorageClass"] == "GLACIER", rec
+'
+}
+
+@test "Makefile archive-run on S3-only host does not hijack S3_BACKEND=auto into rclone" {
+  rm -f "${HOME}/.config/rclone/rclone.conf"
+  local fake_proj="${TEST_TEMP_DIR}/make-proj"
+  mkdir -p "${fake_proj}/scripts"
+  cp Makefile "${fake_proj}/"
+  cp scripts/cloud_backup.sh "${fake_proj}/scripts/"
+
+  run make -C "${fake_proj}" --no-print-directory -n archive-run
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "cloud_backup.sh --archive" ]]
+  [[ ! "$output" =~ "iqoqo-glacier:iqoqo-archive" ]]
+}
+
 @test "cloud_backup.sh fails if rclone is selected but has no config" {
   export S3_BACKEND="rclone"
   rm -f "${HOME}/.config/rclone/rclone.conf"
